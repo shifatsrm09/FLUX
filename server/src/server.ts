@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import dotenv from 'dotenv';
 import { analyzeRoutes } from './routes/analyze.js';
+import { streamRoutes } from './routes/stream.js';
 
 dotenv.config({ path: '../.env' });
 
@@ -15,6 +16,7 @@ async function bootstrap() {
 
   // --- Routes ---
   await app.register(analyzeRoutes, { prefix: '/api' });
+  await app.register(streamRoutes, { prefix: '/api' });
 
   // Health check
   app.get('/api/health', async () => ({ status: 'ok' }));
