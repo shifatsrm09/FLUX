@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
-import type { MediaMetadata } from '../types';
+import Hls from 'hls.js';
+import type { MediaMetadata, HlsSessionResponse } from '../types';
 import './VideoPlayer.css';
 
 interface VideoPlayerProps {
@@ -7,81 +8,231 @@ interface VideoPlayerProps {
   metadata: MediaMetadata;
 }
 
-type PlaybackStatus = 'idle' | 'preparing' | 'playing' | 'paused' | 'error';
+type PlaybackStatus =
+  | 'idle'
+  | 'preparing'
+  | 'loading_playlist'
+  | 'buffering'
+  | 'playing'
+  | 'seeking'
+  | 'paused'
+  | 'error'
+  | 'session_expired';
 
 export function VideoPlayer({ url, metadata }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playbackStatus, setPlaybackStatus] = useState<PlaybackStatus>('idle');
   const [errorTitle, setErrorTitle] = useState<string | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [totalDuration, setTotalDuration] = useState<number | null>(metadata.durationSeconds);
 
   const isDirectPlay = metadata.directPlayCandidate;
   const videoCodec = (metadata.video?.codec || '').toLowerCase();
   const isHevc = videoCodec.includes('hevc') || videoCodec.includes('h265');
+  const videoProfile = metadata.video?.profile || '';
+  const audioCodec = metadata.audio?.codec?.toUpperCase() || 'AAC';
+  const audioChannels = metadata.audio?.channelLayout || (metadata.audio?.channels ? `${metadata.audio.channels}ch` : '');
 
-  // Direct play uses the original URL; otherwise stream via on-demand remux endpoint
-  const streamUrl = isDirectPlay
-    ? url
-    : `/api/stream?url=${encodeURIComponent(url)}`;
-
-  // Reset state when media URL or metadata changes
+  // Setup player when url or metadata changes
   useEffect(() => {
+    let isCancelled = false;
+    let createdSessionId: string | null = null;
+    let hlsInstance: Hls | null = null;
+
     setPlaybackStatus('idle');
     setErrorTitle(null);
     setErrorDetail(null);
-    if (videoRef.current) {
-      videoRef.current.load();
-    }
-  }, [url, metadata]);
+    setActiveSessionId(null);
+    setTotalDuration(metadata.durationSeconds);
 
-  const handleError = () => {
-    setPlaybackStatus('error');
     const video = videoRef.current;
-    const mediaError = video?.error;
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    }
 
-    let title = 'Playback Error';
-    let detail = 'An unknown error occurred during media playback.';
+    if (isDirectPlay) {
+      // Direct Play path (native MP4 / WebM)
+      if (video) {
+        video.src = url;
+        video.load();
+      }
+      return () => {
+        isCancelled = true;
+      };
+    }
 
-    if (mediaError) {
-      switch (mediaError.code) {
-        case MediaError.MEDIA_ERR_ABORTED:
-          title = 'Playback Aborted';
-          detail = 'The playback was aborted by the browser or user.';
-          break;
-        case MediaError.MEDIA_ERR_NETWORK:
-          title = 'Network Error';
-          detail = 'A network error occurred while streaming media from the server.';
-          break;
-        case MediaError.MEDIA_ERR_DECODE:
-          if (!isDirectPlay && isHevc) {
-            title = 'Codec Decode Error: HEVC / H.265';
-            detail =
-              'The browser attempted to decode the stream but failed. Your browser or GPU lacks native decoding support for HEVC (H.265) Main 10. Server-side transcoding (HEVC → H.264) will be required.';
-          } else {
-            title = 'Media Decoding Error';
-            detail =
-              'The media could not be decoded. The stream format or codec profile is not supported by your browser.';
+    // HLS VOD path: create session and load HLS playlist
+    async function initHlsSession() {
+      setPlaybackStatus('preparing');
+
+      try {
+        const res = await fetch('/api/hls/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+
+        if (isCancelled) return;
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || errData.error || `HTTP ${res.status}`);
+        }
+
+        const sessionData: HlsSessionResponse = await res.json();
+        if (isCancelled) {
+          // Clean up if cancelled while request was in-flight
+          fetch(`/api/hls/${sessionData.sessionId}`, { method: 'DELETE', keepalive: true }).catch(() => {});
+          return;
+        }
+
+        createdSessionId = sessionData.sessionId;
+        setActiveSessionId(sessionData.sessionId);
+        if (sessionData.duration) {
+          setTotalDuration(sessionData.duration);
+        }
+
+        setPlaybackStatus('loading_playlist');
+
+        const playlistUrl = sessionData.playlistUrl;
+
+        // Check if hls.js is supported (most modern browsers: Chrome, Firefox, Edge)
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: false,
+            backBufferLength: 60,
+            maxBufferLength: 30,
+            maxMaxBufferLength: 60,
+            fragLoadingTimeOut: 25000,
+            manifestLoadingTimeOut: 15000,
+            maxBufferHole: 0.5,
+            highBufferWatchdogPeriod: 2,
+            nudgeOffset: 0.1,
+            nudgeMaxRetry: 5,
+            maxFragLookUpTolerance: 0.25,
+          });
+          hlsInstance = hls;
+
+          hls.loadSource(playlistUrl);
+          if (videoRef.current) {
+            hls.attachMedia(videoRef.current);
           }
-          break;
-        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-          if (!isDirectPlay && isHevc) {
-            title = 'Unsupported Codec: HEVC Main 10';
-            detail =
-              'Your browser does not support HEVC (H.265) video in MP4. On-demand remuxing successfully converted the container to fragmented MP4, but the underlying video codec is unchanged. Most desktop browsers require H.264 video. Full playback for this file will require transcoding (HEVC → H.264) in a future milestone.';
-          } else if (!isDirectPlay) {
-            title = 'Stream Format Not Supported';
-            detail = `The remuxed stream (${metadata.video?.codec?.toUpperCase() || 'Unknown codec'} in MP4) could not be loaded. Server-side transcoding may be required.`;
-          } else {
-            title = 'Direct Playback Unsupported';
-            detail =
-              'This media format is not supported for direct browser playback. Remuxing or transcoding is required.';
-          }
-          break;
+
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            console.log('[HLS] Manifest parsed successfully');
+            if (!isCancelled) {
+              setPlaybackStatus('idle');
+            }
+          });
+
+          hls.on(Hls.Events.FRAG_LOADING, (_event, data) => {
+            console.log('[HLS] Requesting segment:', data.frag.relurl);
+          });
+
+          hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
+            const stats = (data as unknown as { stats?: { total?: number; loading?: { start: number; end: number } } }).stats;
+            const kb = stats?.total ? (stats.total / 1024).toFixed(1) : '?';
+            const ms = stats?.loading ? Math.round(stats.loading.end - stats.loading.start) : '?';
+            console.log(`[HLS] Received segment: ${data.frag.relurl} (${kb} KB in ${ms}ms)`);
+          });
+
+          hls.on(Hls.Events.FRAG_BUFFERED, (_event, data) => {
+            console.log('[HLS] Buffered segment:', data.frag.relurl);
+          });
+
+          hls.on(Hls.Events.ERROR, (_event, data) => {
+            if (isCancelled) return;
+
+            console.warn('[HLS Error]', data.type, data.details, 'fatal:', data.fatal);
+
+            if (data.fatal) {
+              switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  if (data.response?.code === 404) {
+                    setPlaybackStatus('session_expired');
+                    setErrorTitle('Session Expired');
+                    setErrorDetail('The streaming session has expired or was removed. Please click Analyze to start a new session.');
+                  } else {
+                    console.log('[HLS] Fatal network error, attempting reload...');
+                    hls.startLoad();
+                  }
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  if (isHevc) {
+                    setPlaybackStatus('error');
+                    setErrorTitle('Unsupported Codec: HEVC / H.265');
+                    setErrorDetail(
+                      'Your browser or GPU does not support decoding HEVC (H.265) video in HLS. The HLS delivery and seeking architecture is fully active, but playback requires native HEVC hardware/codec support. Server-side transcoding (HEVC → H.264) will be required for browsers lacking native HEVC decoding.'
+                    );
+                  } else {
+                    console.log('[HLS] Fatal media error, attempting recovery...');
+                    hls.recoverMediaError();
+                  }
+                  break;
+                default:
+                  setPlaybackStatus('error');
+                  setErrorTitle('HLS Playback Error');
+                  setErrorDetail(data.details || 'A fatal streaming error occurred.');
+                  hls.destroy();
+                  break;
+              }
+            } else if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+              console.log('[HLS] Playback stall detected; hls.js nudge/watchdog will advance playhead');
+            }
+          });
+        } else if (video && video.canPlayType('application/vnd.apple.mpegurl')) {
+          // Native HLS support (Safari on macOS/iOS)
+          video.src = playlistUrl;
+        } else {
+          setPlaybackStatus('error');
+          setErrorTitle('HLS Not Supported');
+          setErrorDetail('Your browser does not support HLS media playback.');
+        }
+      } catch (err: unknown) {
+        if (!isCancelled) {
+          setPlaybackStatus('error');
+          setErrorTitle('Stream Initialization Failed');
+          setErrorDetail(err instanceof Error ? err.message : 'Unknown streaming error');
+        }
       }
     }
 
-    setErrorTitle(title);
-    setErrorDetail(detail);
+    initHlsSession();
+
+    return () => {
+      isCancelled = true;
+      if (hlsInstance) {
+        hlsInstance.destroy();
+      }
+      if (createdSessionId) {
+        fetch(`/api/hls/${createdSessionId}`, { method: 'DELETE', keepalive: true }).catch(() => {});
+      }
+    };
+  }, [url, metadata, isDirectPlay, isHevc]);
+
+  const handleNativeVideoError = () => {
+    const video = videoRef.current;
+    const mediaError = video?.error;
+    if (!mediaError) return;
+
+    setPlaybackStatus('error');
+
+    if (mediaError.code === MediaError.MEDIA_ERR_DECODE || mediaError.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+      if (!isDirectPlay && isHevc) {
+        setErrorTitle('Codec Decode Error: HEVC Main 10');
+        setErrorDetail(
+          'Your browser cannot decode HEVC (H.265) video in HLS. The HLS delivery and seeking architecture is active and functioning, but the underlying video stream is HEVC Main 10. Most desktop browsers require H.264 video. Transcoding (HEVC → H.264) will be required for full compatibility.'
+        );
+        return;
+      }
+    }
+
+    setErrorTitle('Media Playback Error');
+    setErrorDetail(`Video error code: ${mediaError.code} (${mediaError.message || 'Format or decode issue'})`);
   };
 
   return (
@@ -90,42 +241,75 @@ export function VideoPlayer({ url, metadata }: VideoPlayerProps) {
         <h2 className="panel-title">Video Player</h2>
 
         <div className="player-badges">
-          <span className={`badge ${isDirectPlay ? 'badge-direct' : 'badge-remux'}`}>
-            {isDirectPlay ? 'Direct Play' : '⚡ On-Demand Remux (fMP4)'}
+          <span className={`badge ${isDirectPlay ? 'badge-direct' : 'badge-hls'}`}>
+            {isDirectPlay ? 'Direct Play' : '⚡ On-Demand HLS'}
           </span>
 
           <span className={`status-pill status-${playbackStatus}`}>
-            {playbackStatus === 'preparing' && <span className="pill-spinner" />}
+            {(playbackStatus === 'preparing' || playbackStatus === 'loading_playlist' || playbackStatus === 'buffering') && (
+              <span className="pill-spinner" />
+            )}
             {playbackStatus === 'playing' && <span className="pill-dot active" />}
+            {playbackStatus === 'seeking' && <span className="pill-dot seeking" />}
             {playbackStatus === 'paused' && <span className="pill-dot paused" />}
-            {playbackStatus === 'error' && <span className="pill-dot error" />}
+            {(playbackStatus === 'error' || playbackStatus === 'session_expired') && <span className="pill-dot error" />}
+
             {playbackStatus === 'preparing' && 'Preparing stream...'}
+            {playbackStatus === 'loading_playlist' && 'Loading playlist...'}
+            {playbackStatus === 'buffering' && 'Buffering...'}
+            {playbackStatus === 'seeking' && 'Seeking...'}
             {playbackStatus === 'playing' && 'Playing'}
             {playbackStatus === 'paused' && 'Paused'}
-            {playbackStatus === 'error' && 'Playback Error'}
             {playbackStatus === 'idle' && 'Ready to Play'}
+            {playbackStatus === 'error' && 'Playback Error'}
+            {playbackStatus === 'session_expired' && 'Session Expired'}
           </span>
         </div>
       </div>
 
       {!isDirectPlay && (
-        <div className="remux-notice">
-          <div className="remux-notice-title">
+        <div className="hls-notice">
+          <div className="hls-notice-header">
             <span className="notice-icon">⚡</span>
-            <span>On-Demand Remux Stream Active</span>
+            <strong>HLS VOD Stream Active</strong>
+            {activeSessionId && <span className="session-tag">Session: {activeSessionId.slice(0, 8)}...</span>}
           </div>
-          <p className="remux-notice-desc">
-            Streaming via <code>/api/stream</code> using stream copy (video:{' '}
-            <strong>{metadata.video?.codec?.toUpperCase() || 'copy'}</strong>, audio:{' '}
-            <strong>{metadata.audio?.codec?.toUpperCase() || 'copy'}</strong>) into fragmented MP4.
-            The file is not stored on disk.
-          </p>
+
+          <div className="hls-tech-specs">
+            <div className="spec-item">
+              <span className="spec-label">Video:</span>
+              <span className="spec-val">
+                {videoCodec ? videoCodec.toUpperCase() : 'UNKNOWN'} {videoProfile ? `(${videoProfile})` : ''}
+              </span>
+            </div>
+            <div className="spec-item">
+              <span className="spec-label">Audio:</span>
+              <span className="spec-val">
+                {audioCodec} {audioChannels ? `(${audioChannels})` : ''}
+              </span>
+            </div>
+            <div className="spec-item">
+              <span className="spec-label">Stream Copy:</span>
+              <span className="spec-val spec-green">Enabled (no re-encoding)</span>
+            </div>
+            <div className="spec-item">
+              <span className="spec-label">Transcoding:</span>
+              <span className="spec-val spec-dim">Disabled</span>
+            </div>
+            {totalDuration && (
+              <div className="spec-item">
+                <span className="spec-label">VOD Duration:</span>
+                <span className="spec-val">
+                  {Math.floor(totalDuration / 60)}m {Math.floor(totalDuration % 60)}s
+                </span>
+              </div>
+            )}
+          </div>
 
           {isHevc && (
             <div className="codec-warning">
-              <strong>Codec Note:</strong> Source video is <strong>HEVC / H.265 Main 10</strong>.
-              Remuxing repackages the container to MP4 without re-encoding. If your browser lacks
-              hardware HEVC support, playback will report an unsupported codec error below.
+              <strong>Important Codec Note:</strong> Source video is encoded as{' '}
+              <strong>HEVC / H.265 Main 10</strong>. HLS provides delivery, independent segment addressing, and arbitrary seeking, but does NOT re-encode the video. If your browser lacks native HEVC hardware decoding, playback will fail with a decode error below.
             </div>
           )}
         </div>
@@ -134,24 +318,29 @@ export function VideoPlayer({ url, metadata }: VideoPlayerProps) {
       <div className="video-container">
         <video
           ref={videoRef}
-          key={streamUrl}
-          src={streamUrl}
           className="video-element"
           controls
-          preload="metadata"
-          onLoadStart={() => setPlaybackStatus('preparing')}
+          playsInline
+          preload="auto"
           onWaiting={() => {
-            if (playbackStatus !== 'error') setPlaybackStatus('preparing');
+            if (playbackStatus !== 'error') setPlaybackStatus('buffering');
           }}
-          onCanPlay={() => {
-            if (playbackStatus === 'preparing') setPlaybackStatus('idle');
+          onSeeking={() => {
+            if (playbackStatus !== 'error') setPlaybackStatus('seeking');
+          }}
+          onSeeked={() => {
+            if (playbackStatus !== 'error') {
+              setPlaybackStatus(videoRef.current?.paused ? 'paused' : 'playing');
+            }
           }}
           onPlay={() => setPlaybackStatus('playing')}
           onPlaying={() => setPlaybackStatus('playing')}
           onPause={() => {
-            if (playbackStatus !== 'error') setPlaybackStatus('paused');
+            if (playbackStatus !== 'error' && playbackStatus !== 'seeking') {
+              setPlaybackStatus('paused');
+            }
           }}
-          onError={handleError}
+          onError={handleNativeVideoError}
         >
           Your browser does not support HTML5 video.
         </video>

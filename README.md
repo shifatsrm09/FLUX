@@ -2,7 +2,7 @@
 
 Internal ISP media streaming platform — technical prototype.
 
-BDIXStream is designed to inspect and play media files available on an ISP's internal network. Given a media URL, it analyzes the file using FFprobe, extracts detailed metadata, and selects the playback method: direct playback for natively supported media, or on-demand stream-copy remuxing (MKV → fragmented MP4) via FFmpeg without re-encoding or temporary disk files.
+BDIXStream is designed to inspect and play media files available on an ISP's internal network. Given a media URL, it analyzes the file using FFprobe, extracts detailed metadata, and selects the playback method: direct playback for natively supported media (MP4/WebM), or seekable on-demand HLS VOD (MKV → fragmented MP4 HLS) via FFmpeg stream copy without re-encoding or permanent disk conversion.
 
 ## Architecture
 
@@ -17,36 +17,63 @@ BDIXStream is designed to inspect and play media files available on an ISP's int
        (MP4 / WebM)            (MKV)
               │                 │
               │                 ▼
-              │            /api/stream
+              │          POST /api/hls/session
               │                 │
-              │              FFmpeg
-              │        (stream copy: -c copy)
+              │           BDIXStream HLS
+              │           Session Manager
               │                 │
-              │          fragmented MP4
-              │           (pipe: stdout)
+              │       ┌─────────┴─────────┐
+              │       ▼                   ▼
+              │  index.m3u8            init.mp4
+              │  (full duration)    (track headers)
+              │       │                   │
+              │       └─────────┬─────────┘
+              │                 ▼
+              │          Seekable Worker
+              │        (-ss seek on-demand)
+              │                 │
+              │          segment_XXXX.m4s
               │                 │
               └────────┬────────┘
                        ▼
-             HTML5 <video> Player
+             Browser Video Player
+            (hls.js / native HLS)
 ```
 
-## Current Prototype Capabilities
+## Features
 
-- **Media analysis**: Enter any authorized HTTP/HTTPS media URL → backend runs FFprobe → returns normalized structured metadata
-- **On-demand remux streaming**: Endpoint `GET /api/stream?url=...` runs FFmpeg on-the-fly, reading directly from the remote media URL and streaming fragmented MP4 (`video/mp4`) to the HTTP response
-- **Stream copy (no transcoding)**: Video and audio streams are copied as-is (`-c:v copy -c:a copy`) with zero quality loss and near-zero CPU overhead
-- **No disk storage**: Media is never written to disk or fully buffered into memory
-- **Client disconnect handling**: Terminating playback, pausing, or closing the tab immediately terminates the FFmpeg process
-- **Detailed media display**: Container, video/audio codecs, resolution, frame rate, bitrate, duration, file size, multi-audio tracks, subtitle streams
-- **Direct play vs remux selection**: Heuristic determines whether the browser can play directly or needs on-demand remuxing
-- **Playback state & codec reporting**: Live player state indicators (Preparing stream..., Playing, Playback error) with clear diagnostics for unsupported codecs like HEVC / H.265 Main 10
+- **Media Analysis**: Enter any authorized HTTP/HTTPS media URL → backend runs FFprobe → returns normalized structured metadata
+- **Seekable HLS VOD Architecture**:
+  - Full duration known immediately from FFprobe
+  - Complete `#EXT-X-PLAYLIST-TYPE:VOD` playlist generated at session creation
+  - Arbitrary, instantaneous seeking to any timestamp (e.g. 10%, 50%, 90%, or jumping 40 minutes ahead) without waiting to stream earlier media
+  - On-demand segment generation: FFmpeg seeks directly to the target timestamp (`-ss <timestamp> -copyts -start_number <index>`) to produce requested segments in milliseconds
+  - Proactive buffer-ahead: Workers generate a small window ahead of the playhead for seamless continuous playback
+- **Stream Copy (No Transcoding)**:
+  - Video and audio streams are copied as-is (`-c:v copy -c:a copy`) with zero quality loss and near-zero CPU overhead
+  - Video codec remains original (e.g. HEVC Main 10)
+  - Audio codec remains original (e.g. AAC 5.1)
+- **Bounded Temporary Storage & Lifecycle Management**:
+  - Dedicated isolated directories per session (`os.tmpdir()/bdixstream/<sessionId>/`)
+  - No permanent 20 GB conversions; temporary segments are pruned when cache limits are reached
+  - Automatic TTL cleanup (default: 30 minutes of inactivity)
+  - Automatic cleanup of stale directories on server startup and shutdown (`SIGINT`, `SIGTERM`)
+- **Robust Process Management**:
+  - Every FFmpeg worker is tracked per session with PID logging
+  - Re-anchoring a seek position cleanly terminates the previous forward worker (`SIGTERM` → `SIGKILL`)
+  - No orphan FFmpeg processes or leaked file descriptors
+- **Frontend Player**:
+  - Uses `hls.js` for universal MSE playback (Chrome, Firefox, Edge) and native HLS on Safari
+  - Accurate status UI: "⚡ On-Demand HLS", "Video: HEVC / H.265 Main 10", "Audio: AAC 5.1", "Stream copy: enabled", "Transcoding: disabled"
+  - Real-time states: `Preparing stream...`, `Loading playlist...`, `Buffering...`, `Playing`, `Seeking...`, `Playback Error`, `Session Expired`
+  - Codec diagnostics: Clearly explains if the browser lacks native HEVC hardware decoding
 
 ## Prerequisites
 
 | Tool | Version | Notes |
 |------|---------|-------|
 | **Node.js** | 18+ | LTS recommended |
-| **FFmpeg** | 5+ | Required for on-demand remuxing (`ffmpeg`) |
+| **FFmpeg** | 5+ | Required for on-demand HLS packaging (`ffmpeg`) |
 | **FFprobe** | 5+ | Required for media inspection (`ffprobe`) |
 
 Verify tools are available in PATH:
@@ -67,14 +94,6 @@ cd BDIXStream
 npm run install:all
 ```
 
-Or install individually:
-
-```bash
-npm install          # root (concurrently)
-cd client && npm install
-cd ../server && npm install
-```
-
 ## Configuration
 
 Copy the environment template:
@@ -90,26 +109,20 @@ PORT=3001                           # Backend port
 CORS_ORIGIN=http://localhost:5173   # Frontend dev server origin
 FFPROBE_PATH=                       # Path to ffprobe (leave empty for PATH)
 FFMPEG_PATH=                        # Path to ffmpeg (leave empty for PATH)
+
+# HLS VOD Configuration
+HLS_SEGMENT_DURATION=6              # Segment duration in seconds (default: 6)
+HLS_SESSION_TTL_MINUTES=30          # Inactivity cleanup timeout in minutes (default: 30)
+HLS_TEMP_DIR=                       # Temp storage directory (default: system tmpdir/bdixstream)
+MAX_ACTIVE_SESSIONS=10              # Maximum concurrent streaming sessions
+MAX_CONCURRENT_FFMPEG_PROCESSES=5   # Maximum concurrent FFmpeg workers
 ```
 
 ## Running in Development
 
-### Option 1: Both simultaneously (recommended)
-
 ```bash
+# Starts backend (port 3001) and frontend (port 5173) concurrently
 npm run dev
-```
-
-Starts the Fastify backend on port 3001 and Vite frontend on port 5173 concurrently.
-
-### Option 2: Separately
-
-```bash
-# Terminal 1 — Backend
-npm run dev:server
-
-# Terminal 2 — Frontend
-npm run dev:client
 ```
 
 Open **http://localhost:5173** in your browser.
@@ -124,12 +137,15 @@ Open **http://localhost:5173** in your browser.
 3. Click **Analyze**
 4. View the extracted metadata (video codec, audio tracks, subtitles)
 5. The VideoPlayer automatically routes the playback:
-   - **Direct Play**: If the file is MP4 / WebM natively supported by browsers
-   - **On-Demand Remux**: If the file is MKV, the video player points to `/api/stream?url=...`
-6. FFmpeg begins remuxing immediately; fragmented MP4 streams progressively to the browser
+   - **Direct Play**: If the file is natively supported (MP4 / WebM)
+   - **On-Demand HLS**: If the file is MKV, creates a session via `POST /api/hls/session` and mounts the HLS stream
+6. **Arbitrary Seeking Test**:
+   - The timeline shows the full duration immediately
+   - Seek to 50%, 90%, 10%, or 40:00
+   - Playback re-anchors directly to the requested position without decoding from 00:00
 
 > **Important Codec Rule**:
-> Remuxing repackages the container (MKV → MP4) but does NOT change the underlying video codec (`-c:v copy`).
+> HLS provides segment delivery and seeking, but does NOT re-encode the video (`-c:v copy`).
 > If the source file is **HEVC / H.265 Main 10**, desktop browsers without hardware HEVC decoding (such as standard Chrome/Firefox on Windows/Linux) will fail to decode the video stream. The UI explicitly detects and explains this limitation. True cross-browser playback for HEVC files requires video transcoding (HEVC → H.264), planned for the next milestone.
 
 ## API Endpoints
@@ -137,6 +153,10 @@ Open **http://localhost:5173** in your browser.
 ### 1. `POST /api/analyze`
 
 Analyzes remote media with FFprobe.
+
+### 2. `POST /api/hls/session`
+
+Initializes an HLS VOD streaming session for an authorized media URL.
 
 **Request:**
 
@@ -150,56 +170,33 @@ Analyzes remote media with FFprobe.
 
 ```json
 {
-  "success": true,
-  "metadata": {
-    "filename": "movie.mkv",
-    "container": "MKV",
-    "format": "Matroska / WebM",
-    "duration": "43:55",
-    "durationSeconds": 2635,
-    "fileSize": "613.50 MB",
-    "fileSizeBytes": 643297280,
-    "bitrate": "1.9 Mbps",
-    "video": {
-      "codec": "hevc",
-      "profile": "Main 10",
-      "width": 1920,
-      "height": 960,
-      "frameRate": "23.976 fps",
-      "bitrate": "1.6 Mbps",
-      "pixelFormat": "yuv420p10le"
-    },
-    "audio": {
-      "codec": "aac",
-      "channels": 6,
-      "channelLayout": "5.1",
-      "sampleRate": "48000",
-      "bitrate": "384 Kbps",
-      "language": "eng"
-    },
-    "audioTracks": [...],
-    "subtitles": [...],
-    "directPlayCandidate": false
-  }
+  "sessionId": "49557fc2-b8f1-4db8-b4b6-455b8e986064",
+  "playlistUrl": "/api/hls/49557fc2-b8f1-4db8-b4b6-455b8e986064/index.m3u8",
+  "duration": 2635.0,
+  "segmentDuration": 6,
+  "totalSegments": 440
 }
 ```
 
-### 2. `GET /api/stream?url=<encoded-url>`
+### 3. `GET /api/hls/:sessionId/index.m3u8`
 
-Streams on-demand fragmented MP4 (`video/mp4`) by invoking FFmpeg with stream copy.
+Returns the full HLS VOD playlist (`application/vnd.apple.mpegurl`).
 
-- **Query param**: `url` (URL-encoded remote media URL)
-- **Response**: Chunked `video/mp4` stream
-- **Headers**:
-  - `Content-Type: video/mp4`
-  - `Cache-Control: no-cache, no-store, must-revalidate`
-- **Behavior**:
-  - Starts streaming as soon as FFmpeg emits the first fragment
-  - When the client disconnects, FFmpeg is immediately terminated via `SIGTERM` / `SIGKILL`
+### 4. `GET /api/hls/:sessionId/init.mp4`
 
-### 3. `GET /api/health`
+Returns the fragmented MP4 initialization segment (`video/mp4`).
 
-Health check endpoint. Returns `{"status": "ok"}`.
+### 5. `GET /api/hls/:sessionId/:segment`
+
+Returns the requested media segment (e.g. `segment_0400.m4s`), generating on-demand or returning from cache.
+
+### 6. `GET /api/hls/:sessionId/status`
+
+Returns session diagnostics, cache size, active FFmpeg worker state, and idle time.
+
+### 7. `DELETE /api/hls/:sessionId`
+
+Explicitly terminates all FFmpeg processes and removes temporary files for the session.
 
 ## Production Build
 
@@ -211,65 +208,9 @@ npm run build
 npm start
 ```
 
-## Project Structure
-
-```
-BDIXStream/
-├── client/                     # React frontend (Vite + TypeScript)
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── MetadataPanel.tsx / MetadataPanel.css
-│   │   │   ├── UrlInput.tsx / UrlInput.css
-│   │   │   └── VideoPlayer.tsx / VideoPlayer.css
-│   │   ├── App.tsx / App.css
-│   │   ├── index.css
-│   │   ├── main.tsx
-│   │   └── types.ts
-│   ├── index.html
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── server/                     # Fastify backend (Node.js + TypeScript)
-│   ├── src/
-│   │   ├── routes/
-│   │   │   ├── analyze.ts      # POST /api/analyze
-│   │   │   └── stream.ts       # GET /api/stream
-│   │   ├── services/
-│   │   │   ├── ffmpeg.ts       # FFmpeg remux process management
-│   │   │   ├── ffprobe.ts      # FFprobe metadata probe
-│   │   │   └── metadata.ts     # Metadata normalization & heuristics
-│   │   ├── utils/
-│   │   │   └── validation.ts   # Safe URL validation
-│   │   └── server.ts           # Fastify server entry
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── .env.example
-├── .gitignore
-├── package.json
-└── README.md
-```
-
 ## Security Design
 
-- **Safe process invocation**: Uses `child_process.spawn` and `execFile` exclusively with argument arrays — no shell interpretation (`exec`) or command string concatenation
-- **Protocol restriction**: Validates URLs to only allow `http:` and `https:`, blocking `file://`, `ftp://`, etc.
-- **Log sanitization**: Passwords or authentication credentials in URLs are stripped before logging
-- **Process lifecycle guarantee**: FFmpeg child processes are tied to the HTTP request lifecycle; if the client disconnects, FFmpeg is killed to prevent zombie processes
-
-## Current Limitations
-
-- **No transcoding** — stream copy retains original video/audio codecs; HEVC Main 10 requires browser/hardware HEVC decoding
-- **No HTTP Range seek on remux stream** — progressive streaming begins from 0:00; random seeking in fragmented MP4 pipe requires transcoding/range proxy
-- **Single stream selection** — remux maps the first video (`0:v:0`) and first audio track (`0:a:0`)
-- **No subtitle muxing** — subtitle streams are detected in metadata but not converted to WebVTT or burned into video
-- **No persistence or auth** — no database, user accounts, or watch history
-
-## Planned Future Milestones
-
-1. **FFmpeg transcoding pipeline** (HEVC → H.264, EAC3/DTS → AAC)
-2. **HTTP Range support / timeline seeking**
-3. **Subtitle extraction to WebVTT** for in-player selection
-4. **Multi-audio track switching**
-5. **HLS / DASH adaptive streaming**
-6. **Media library indexing and PostgreSQL database**
+- **Safe Process Invocation**: Uses `child_process.spawn` exclusively with argument arrays — no shell string interpolation
+- **URL Whitelist**: Rejects any protocol other than `http:` and `https:`
+- **Path Traversal Protection**: Session IDs and segment names are validated with strict regular expressions (`^[0-9a-fA-F-]{36}$` and `^segment_\d{4}\.m4s$`); arbitrary paths cannot be accessed
+- **Process & Storage Isolation**: Each session runs in an isolated directory with bounded segment caching and automatic cleanup

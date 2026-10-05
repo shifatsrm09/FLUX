@@ -46,3 +46,13 @@ export interface MediaMetadata {
 
   directPlayCandidate: boolean;
 }
+
+export interface HlsSessionResponse {
+  sessionId: string;
+  playlistUrl: string;
+  duration: number;
+  segmentDuration: number;
+  totalSegments: number;
+  metadata?: MediaMetadata;
+}
+

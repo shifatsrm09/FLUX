@@ -61,8 +61,8 @@ function App() {
 
         {metadata && (
           <div className="results">
-            <MetadataPanel metadata={metadata} />
             <VideoPlayer url={videoUrl} metadata={metadata} />
+            <MetadataPanel metadata={metadata} />
           </div>
         )}
       </main>

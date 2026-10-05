@@ -6,14 +6,36 @@ interface UrlInputProps {
   loading: boolean;
 }
 
+const STORAGE_KEY = 'bdixstream_last_media_url';
+
 export function UrlInput({ onAnalyze, loading }: UrlInputProps) {
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const trimmed = url.trim();
     if (trimmed) {
+      try {
+        localStorage.setItem(STORAGE_KEY, trimmed);
+      } catch {
+        // ignore localStorage errors (e.g. incognito/disabled)
+      }
       onAnalyze(trimmed);
+    }
+  };
+
+  const handleChange = (newVal: string) => {
+    setUrl(newVal);
+    try {
+      localStorage.setItem(STORAGE_KEY, newVal);
+    } catch {
+      // ignore
     }
   };
 
@@ -27,7 +49,7 @@ export function UrlInput({ onAnalyze, loading }: UrlInputProps) {
           className="url-field"
           placeholder="http://172.16.50.4/path/to/movie.mkv"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
           disabled={loading}
           autoFocus
         />
