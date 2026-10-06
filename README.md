@@ -53,11 +53,10 @@ Build output is written to `dist/`.
 
 ## Running Compatibility Tests
 
-1. Enter or select an authorized media URL (e.g., `http://172.16.50.14/Barbie.2023.1080p.x265.mkv`).
-2. Click **⚡ Test Playback & Codecs**.
-3. The lab automatically executes:
+1. Click any of the **Quick Test Presets** (Ant-Man, Civil War, Kingdom S1E1) or enter any authorized media URL.
+2. The lab automatically executes:
    - **Device & Engine Probe**: Detects browser, OS, MediaSource, Managed MediaSource (iOS).
    - **Network & Range Probe**: Tests latency, HTTP 206 status, Range response, and CORS.
    - **EBML Header Demuxer**: Reads the first ~512 KB to identify container, video codec (HEVC/AVC), audio tracks (DTS, AAC, AC3), and channels.
    - **Native Video Test Harness**: Mounts the native `<video>` element, measuring time to metadata, time to first frame, seek latency, and Web Audio signal presence.
-4. Click **📋 Copy Diagnostic JSON** to copy the complete report and compare across Android, iOS, and Desktop devices.
+3. Click **📋 Copy Diagnostic JSON** to copy the complete report and compare across Android, iOS, and Desktop devices.

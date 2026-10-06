@@ -18,9 +18,10 @@ import { NetworkProbeCard } from './components/NetworkProbeCard';
 import { StreamMetadata } from './components/StreamMetadata';
 import { PlayerHarness } from './components/PlayerHarness';
 import { DiagnosticLog } from './components/DiagnosticLog';
+import { HARDCODED_PRESETS } from './constants/presets';
 import './App.css';
 
-const DEFAULT_URL = 'http://172.16.50.14/Barbie.2023.1080p.x265.mkv';
+const DEFAULT_URL = HARDCODED_PRESETS[0].url;
 
 export function App() {
   const [device, setDevice] = useState<DeviceInfo | null>(null);

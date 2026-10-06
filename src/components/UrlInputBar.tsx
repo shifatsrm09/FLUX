@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { HARDCODED_PRESETS, type MoviePreset } from '../constants/presets';
 
 interface Props {
   initialUrl: string;
@@ -11,9 +12,9 @@ const STORAGE_KEY = 'bdixstream_media_test_url';
 export function UrlInputBar({ initialUrl, onRunTest, isRunning }: Props) {
   const [url, setUrl] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) || initialUrl || 'http://172.16.50.14/Barbie.2023.1080p.x265.mkv';
+      return localStorage.getItem(STORAGE_KEY) || initialUrl || HARDCODED_PRESETS[0].url;
     } catch {
-      return initialUrl;
+      return initialUrl || HARDCODED_PRESETS[0].url;
     }
   });
 
@@ -30,24 +31,60 @@ export function UrlInputBar({ initialUrl, onRunTest, isRunning }: Props) {
     }
   };
 
-  const handleQuickSelect = (preset: string) => {
-    setUrl(preset);
+  const handleSelectPreset = (preset: MoviePreset) => {
+    setUrl(preset.url);
     try {
-      localStorage.setItem(STORAGE_KEY, preset);
+      localStorage.setItem(STORAGE_KEY, preset.url);
     } catch {
       // ignore
     }
-    onRunTest(preset);
+    onRunTest(preset.url);
   };
 
   return (
     <div className="card input-card">
+      {/* Quick Hardcoded Test Media Presets */}
+      <div className="presets-container">
+        <div className="presets-header">
+          <span className="presets-title">
+            <span className="card-icon">⚡</span> Quick Test Presets (BDIX Origin 172.16.50.14)
+          </span>
+          <span className="presets-subtitle">Click any title to load & probe immediately</span>
+        </div>
+
+        <div className="presets-grid">
+          {HARDCODED_PRESETS.map((preset) => {
+            const isSelected = url === preset.url;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                className={`preset-card ${isSelected ? 'preset-card-selected' : ''}`}
+                disabled={isRunning}
+                onClick={() => handleSelectPreset(preset)}
+              >
+                <div className="preset-card-top">
+                  <span className="preset-movie-name">{preset.name}</span>
+                  {preset.year && <span className="preset-year-badge">{preset.year}</span>}
+                </div>
+                <div className="preset-badge-row">
+                  <span className="preset-tech-badge">{preset.badge}</span>
+                </div>
+                <div className="preset-details-text">{preset.details}</div>
+                {isSelected && <span className="preset-active-indicator">● Active Selection</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Manual URL Input Form */}
       <form onSubmit={handleSubmit} className="input-form">
         <div className="input-header">
           <label htmlFor="media-url" className="input-label">
-            <span className="card-icon">🎯</span> Media Test Target (Direct BDIX URL)
+            <span className="card-icon">🔗</span> Active Media Stream URL
           </label>
-          <span className="input-hint">Direct client-to-origin streaming (no proxy)</span>
+          <span className="input-hint">Direct client-to-origin HTTP streaming</span>
         </div>
 
         <div className="input-row">
@@ -67,36 +104,8 @@ export function UrlInputBar({ initialUrl, onRunTest, isRunning }: Props) {
                 <span className="spinner" /> Probing Media...
               </span>
             ) : (
-              '⚡ Test Playback & Codecs'
+              '⚡ Run Diagnostics'
             )}
-          </button>
-        </div>
-
-        <div className="quick-presets">
-          <span className="preset-label">Quick Targets:</span>
-          <button
-            type="button"
-            className="preset-btn"
-            disabled={isRunning}
-            onClick={() => handleQuickSelect('http://172.16.50.14/Barbie.2023.1080p.x265.mkv')}
-          >
-            Barbie (172.16.50.14 MKV)
-          </button>
-          <button
-            type="button"
-            className="preset-btn"
-            disabled={isRunning}
-            onClick={() => handleQuickSelect('http://172.16.50.4/movie.mkv')}
-          >
-            172.16.50.4 MKV
-          </button>
-          <button
-            type="button"
-            className="preset-btn"
-            disabled={isRunning}
-            onClick={() => handleQuickSelect('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')}
-          >
-            Public MP4 (Control Test)
           </button>
         </div>
       </form>
