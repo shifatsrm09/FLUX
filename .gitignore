@@ -1,0 +1,9 @@
+build/
+bin/
+out/
+.vs/
+*.user
+*.log
+CMakeUserPresets.json
+third_party/vlc.7z
+third_party/libvlcpp-tmp/

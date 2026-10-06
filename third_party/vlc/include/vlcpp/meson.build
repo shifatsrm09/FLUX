@@ -1,0 +1,19 @@
+# Copyright (C) 2014-2025 VideoLAN - VideoLabs
+
+libvlcpp_headers = files(
+    'Dialog.hpp',
+    'Equalizer.hpp',
+    'Instance.hpp',
+    'Internal.hpp',
+    'Media.hpp',
+    'MediaDiscoverer.hpp',
+    'MediaList.hpp',
+    'MediaListPlayer.hpp',
+    'MediaPlayer.hpp',
+    'Parser.hpp',
+    'Picture.hpp',
+    'RendererDiscoverer.hpp',
+    'common.hpp',
+    'structures.hpp',
+    'vlc.hpp',
+)
