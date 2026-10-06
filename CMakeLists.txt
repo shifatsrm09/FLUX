@@ -90,10 +90,7 @@ if(WIN32)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${SYSTEM_VLC_DIR}/libvlccore.dll"
                 "$<TARGET_FILE_DIR:FLUX>"
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${SYSTEM_VLC_DIR}/plugins"
-                "$<TARGET_FILE_DIR:FLUX>/plugins"
-            COMMENT "Copying libVLC binaries and plugins to build output directory"
+            COMMENT "Copying libVLC binaries to build output directory"
         )
     endif()
 endif()
