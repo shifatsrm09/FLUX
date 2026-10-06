@@ -8,9 +8,9 @@
 #include <vector>
 #include <memory>
 
-namespace Flux {
+#include "VLCPlayer.h"
 
-class VLCPlayer;
+namespace Flux {
 
 class VLCVideoItem : public QQuickPaintedItem {
     Q_OBJECT

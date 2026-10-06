@@ -26,19 +26,32 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    // Try loading QML from Qt resource system (qt_add_qml_module) or local disk fallback
-    const QUrl qmlResourceUrl(u"qrc:/FLUX/qml/Main.qml"_s);
-    const QString localQmlPath = QDir(QGuiApplication::applicationDirPath()).filePath("../qml/Main.qml");
+    using namespace Qt::StringLiterals;
+
+    // Connect QML engine warnings to logger for full visibility
+    QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError> &warnings) {
+        for (const auto &w : warnings) {
+            FLUX_LOG_WARN("QML", w.toString());
+        }
+    });
+
+    const QUrl qmlResourceUrl(QStringLiteral("qrc:/FLUX/qml/Main.qml"));
+    const QUrl qmlResourceUrlQt6(QStringLiteral("qrc:/qt/qml/FLUX/qml/Main.qml"));
+    const QString localQmlPath = QDir(QGuiApplication::applicationDirPath()).filePath("../../../qml/Main.qml");
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [qmlResourceUrl](QObject *obj, const QUrl &objUrl) {
         if (!obj && objUrl == qmlResourceUrl) {
-            FLUX_LOG_ERROR("Main", "Failed to instantiate root QML object!");
+            FLUX_LOG_ERROR("Main", "Failed to instantiate root QML object from URL: " + objUrl.toString());
             QCoreApplication::exit(-1);
         }
     }, Qt::QueuedConnection);
 
     engine.load(qmlResourceUrl);
+
+    if (engine.rootObjects().isEmpty()) {
+        engine.load(qmlResourceUrlQt6);
+    }
 
     if (engine.rootObjects().isEmpty()) {
         FLUX_LOG_WARN("Main", "QRC QML not found, falling back to local file path: " + localQmlPath);

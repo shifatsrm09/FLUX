@@ -4,10 +4,10 @@
 #include <QQmlApplicationEngine>
 #include <memory>
 
-namespace Flux {
+#include "../media/VLCPlayer.h"
+#include "../models/TestMedia.h"
 
-class VLCPlayer;
-class TestMediaModel;
+namespace Flux {
 
 class Application : public QObject {
     Q_OBJECT
