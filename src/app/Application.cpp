@@ -44,6 +44,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     rootContext->setContextProperty("fluxPlayer", m_player.get());
     rootContext->setContextProperty("testMediaModel", m_testMedia.get());
     rootContext->setContextProperty("fluxSearch", m_searchManager.get());
+    rootContext->setContextProperty("fluxLibrary", m_searchManager->libraryModel());
     rootContext->setContextProperty("fluxLogger", &Logger::instance());
 
     FLUX_LOG_INFO("Application", "Core services registered with QML engine");

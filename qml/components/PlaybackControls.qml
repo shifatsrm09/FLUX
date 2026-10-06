@@ -6,12 +6,13 @@ Rectangle {
     id: root
 
     property var player: null
+    property bool isUserInteracting: (seekSlider.pressed || volumeSlider.pressed || audioTrackCombo.popup.visible || subTrackCombo.popup.visible)
     signal toggleFullscreenRequested()
 
     implicitHeight: 64
-    color: "#0f172a"
-    radius: 8
-    border.color: "#1e293b"
+    color: "#e60a1224"
+    radius: 10
+    border.color: "#1e2c48"
     border.width: 1
 
     RowLayout {

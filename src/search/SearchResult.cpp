@@ -4,15 +4,32 @@
 
 namespace Flux {
 
-SearchResult SearchResult::fromJson(const QString &href, qint64 size, bool isSizeNull) {
+SearchResult SearchResult::fromJson(const QString &href,
+                                     qint64 size,
+                                     bool isSizeNull,
+                                     const QString &serverOrigin,
+                                     const QString &libraryId,
+                                     const QString &libraryName,
+                                     const QString &group) {
     SearchResult result;
     result.rawHref = href;
     result.sizeBytes = isSizeNull ? -1 : size;
     result.isFolder = isSizeNull || href.endsWith('/');
+    result.libraryId = libraryId;
+    result.libraryName = libraryName;
+    result.group = group;
 
     // Construct full playable URL without altering the server-provided percent-encoding
-    const QString serverOrigin = "http://172.16.50.14";
-    result.playUrl = serverOrigin + href;
+    // Ensure serverOrigin has no trailing slash and href begins with a slash
+    QString origin = serverOrigin;
+    if (origin.endsWith('/')) {
+        origin.chop(1);
+    }
+    QString path = href;
+    if (!path.startsWith('/')) {
+        path = "/" + path;
+    }
+    result.playUrl = origin + path;
 
     // URL-decode for clean user-facing display
     QString decoded = QUrl::fromPercentEncoding(href.toUtf8());

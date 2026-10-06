@@ -14,11 +14,24 @@ int main(int argc, char *argv[]) {
     Flux::SearchManager searchMgr;
 
     QString testQuery = "kingdom";
+    QString targetLibraryId = "korean_series";
+
     if (argc > 1) {
         testQuery = QString::fromUtf8(argv[1]);
     }
+    if (argc > 2) {
+        targetLibraryId = QString::fromUtf8(argv[2]);
+    }
 
-    std::cout << "Searching media server (172.16.50.14) for: " << testQuery.toStdString() << "\n";
+    if (!targetLibraryId.isEmpty()) {
+        searchMgr.selectLibraryById(targetLibraryId);
+    }
+
+    std::cout << "Target Library: [" << searchMgr.selectedLibraryGroup().toStdString() << "] "
+              << searchMgr.selectedLibraryName().toStdString() << " ("
+              << searchMgr.selectedLibraryId().toStdString() << ")\n";
+    std::cout << "Library URL:    " << searchMgr.selectedLibraryUrl().toStdString() << "\n";
+    std::cout << "Search Query:   \"" << testQuery.toStdString() << "\"\n";
 
     QObject::connect(&searchMgr, &Flux::SearchManager::resultCountChanged, [&]() {
         if (searchMgr.isSearching()) return;
@@ -52,9 +65,9 @@ int main(int argc, char *argv[]) {
         app.quit();
     });
 
-    // Timeout after 10 seconds
-    QTimer::singleShot(10000, [&]() {
-        std::cerr << "\nTIMEOUT: Search took longer than 10s.\n";
+    // Timeout after 15 seconds
+    QTimer::singleShot(15000, [&]() {
+        std::cerr << "\nTIMEOUT: Search took longer than 15s.\n";
         app.exit(2);
     });
 

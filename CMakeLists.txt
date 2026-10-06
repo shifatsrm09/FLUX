@@ -49,6 +49,8 @@ qt_add_executable(FLUX
     src/models/TestMedia.cpp
     src/search/SearchResult.h
     src/search/SearchResult.cpp
+    src/search/MediaLibrary.h
+    src/search/MediaLibrary.cpp
     src/search/SearchManager.h
     src/search/SearchManager.cpp
     src/core/Logger.h
@@ -61,11 +63,15 @@ qt_add_qml_module(FLUX
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/SearchPage.qml
         qml/PlayerView.qml
         qml/components/MediaCard.qml
         qml/components/PlaybackControls.qml
         qml/components/DiagnosticPanel.qml
         qml/components/SearchResultItem.qml
+        qml/components/SearchResultCard.qml
+        qml/components/CategorySelector.qml
+        qml/components/DevToolsDrawer.qml
 )
 
 target_link_libraries(FLUX PRIVATE
@@ -90,7 +96,12 @@ if(WIN32)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${SYSTEM_VLC_DIR}/libvlccore.dll"
                 "$<TARGET_FILE_DIR:FLUX>"
-            COMMENT "Copying libVLC binaries to build output directory"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:FLUX>/resources"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/media_library.json"
+                "$<TARGET_FILE_DIR:FLUX>/resources/media_library.json"
+            COMMENT "Copying runtime assets and libVLC binaries to build output directory"
         )
     endif()
 endif()
@@ -100,12 +111,31 @@ add_executable(flux_test_search
     tests/test_search.cpp
     src/search/SearchResult.h
     src/search/SearchResult.cpp
+    src/search/MediaLibrary.h
+    src/search/MediaLibrary.cpp
     src/search/SearchManager.h
     src/search/SearchManager.cpp
     src/core/Logger.h
     src/core/Logger.cpp
 )
 target_link_libraries(flux_test_search PRIVATE
+    Qt6::Core
+    Qt6::Network
+)
+
+# Standalone CLI test for category switching and stale-result prevention
+add_executable(flux_test_category_switch
+    tests/test_category_switch.cpp
+    src/search/SearchResult.h
+    src/search/SearchResult.cpp
+    src/search/MediaLibrary.h
+    src/search/MediaLibrary.cpp
+    src/search/SearchManager.h
+    src/search/SearchManager.cpp
+    src/core/Logger.h
+    src/core/Logger.cpp
+)
+target_link_libraries(flux_test_category_switch PRIVATE
     Qt6::Core
     Qt6::Network
 )
