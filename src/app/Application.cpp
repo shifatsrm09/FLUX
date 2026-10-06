@@ -16,6 +16,7 @@ Application::~Application() {
     FLUX_LOG_INFO("Application", "Shutting down FLUX Application...");
     m_player.reset();
     m_testMedia.reset();
+    m_searchManager.reset();
     VLCInstance::instance().shutdown();
 }
 
@@ -28,9 +29,10 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
         return false;
     }
 
-    // 2. Instantiate core media player and test media catalog
+    // 2. Instantiate core media player, test catalog, and search manager
     m_player = std::make_unique<VLCPlayer>(this);
     m_testMedia = std::make_unique<TestMediaModel>(this);
+    m_searchManager = std::make_unique<SearchManager>(this);
 
     // 3. Register QML types
     qmlRegisterType<VLCVideoItem>("Flux.Media", 1, 0, "VLCVideoItem");
@@ -41,6 +43,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     rootContext->setContextProperty("fluxApp", this);
     rootContext->setContextProperty("fluxPlayer", m_player.get());
     rootContext->setContextProperty("testMediaModel", m_testMedia.get());
+    rootContext->setContextProperty("fluxSearch", m_searchManager.get());
     rootContext->setContextProperty("fluxLogger", &Logger::instance());
 
     FLUX_LOG_INFO("Application", "Core services registered with QML engine");

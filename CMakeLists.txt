@@ -16,6 +16,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Qml
     Quick
     QuickControls2
+    Network
 )
 
 # libVLC configuration
@@ -46,6 +47,10 @@ qt_add_executable(FLUX
     src/media/VLCVideoItem.cpp
     src/models/TestMedia.h
     src/models/TestMedia.cpp
+    src/search/SearchResult.h
+    src/search/SearchResult.cpp
+    src/search/SearchManager.h
+    src/search/SearchManager.cpp
     src/core/Logger.h
     src/core/Logger.cpp
 )
@@ -60,6 +65,7 @@ qt_add_qml_module(FLUX
         qml/components/MediaCard.qml
         qml/components/PlaybackControls.qml
         qml/components/DiagnosticPanel.qml
+        qml/components/SearchResultItem.qml
 )
 
 target_link_libraries(FLUX PRIVATE
@@ -68,6 +74,7 @@ target_link_libraries(FLUX PRIVATE
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
+    Qt6::Network
     ${VLC_LIBRARIES}
 )
 
@@ -90,3 +97,18 @@ if(WIN32)
         )
     endif()
 endif()
+
+# Standalone CLI test for SearchManager
+add_executable(flux_test_search
+    tests/test_search.cpp
+    src/search/SearchResult.h
+    src/search/SearchResult.cpp
+    src/search/SearchManager.h
+    src/search/SearchManager.cpp
+    src/core/Logger.h
+    src/core/Logger.cpp
+)
+target_link_libraries(flux_test_search PRIVATE
+    Qt6::Core
+    Qt6::Network
+)
