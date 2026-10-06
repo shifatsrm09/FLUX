@@ -1,0 +1,38 @@
+{
+    "configurations": [
+        {
+            "name": "Win64-FLUX",
+            "includePath": [
+                "${workspaceFolder}/src/**",
+                "${workspaceFolder}/third_party/vlc/include/**",
+                "C:/Qt/6.8.0/msvc2022_64/include",
+                "C:/Qt/6.8.0/msvc2022_64/include/QtCore",
+                "C:/Qt/6.8.0/msvc2022_64/include/QtGui",
+                "C:/Qt/6.8.0/msvc2022_64/include/QtQml",
+                "C:/Qt/6.8.0/msvc2022_64/include/QtQuick",
+                "C:/Qt/6.8.0/msvc2022_64/include/QtQuickControls2",
+                "C:/Qt/6.8.0/msvc2022_64/include/QtNetwork",
+                "${workspaceFolder}/build/FLUX_autogen/include",
+                "${workspaceFolder}/build/FLUX_autogen/include_Release"
+            ],
+            "defines": [
+                "_UNICODE",
+                "UNICODE",
+                "WIN32",
+                "_WIN32",
+                "_WIN64",
+                "QT_CORE_LIB",
+                "QT_GUI_LIB",
+                "QT_QML_LIB",
+                "QT_QUICK_LIB",
+                "QT_QUICKCONTROLS2_LIB",
+                "QT_NETWORK_LIB"
+            ],
+            "compilerPath": "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "windows-msvc-x64"
+        }
+    ],
+    "version": 4
+}

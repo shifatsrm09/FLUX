@@ -1,8 +1,12 @@
 #include <QGuiApplication>
+#include <QCoreApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlError>
 #include <QQuickStyle>
 #include <QDir>
 #include <QUrl>
+#include <QList>
+#include <QString>
 #include "app/Application.h"
 #include "core/Logger.h"
 

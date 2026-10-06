@@ -1,0 +1,9 @@
+{
+    "cmake.configureSettings": {
+        "CMAKE_PREFIX_PATH": "C:/Qt/6.8.0/msvc2022_64"
+    },
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "C_Cpp.default.cppStandard": "c++20",
+    "C_Cpp.default.cStandard": "c17",
+    "C_Cpp.intelliSenseEngine": "default"
+}
