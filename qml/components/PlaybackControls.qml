@@ -9,31 +9,31 @@ Rectangle {
     property bool isUserInteracting: (seekSlider.pressed || volumeSlider.pressed || audioTrackCombo.popup.visible || subTrackCombo.popup.visible)
     signal toggleFullscreenRequested()
 
-    implicitHeight: 64
-    color: "#e60a1224"
-    radius: 10
-    border.color: "#1e2c48"
+    implicitHeight: 60
+    color: "#D90B0E14"
+    radius: 8
+    border.color: "#1A1E29"
     border.width: 1
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 16
-        anchors.rightMargin: 16
-        spacing: 12
+        anchors.leftMargin: 20
+        anchors.rightMargin: 20
+        spacing: 16
 
         // Play / Pause Button
         Button {
             id: playBtn
-            implicitWidth: 38
-            implicitHeight: 38
+            implicitWidth: 36
+            implicitHeight: 36
             background: Rectangle {
-                radius: 19
-                color: playBtn.down ? "#1d4ed8" : (playBtn.hovered ? "#2563eb" : "#3b82f6")
+                radius: 18
+                color: playBtn.down ? "#0284C7" : (playBtn.hovered ? "#0EA5E9" : "#1A202C")
             }
             contentItem: Text {
-                text: root.player && root.player.isPlaying ? "❚❚" : "▶"
-                color: "#ffffff"
-                font.pixelSize: 15
+                text: root.player && root.player.isPlaying ? "❙❙" : "▶"
+                color: "#FFFFFF"
+                font.pixelSize: 13
                 font.bold: true
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
@@ -43,36 +43,13 @@ Rectangle {
             }
         }
 
-        // Stop Button
-        Button {
-            id: stopBtn
-            implicitWidth: 34
-            implicitHeight: 34
-            background: Rectangle {
-                radius: 17
-                color: stopBtn.down ? "#475569" : (stopBtn.hovered ? "#334155" : "#1e293b")
-            }
-            contentItem: Text {
-                text: "■"
-                color: "#94a3b8"
-                font.pixelSize: 13
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-            onClicked: {
-                if (root.player) root.player.stop()
-            }
-        }
-
         // Current Playback Time
         Text {
             id: currentTimeLabel
             text: root.player ? root.player.formattedTime : "00:00"
-            color: "#e2e8f0"
+            color: "#E2E8F0"
             font.pixelSize: 12
-            font.family: "Consolas, monospace"
-            font.bold: true
+            font.family: "Consolas, Segoe UI, monospace"
         }
 
         // Seek Bar (Timeline Slider)
@@ -83,42 +60,31 @@ Rectangle {
             to: 1.0
             value: root.player ? root.player.position : 0.0
 
-            property bool userSeeking: false
-
             background: Rectangle {
                 x: seekSlider.leftPadding
                 y: seekSlider.topPadding + seekSlider.availableHeight / 2 - height / 2
                 implicitWidth: 200
-                implicitHeight: 6
+                implicitHeight: 4
                 width: seekSlider.availableWidth
                 height: implicitHeight
-                radius: 3
-                color: "#1e293b"
+                radius: 2
+                color: "#1E222D"
 
                 Rectangle {
                     width: seekSlider.visualPosition * parent.width
                     height: parent.height
-                    color: "#3b82f6"
-                    radius: 3
+                    color: "#38BDF8"
+                    radius: 2
                 }
             }
 
             handle: Rectangle {
                 x: seekSlider.leftPadding + seekSlider.visualPosition * (seekSlider.availableWidth - width)
                 y: seekSlider.topPadding + seekSlider.availableHeight / 2 - height / 2
-                implicitWidth: 14
-                implicitHeight: 14
-                radius: 7
-                color: seekSlider.pressed ? "#60a5fa" : "#ffffff"
-                border.color: "#3b82f6"
-                border.width: 2
-            }
-
-            onPressedChanged: {
-                userSeeking = pressed
-                if (!pressed && root.player) {
-                    root.player.seek(value)
-                }
+                implicitWidth: 12
+                implicitHeight: 12
+                radius: 6
+                color: seekSlider.pressed ? "#38BDF8" : "#FFFFFF"
             }
 
             onMoved: {
@@ -132,9 +98,9 @@ Rectangle {
         Text {
             id: durationLabel
             text: root.player ? root.player.formattedDuration : "00:00"
-            color: "#94a3b8"
+            color: "#8F96A3"
             font.pixelSize: 12
-            font.family: "Consolas, monospace"
+            font.family: "Consolas, Segoe UI, monospace"
         }
 
         // Volume Mute Button
@@ -144,8 +110,10 @@ Rectangle {
             implicitHeight: 32
             background: Rectangle { color: "transparent" }
             contentItem: Text {
-                text: root.player && root.player.muted ? "🔇" : "🔊"
-                font.pixelSize: 15
+                text: root.player && root.player.muted ? "VOL ✕" : "VOL"
+                color: muteBtn.hovered ? "#38BDF8" : "#8F96A3"
+                font.pixelSize: 11
+                font.weight: Font.Medium
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
@@ -157,7 +125,7 @@ Rectangle {
         // Volume Slider
         Slider {
             id: volumeSlider
-            implicitWidth: 80
+            implicitWidth: 70
             from: 0
             to: 100
             value: root.player ? root.player.volume : 100
@@ -165,18 +133,18 @@ Rectangle {
             background: Rectangle {
                 x: volumeSlider.leftPadding
                 y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
-                implicitWidth: 80
-                implicitHeight: 4
+                implicitWidth: 70
+                implicitHeight: 3
                 width: volumeSlider.availableWidth
                 height: implicitHeight
-                radius: 2
-                color: "#334155"
+                radius: 1.5
+                color: "#1E222D"
 
                 Rectangle {
                     width: volumeSlider.visualPosition * parent.width
                     height: parent.height
-                    color: "#38bdf8"
-                    radius: 2
+                    color: "#8F96A3"
+                    radius: 1.5
                 }
             }
 
@@ -186,7 +154,7 @@ Rectangle {
                 implicitWidth: 10
                 implicitHeight: 10
                 radius: 5
-                color: "#ffffff"
+                color: "#FFFFFF"
             }
 
             onMoved: {
@@ -197,23 +165,23 @@ Rectangle {
         // Audio Track Selector
         ComboBox {
             id: audioTrackCombo
-            implicitWidth: 120
-            implicitHeight: 32
+            implicitWidth: 100
+            implicitHeight: 30
             model: root.player ? root.player.audioTracks : []
             textRole: "name"
             valueRole: "id"
 
             background: Rectangle {
-                color: "#1e293b"
+                color: "#101218"
                 radius: 4
-                border.color: "#334155"
+                border.color: "#1E222D"
             }
 
             contentItem: Text {
                 leftPadding: 8
                 rightPadding: 8
-                text: audioTrackCombo.currentText.length > 0 ? audioTrackCombo.currentText : "Audio Track"
-                color: "#93c5fd"
+                text: audioTrackCombo.currentText.length > 0 ? audioTrackCombo.currentText : "Audio"
+                color: "#C7CBD4"
                 font.pixelSize: 11
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
@@ -230,23 +198,23 @@ Rectangle {
         // Subtitle Track Selector
         ComboBox {
             id: subTrackCombo
-            implicitWidth: 120
-            implicitHeight: 32
+            implicitWidth: 100
+            implicitHeight: 30
             model: root.player ? root.player.subtitleTracks : []
             textRole: "name"
             valueRole: "id"
 
             background: Rectangle {
-                color: "#1e293b"
+                color: "#101218"
                 radius: 4
-                border.color: "#334155"
+                border.color: "#1E222D"
             }
 
             contentItem: Text {
                 leftPadding: 8
                 rightPadding: 8
                 text: subTrackCombo.currentText.length > 0 ? subTrackCombo.currentText : "Subtitles"
-                color: "#93c5fd"
+                color: "#C7CBD4"
                 font.pixelSize: 11
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
@@ -260,18 +228,18 @@ Rectangle {
             }
         }
 
-        // Fullscreen Toggle
+        // Fullscreen Toggle Button
         Button {
             id: fsBtn
             implicitWidth: 32
             implicitHeight: 32
             background: Rectangle {
-                color: fsBtn.hovered ? "#334155" : "#1e293b"
+                color: fsBtn.hovered ? "#1E222D" : "transparent"
                 radius: 4
             }
             contentItem: Text {
                 text: "⛶"
-                color: "#e2e8f0"
+                color: fsBtn.hovered ? "#38BDF8" : "#8F96A3"
                 font.pixelSize: 14
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter

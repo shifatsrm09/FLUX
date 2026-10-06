@@ -9,11 +9,11 @@ ApplicationWindow {
 
     visible: true
     width: 1280
-    height: 820
+    height: 800
     minimumWidth: 960
-    minimumHeight: 640
+    minimumHeight: 600
     title: "FLUX"
-    color: "#070a13"
+    color: "#08090C"
 
     property bool isFullscreen: false
     property string currentPage: "search" // "search" | "player"
@@ -56,142 +56,120 @@ ApplicationWindow {
         }
     }
 
+    Shortcut {
+        sequence: "Ctrl+D"
+        onActivated: devDrawer.open()
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
         // =====================================================================
-        // Top Navigation Bar (Hidden in fullscreen & hidden in player view)
+        // Top Navigation Bar (Hidden in fullscreen & player)
         // =====================================================================
         Rectangle {
             Layout.fillWidth: true
-            height: 60
-            color: "#0a0f1d"
-            border.color: "#162035"
-            border.width: 1
+            height: 56
+            color: "#08090C"
             visible: !isFullscreen && currentPage !== "player"
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 24
-                anchors.rightMargin: 24
-                spacing: 16
+                anchors.leftMargin: 28
+                anchors.rightMargin: 28
+                spacing: 20
 
-                // Logo Brand
-                RowLayout {
-                    spacing: 10
-
-                    Text {
-                        text: "FLUX"
-                        font.pixelSize: 22
-                        font.bold: true
-                        color: "#ffffff"
-                        font.letterSpacing: 2
-                    }
-
-                    Rectangle {
-                        implicitWidth: 84
-                        implicitHeight: 20
-                        radius: 10
-                        color: "#1e3a8a"
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "BDIX STREAM"
-                            color: "#93c5fd"
-                            font.pixelSize: 9
-                            font.bold: true
-                            font.letterSpacing: 1
-                        }
-                    }
+                // Brand Logo
+                Text {
+                    text: "FLUX"
+                    font.pixelSize: 18
+                    font.weight: Font.Bold
+                    color: "#F5F5F5"
+                    font.letterSpacing: 3
                 }
 
                 Item { Layout.fillWidth: true }
 
-                // Navigation Items
+                // Clean Navigation Links
                 RowLayout {
-                    spacing: 12
+                    spacing: 20
 
-                    // Search Nav
-                    Button {
-                        id: navSearchBtn
-                        implicitHeight: 34
-                        background: Rectangle {
-                            radius: 6
-                            color: currentPage === "search" ? "#1e293b" : "transparent"
+                    // Search Link
+                    Text {
+                        text: "Search"
+                        color: currentPage === "search" ? "#F5F5F5" : "#8F96A3"
+                        font.pixelSize: 13
+                        font.weight: currentPage === "search" ? Font.Medium : Font.Normal
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: currentPage = "search"
                         }
-                        contentItem: Text {
-                            text: "Search"
-                            color: currentPage === "search" ? "#ffffff" : "#94a3b8"
-                            font.pixelSize: 13
-                            font.bold: currentPage === "search"
-                        }
-                        onClicked: currentPage = "search"
                     }
 
-                    // Return to Player if already active
-                    Button {
-                        id: navPlayerBtn
+                    // Return to Player if already streaming
+                    Text {
                         visible: fluxPlayer && fluxPlayer.isPlaying
-                        implicitHeight: 34
-                        background: Rectangle {
-                            radius: 6
-                            color: "#1e3a8a"
+                        text: "Now Playing ▶"
+                        color: "#38BDF8"
+                        font.pixelSize: 13
+                        font.weight: Font.Medium
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: currentPage = "player"
                         }
-                        contentItem: RowLayout {
-                            spacing: 6
-                            Text {
-                                text: "▶"
-                                color: "#60a5fa"
-                                font.pixelSize: 11
-                            }
-                            Text {
-                                text: "Now Playing"
-                                color: "#ffffff"
-                                font.pixelSize: 12
-                                font.bold: true
-                            }
-                        }
-                        onClicked: currentPage = "player"
                     }
 
-                    // Developer Tools & Test Catalog Toggle
-                    Button {
-                        id: navDevBtn
-                        implicitHeight: 34
-                        background: Rectangle {
-                            radius: 6
-                            color: navDevBtn.hovered ? "#1e293b" : "transparent"
-                            border.color: "#334155"
-                            border.width: 1
+                    // Unobtrusive Developer & Settings Access
+                    Item {
+                        implicitWidth: 24
+                        implicitHeight: 24
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "···"
+                            color: devMouse.containsMouse ? "#F5F5F5" : "#555C6A"
+                            font.pixelSize: 16
+                            font.weight: Font.Bold
                         }
-                        contentItem: RowLayout {
-                            spacing: 6
-                            Text {
-                                text: "⚙"
-                                color: "#94a3b8"
-                                font.pixelSize: 12
-                            }
-                            Text {
-                                text: "Dev Tools"
-                                color: "#94a3b8"
-                                font.pixelSize: 12
-                            }
+
+                        MouseArea {
+                            id: devMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: devDrawer.open()
                         }
-                        onClicked: devDrawer.open()
+
+                        ToolTip.visible: devMouse.containsMouse
+                        ToolTip.delay: 500
+                        ToolTip.text: "Developer Tools (Ctrl+D)"
                     }
                 }
+            }
+
+            // Hairline bottom separator
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: "#141721"
             }
         }
 
         // =====================================================================
-        // Main Content View Area
+        // Content Area (Search View or Player View)
         // =====================================================================
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            // Page 1: Search View
+            // Search Experience
             SearchPage {
                 anchors.fill: parent
                 visible: currentPage === "search"
@@ -200,7 +178,7 @@ ApplicationWindow {
                 }
             }
 
-            // Page 2: Dedicated Player View
+            // Cinematic Full-Viewport Player
             PlayerView {
                 anchors.fill: parent
                 visible: currentPage === "player"
@@ -214,7 +192,7 @@ ApplicationWindow {
         }
     }
 
-    // Developer Tools Slide-Out Drawer
+    // Unobtrusive Developer Slide-Out Drawer
     DevToolsDrawer {
         id: devDrawer
         player: fluxPlayer

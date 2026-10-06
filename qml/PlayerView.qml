@@ -52,52 +52,51 @@ Rectangle {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 64
+        height: 72
         opacity: root.showControls ? 1.0 : 0.0
         visible: opacity > 0
 
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: 180 } }
 
         gradient: Gradient {
-            GradientStop { position: 0.0; color: "#d0000000" }
+            GradientStop { position: 0.0; color: "#CC000000" }
             GradientStop { position: 1.0; color: "#00000000" }
         }
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 20
-            anchors.rightMargin: 20
+            anchors.leftMargin: 24
+            anchors.rightMargin: 24
             spacing: 16
 
             Button {
                 id: backBtn
-                implicitHeight: 36
-                implicitWidth: backRow.implicitWidth + 24
+                implicitHeight: 34
+                implicitWidth: backRow.implicitWidth + 20
 
                 background: Rectangle {
-                    radius: 18
-                    color: backBtn.down ? "#1d4ed8" : (backBtn.hovered ? "#2563eb" : "#cc0f172a")
-                    border.color: "#334155"
+                    radius: 6
+                    color: backBtn.down ? "#1F2430" : (backBtn.hovered ? "#161922" : "#0D0F14")
+                    border.color: backBtn.hovered ? "#38BDF8" : "#222634"
                     border.width: 1
                 }
 
                 contentItem: RowLayout {
                     id: backRow
                     anchors.centerIn: parent
-                    spacing: 8
+                    spacing: 6
 
                     Text {
                         text: "←"
-                        color: "#ffffff"
-                        font.pixelSize: 14
-                        font.bold: true
+                        color: backBtn.hovered ? "#38BDF8" : "#F5F5F5"
+                        font.pixelSize: 13
                     }
 
                     Text {
-                        text: "Back to Search"
-                        color: "#ffffff"
+                        text: "Back"
+                        color: backBtn.hovered ? "#38BDF8" : "#F5F5F5"
                         font.pixelSize: 12
-                        font.bold: true
+                        font.weight: Font.Medium
                     }
                 }
 
@@ -106,10 +105,10 @@ Rectangle {
 
             Text {
                 Layout.fillWidth: true
-                text: root.mediaTitle.length > 0 ? root.mediaTitle : (root.player ? root.player.url : "")
-                color: "#f8fafc"
-                font.pixelSize: 14
-                font.bold: true
+                text: root.mediaTitle
+                color: "#F5F5F5"
+                font.pixelSize: 15
+                font.weight: Font.DemiBold
                 elide: Text.ElideRight
             }
         }
@@ -118,11 +117,12 @@ Rectangle {
     // Buffering Spinner Overlay
     Rectangle {
         anchors.centerIn: parent
-        width: 140
-        height: 54
-        radius: 8
-        color: "#d90b1329"
-        border.color: "#1e293b"
+        implicitWidth: 120
+        implicitHeight: 44
+        radius: 6
+        color: "#E60A0D13"
+        border.color: "#1E222D"
+        border.width: 1
         visible: root.player && root.player.isBuffering
 
         RowLayout {
@@ -130,25 +130,15 @@ Rectangle {
             spacing: 10
 
             BusyIndicator {
-                implicitWidth: 20
-                implicitHeight: 20
+                implicitWidth: 16
+                implicitHeight: 16
                 running: true
             }
 
-            ColumnLayout {
-                spacing: 2
-                Text {
-                    text: "Buffering..."
-                    color: "#38bdf8"
-                    font.pixelSize: 12
-                    font.bold: true
-                }
-                Text {
-                    text: root.player ? Math.round(root.player.bufferingPercent) + "%" : ""
-                    color: "#94a3b8"
-                    font.pixelSize: 10
-                    font.family: "Consolas, monospace"
-                }
+            Text {
+                text: "Buffering"
+                color: "#E2E8F0"
+                font.pixelSize: 12
             }
         }
     }
@@ -159,12 +149,12 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.margins: 20
+        anchors.margins: 24
         player: root.player
         opacity: root.showControls ? 1.0 : 0.0
         visible: opacity > 0
 
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: 180 } }
 
         onToggleFullscreenRequested: root.toggleFullscreenRequested()
     }

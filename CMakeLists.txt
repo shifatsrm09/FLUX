@@ -72,6 +72,7 @@ qt_add_qml_module(FLUX
         qml/components/SearchResultCard.qml
         qml/components/CategorySelector.qml
         qml/components/DevToolsDrawer.qml
+        qml/components/MediaFormatter.js
 )
 
 target_link_libraries(FLUX PRIVATE

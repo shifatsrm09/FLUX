@@ -16,14 +16,14 @@ Drawer {
     height: parent.height
 
     background: Rectangle {
-        color: "#080e1b"
-        border.color: "#1e293b"
+        color: "#0B0D12"
+        border.color: "#181C26"
         border.width: 1
     }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 20
+        anchors.margins: 24
         spacing: 16
 
         // Header
@@ -34,31 +34,30 @@ Drawer {
                 Layout.fillWidth: true
                 spacing: 2
                 Text {
-                    text: "Developer Tools"
-                    color: "#ffffff"
+                    text: "Developer & Diagnostics"
+                    color: "#F5F5F5"
                     font.pixelSize: 16
-                    font.bold: true
+                    font.weight: Font.DemiBold
                 }
                 Text {
-                    text: "Internal diagnostics & pre-verified test streams"
-                    color: "#64748b"
+                    text: "Test catalog and libVLC diagnostic output"
+                    color: "#5E6676"
                     font.pixelSize: 11
                 }
             }
 
             Button {
                 id: closeBtn
-                implicitWidth: 32
-                implicitHeight: 32
+                implicitWidth: 28
+                implicitHeight: 28
                 background: Rectangle {
-                    radius: 16
-                    color: closeBtn.hovered ? "#334155" : "#1e293b"
+                    radius: 14
+                    color: closeBtn.hovered ? "#1C202B" : "transparent"
                 }
                 contentItem: Text {
                     text: "✕"
-                    color: "#94a3b8"
-                    font.pixelSize: 12
-                    font.bold: true
+                    color: "#8F96A3"
+                    font.pixelSize: 11
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -69,7 +68,7 @@ Drawer {
         Rectangle {
             Layout.fillWidth: true
             height: 1
-            color: "#1e293b"
+            color: "#181C26"
         }
 
         ScrollView {
@@ -79,33 +78,75 @@ Drawer {
 
             ColumnLayout {
                 width: parent.width
-                spacing: 18
+                spacing: 20
 
                 // -------------------------------------------------------------
-                // Section 1: Pre-verified Test Catalog
+                // Section 1: Pre-verified Test Media
                 // -------------------------------------------------------------
-                Text {
-                    text: "PRE-VERIFIED TEST MEDIA"
-                    color: "#94a3b8"
-                    font.pixelSize: 11
-                    font.bold: true
-                    font.letterSpacing: 1
-                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
 
-                Repeater {
-                    model: root.catalogModel
+                    Text {
+                        text: "PRE-VERIFIED TEST MEDIA"
+                        color: "#5E6676"
+                        font.pixelSize: 10
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.2
+                    }
 
-                    delegate: MediaCard {
-                        Layout.fillWidth: true
-                        title: model.title
-                        year: model.year
-                        badge: model.badge
-                        description: model.description
-                        url: model.url
-                        isSelected: (root.player && root.player.url === model.url)
-                        onClicked: {
-                            root.playTestRequested(model.url, model.title)
-                            root.close()
+                    Repeater {
+                        model: root.catalogModel
+
+                        delegate: Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: 64
+                            radius: 6
+                            color: itemMouse.containsMouse ? "#141720" : "#0F1117"
+                            border.color: (root.player && root.player.url === model.url) ? "#38BDF8" : "#1A1D26"
+                            border.width: 1
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 12
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 2
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: model.title
+                                        color: "#F5F5F5"
+                                        font.pixelSize: 13
+                                        font.weight: Font.Medium
+                                        elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: model.year + " · " + model.badge
+                                        color: "#8F96A3"
+                                        font.pixelSize: 11
+                                    }
+                                }
+
+                                Text {
+                                    text: "▶"
+                                    color: itemMouse.containsMouse ? "#38BDF8" : "#5E6676"
+                                    font.pixelSize: 12
+                                }
+                            }
+
+                            MouseArea {
+                                id: itemMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.playTestRequested(model.url, model.title)
+                                    root.close()
+                                }
+                            }
                         }
                     }
                 }
@@ -113,53 +154,67 @@ Drawer {
                 // -------------------------------------------------------------
                 // Section 2: Direct URL Test
                 // -------------------------------------------------------------
-                Text {
-                    text: "DIRECT STREAM TEST"
-                    color: "#94a3b8"
-                    font.pixelSize: 11
-                    font.bold: true
-                    font.letterSpacing: 1
-                }
-
-                RowLayout {
+                ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 8
 
-                    TextField {
-                        id: directUrlInput
-                        Layout.fillWidth: true
-                        implicitHeight: 36
-                        placeholderText: "http://172.16.50.x/... (MKV/MP4)"
-                        font.pixelSize: 11
-                        font.family: "Consolas, monospace"
-                        color: "#f8fafc"
-                        background: Rectangle {
-                            color: "#0f172a"
-                            border.color: "#1e293b"
-                            radius: 4
-                        }
+                    Text {
+                        text: "DIRECT URL STREAM TEST"
+                        color: "#5E6676"
+                        font.pixelSize: 10
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.2
                     }
 
-                    Button {
-                        id: directPlayBtn
-                        implicitWidth: 64
-                        implicitHeight: 36
-                        background: Rectangle {
-                            color: "#2563eb"
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: 36
                             radius: 4
+                            color: "#0E1016"
+                            border.color: "#1E222D"
+                            border.width: 1
+
+                            TextField {
+                                id: directUrlInput
+                                anchors.fill: parent
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 10
+                                placeholderText: "http://172.16.50.x/... (MKV/MP4)"
+                                placeholderTextColor: "#444A57"
+                                font.pixelSize: 11
+                                font.family: "Consolas, monospace"
+                                color: "#F5F5F5"
+                                background: null
+                            }
                         }
-                        contentItem: Text {
-                            text: "Play"
-                            color: "#ffffff"
-                            font.pixelSize: 11
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        onClicked: {
-                            if (directUrlInput.text.trim().length > 0) {
-                                root.playTestRequested(directUrlInput.text.trim(), "Direct URL Stream")
-                                root.close()
+
+                        Button {
+                            id: directPlayBtn
+                            implicitWidth: 60
+                            implicitHeight: 36
+                            background: Rectangle {
+                                color: directPlayBtn.hovered ? "#0EA5E9" : "#171A21"
+                                border.color: "#232734"
+                                border.width: 1
+                                radius: 4
+                            }
+                            contentItem: Text {
+                                text: "Play"
+                                color: "#F5F5F5"
+                                font.pixelSize: 11
+                                font.weight: Font.Medium
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            onClicked: {
+                                if (directUrlInput.text.trim().length > 0) {
+                                    root.playTestRequested(directUrlInput.text.trim(), "Direct Stream")
+                                    root.close()
+                                }
                             }
                         }
                     }
@@ -168,44 +223,49 @@ Drawer {
                 // -------------------------------------------------------------
                 // Section 3: libVLC Diagnostic Console
                 // -------------------------------------------------------------
-                Text {
-                    text: "LIBVLC DIAGNOSTIC LOGS"
-                    color: "#94a3b8"
-                    font.pixelSize: 11
-                    font.bold: true
-                    font.letterSpacing: 1
-                }
-
-                Rectangle {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    implicitHeight: 180
-                    color: "#050912"
-                    border.color: "#1e293b"
-                    border.width: 1
-                    radius: 6
+                    spacing: 8
 
-                    ScrollView {
-                        anchors.fill: parent
-                        anchors.margins: 8
-                        clip: true
+                    Text {
+                        text: "LIBVLC DIAGNOSTIC LOGS"
+                        color: "#5E6676"
+                        font.pixelSize: 10
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.2
+                    }
 
-                        ListView {
-                            width: parent.width
-                            model: root.logger ? root.logger.recentLogs : []
-                            spacing: 3
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 200
+                        color: "#08090C"
+                        border.color: "#181C26"
+                        border.width: 1
+                        radius: 4
 
-                            delegate: Text {
+                        ScrollView {
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            clip: true
+
+                            ListView {
                                 width: parent.width
-                                text: modelData
-                                color: {
-                                    if (modelData.indexOf("[ERROR]") !== -1) return "#f87171"
-                                    if (modelData.indexOf("[WARN ]") !== -1) return "#fbbf24"
-                                    if (modelData.indexOf("[VLC  ]") !== -1) return "#38bdf8"
-                                    return "#94a3b8"
+                                model: root.logger ? root.logger.recentLogs : []
+                                spacing: 2
+
+                                delegate: Text {
+                                    width: parent.width
+                                    text: modelData
+                                    color: {
+                                        if (modelData.indexOf("[ERROR]") !== -1) return "#F87171"
+                                        if (modelData.indexOf("[WARN ]") !== -1) return "#FBBF24"
+                                        if (modelData.indexOf("[VLC  ]") !== -1) return "#38BDF8"
+                                        return "#7E8696"
+                                    }
+                                    font.pixelSize: 10
+                                    font.family: "Consolas, monospace"
+                                    wrapMode: Text.WrapAnywhere
                                 }
-                                font.pixelSize: 10
-                                font.family: "Consolas, monospace"
-                                wrapMode: Text.WrapAnywhere
                             }
                         }
                     }
