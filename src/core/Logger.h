@@ -28,6 +28,7 @@ public:
 
     void log(LogLevel level, const QString &category, const QString &message);
     QStringList recentLogs() const;
+    QString logFilePath() const;
 
     Q_INVOKABLE void clear();
 

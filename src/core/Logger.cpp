@@ -11,8 +11,11 @@ Logger& Logger::instance() {
 }
 
 Logger::Logger() {
-    QString logDirPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir dir(logDirPath);
+    QString localAppData = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    if (localAppData.isEmpty()) {
+        localAppData = QDir::homePath() + "/AppData/Local";
+    }
+    QDir dir(QDir(localAppData).filePath("FLUX/logs"));
     if (!dir.exists()) {
         dir.mkpath(".");
     }
@@ -21,7 +24,15 @@ Logger::Logger() {
     m_logFile.setFileName(logFilePath);
     if (m_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
         m_fileStream.setDevice(&m_logFile);
+        QString startHeader = QString("\n=== FLUX Application Session Started [%1] ===\n")
+                                  .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz"));
+        m_fileStream << startHeader;
+        m_fileStream.flush();
     }
+}
+
+QString Logger::logFilePath() const {
+    return m_logFile.fileName();
 }
 
 Logger::~Logger() {

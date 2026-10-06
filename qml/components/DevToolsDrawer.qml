@@ -34,7 +34,7 @@ Drawer {
                 Layout.fillWidth: true
                 spacing: 2
                 Text {
-                    text: "Developer & Diagnostics"
+                    text: "FLUX v0.0.1 • Developer & Diagnostics"
                     color: "#F5F5F5"
                     font.pixelSize: 16
                     font.weight: Font.DemiBold

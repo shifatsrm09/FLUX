@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(FLUX VERSION 0.1.0 LANGUAGES CXX)
+project(FLUX VERSION 0.0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,8 +34,8 @@ include_directories(
     ${VLC_INCLUDE_DIRS}
 )
 
-# Project executable
-qt_add_executable(FLUX
+# Project executable (Windows GUI subsystem)
+qt_add_executable(FLUX WIN32
     src/main.cpp
     src/app/Application.h
     src/app/Application.cpp
@@ -55,6 +55,11 @@ qt_add_executable(FLUX
     src/search/SearchManager.cpp
     src/core/Logger.h
     src/core/Logger.cpp
+    resources/flux.rc
+)
+
+set_target_properties(FLUX PROPERTIES
+    WIN32_EXECUTABLE TRUE
 )
 
 # Qt Quick / QML Module
@@ -139,4 +144,20 @@ add_executable(flux_test_category_switch
 target_link_libraries(flux_test_category_switch PRIVATE
     Qt6::Core
     Qt6::Network
+)
+
+# Standalone CLI test for libVLC playback pipeline
+add_executable(flux_test_playback
+    tests/test_playback.cpp
+    src/media/VLCInstance.h
+    src/media/VLCInstance.cpp
+    src/media/VLCPlayer.h
+    src/media/VLCPlayer.cpp
+    src/core/Logger.h
+    src/core/Logger.cpp
+)
+target_link_libraries(flux_test_playback PRIVATE
+    Qt6::Core
+    Qt6::Network
+    ${VLC_LIBRARIES}
 )

@@ -20,7 +20,22 @@ int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
     QQuickStyle::setStyle("Basic");
 
-    FLUX_LOG_INFO("Main", "Initializing FLUX Native Desktop Player...");
+    // Install Qt message handler to route Qt warnings/errors to our release log file
+    qInstallMessageHandler([](QtMsgType type, const QMessageLogContext &context, const QString &msg) {
+        Q_UNUSED(context);
+        Flux::LogLevel level = Flux::LogLevel::Info;
+        switch (type) {
+        case QtDebugMsg:    level = Flux::LogLevel::Debug; break;
+        case QtInfoMsg:     level = Flux::LogLevel::Info; break;
+        case QtWarningMsg:  level = Flux::LogLevel::Warning; break;
+        case QtCriticalMsg: level = Flux::LogLevel::Error; break;
+        case QtFatalMsg:    level = Flux::LogLevel::Error; break;
+        }
+        Flux::Logger::instance().log(level, "Qt", msg);
+    });
+
+    FLUX_LOG_INFO("Main", QString("Initializing FLUX v0.0.1 Native Desktop Player... Log path: %1")
+                              .arg(Flux::Logger::instance().logFilePath()));
 
     QQmlApplicationEngine engine;
     Flux::Application fluxApp;
