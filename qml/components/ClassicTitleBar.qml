@@ -7,8 +7,11 @@ Rectangle {
     id: root
 
     property var window: null
-    property string subtitle: ""
     property bool isMaximized: window ? window.visibility === Window.Maximized : false
+    property bool showNowPlaying: false
+
+    signal nowPlayingClicked()
+    signal devToolsClicked()
 
     height: 36
     color: "#08090C"
@@ -41,66 +44,71 @@ Rectangle {
         }
     }
 
-    // Left Branding & Context Title
-    RowLayout {
+    // Left Title: Only FLUX remains
+    Text {
         anchors.left: parent.left
-        anchors.leftMargin: 12
+        anchors.leftMargin: 16
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 9
+        text: "FLUX"
+        font.pixelSize: 12
+        font.weight: Font.Bold
+        font.letterSpacing: 2
+        color: "#E2E8F0"
         z: 1
-
-        // Sleek FLUX Logo Mark
-        Rectangle {
-            width: 18
-            height: 18
-            radius: 4
-            color: "#0F172A"
-            border.color: "#38BDF8"
-            border.width: 1
-
-            Text {
-                anchors.centerIn: parent
-                text: "F"
-                color: "#38BDF8"
-                font.pixelSize: 11
-                font.weight: Font.Black
-            }
-        }
-
-        // App Title
-        Text {
-            text: "FLUX"
-            font.pixelSize: 12
-            font.weight: Font.Bold
-            font.letterSpacing: 2
-            color: "#E2E8F0"
-        }
-
-        // Separator
-        Text {
-            text: "•"
-            font.pixelSize: 10
-            color: "#334155"
-        }
-
-        // Dynamic Subtitle / Playing Item
-        Text {
-            text: root.subtitle !== "" ? root.subtitle : "Media Player"
-            font.pixelSize: 11
-            color: root.subtitle !== "" ? "#94A3B8" : "#64748B"
-            font.weight: root.subtitle !== "" ? Font.Medium : Font.Normal
-            elide: Text.ElideRight
-            Layout.maximumWidth: Math.max(120, root.width - 320)
-        }
     }
 
-    // Right Window Control Buttons (Minimize, Maximize / Restore, Close)
+    // Right Controls
     RowLayout {
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         spacing: 0
         z: 2
+
+        // Return to Player if already streaming
+        Text {
+            visible: root.showNowPlaying
+            text: "Now Playing ▶"
+            color: nowPlayingMouse.containsMouse ? "#7DD3FC" : "#38BDF8"
+            font.pixelSize: 12
+            font.weight: Font.Medium
+            Layout.rightMargin: 14
+
+            MouseArea {
+                id: nowPlayingMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.nowPlayingClicked()
+            }
+        }
+
+        // Developer Tools Access
+        Item {
+            implicitWidth: 32
+            implicitHeight: 36
+            Layout.rightMargin: 6
+
+            Text {
+                anchors.centerIn: parent
+                text: "···"
+                color: devMouse.containsMouse ? "#F5F5F5" : "#64748B"
+                font.pixelSize: 16
+                font.weight: Font.Bold
+            }
+
+            MouseArea {
+                id: devMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.devToolsClicked()
+            }
+
+            ToolTip.visible: devMouse.containsMouse
+            ToolTip.delay: 500
+            ToolTip.text: "Developer Tools (Ctrl+D)"
+        }
 
         // Minimize Button
         Rectangle {
