@@ -287,8 +287,13 @@ void VLCPlayer::play(const QString &mediaUrl) {
 }
 
 void VLCPlayer::pause() {
-    if (m_mediaPlayer && isPlaying()) {
+    if (!m_mediaPlayer) return;
+    libvlc_state_t st = libvlc_media_player_get_state(m_mediaPlayer);
+    if (st == libvlc_Playing || st == libvlc_Buffering || st == libvlc_Opening) {
         libvlc_media_player_pause(m_mediaPlayer);
+        m_state = "Paused";
+        emit stateChanged();
+        FLUX_LOG_INFO("VLCPlayer", "Playback paused immediately");
     }
 }
 

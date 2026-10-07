@@ -45,13 +45,36 @@ ApplicationWindow {
         }
     }
 
+    function returnToHome() {
+        if (fluxPlayer) {
+            fluxPlayer.pause()
+        }
+        if (isFullscreen) {
+            toggleFullscreen()
+        }
+        currentPage = "search"
+        if (fluxSearch) {
+            fluxSearch.clear()
+        }
+    }
+
+    function returnToSearch() {
+        if (fluxPlayer) {
+            fluxPlayer.pause()
+        }
+        if (isFullscreen) {
+            toggleFullscreen()
+        }
+        currentPage = "search"
+    }
+
     Shortcut {
         sequence: "Escape"
         onActivated: {
             if (isFullscreen) {
                 toggleFullscreen()
             } else if (currentPage === "player") {
-                currentPage = "search"
+                window.returnToSearch()
             }
         }
     }
@@ -91,6 +114,7 @@ ApplicationWindow {
             showNowPlaying: fluxPlayer && fluxPlayer.isPlaying && currentPage !== "player"
             onNowPlayingClicked: currentPage = "player"
             onDevToolsClicked: devDrawer.open()
+            onHomeClicked: window.returnToHome()
         }
 
         // =====================================================================
@@ -116,9 +140,7 @@ ApplicationWindow {
                 player: fluxPlayer
                 mediaTitle: window.currentPlayingTitle
                 onToggleFullscreenRequested: window.toggleFullscreen()
-                onBackRequested: {
-                    currentPage = "search"
-                }
+                onBackRequested: window.returnToSearch()
             }
         }
     }

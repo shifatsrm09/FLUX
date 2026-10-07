@@ -10,6 +10,7 @@ Rectangle {
     property bool isMaximized: window ? window.visibility === Window.Maximized : false
     property bool showNowPlaying: false
 
+    signal homeClicked()
     signal nowPlayingClicked()
     signal devToolsClicked()
 
@@ -44,17 +45,39 @@ Rectangle {
         }
     }
 
-    // Left Title: Only FLUX remains
-    Text {
+    // Left Title: Clickable FLUX Home Navigation
+    Item {
+        id: fluxHomeBtn
         anchors.left: parent.left
         anchors.leftMargin: 16
         anchors.verticalCenter: parent.verticalCenter
-        text: "FLUX"
-        font.pixelSize: 12
-        font.weight: Font.Bold
-        font.letterSpacing: 2
-        color: "#E2E8F0"
-        z: 1
+        implicitWidth: fluxText.implicitWidth + 8
+        implicitHeight: 24
+        z: 3
+
+        Text {
+            id: fluxText
+            anchors.centerIn: parent
+            text: "FLUX"
+            font.pixelSize: 12
+            font.weight: Font.Bold
+            font.letterSpacing: 2
+            color: fluxMouse.containsMouse ? "#38BDF8" : "#E2E8F0"
+
+            Behavior on color { ColorAnimation { duration: 120 } }
+        }
+
+        MouseArea {
+            id: fluxMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.homeClicked()
+        }
+
+        ToolTip.visible: fluxMouse.containsMouse
+        ToolTip.delay: 400
+        ToolTip.text: "Return to Home Page"
     }
 
     // Right Controls

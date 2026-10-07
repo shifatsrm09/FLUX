@@ -100,7 +100,12 @@ Rectangle {
                     }
                 }
 
-                onClicked: root.backRequested()
+                onClicked: {
+                    if (root.player) {
+                        root.player.pause()
+                    }
+                    root.backRequested()
+                }
             }
 
             Text {
