@@ -79,6 +79,8 @@ qt_add_qml_module(FLUX
         qml/components/DevToolsDrawer.qml
         qml/components/ClassicTitleBar.qml
         qml/components/WindowResizeBorders.qml
+        qml/components/CategoryCheckpoints.qml
+        qml/components/CategoryFilterSection.qml
         qml/components/MediaFormatter.js
 )
 

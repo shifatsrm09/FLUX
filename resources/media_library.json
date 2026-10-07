@@ -2,7 +2,7 @@
   {
     "id": "english_movies",
     "name": "English Movies",
-    "group": "Movies",
+    "group": "English Movies",
     "url": "http://172.16.50.7/DHAKA-FLIX-7/English%20Movies/",
     "serverOrigin": "http://172.16.50.7",
     "href": "/DHAKA-FLIX-7/English%20Movies/"
@@ -10,63 +10,39 @@
   {
     "id": "english_movies_1080p",
     "name": "English Movies 1080p",
-    "group": "Movies",
+    "group": "English Movies",
     "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/",
     "serverOrigin": "http://172.16.50.14",
     "href": "/DHAKA-FLIX-14/English%20Movies%20%281080p%29/"
   },
   {
+    "id": "awards_tv_shows",
+    "name": "Awards & TV Shows",
+    "group": "English Movies",
+    "url": "http://172.16.50.10/DHAKA-FLIX-10/Awards%20%26%20TV%20Shows/",
+    "serverOrigin": "http://172.16.50.10",
+    "href": "/DHAKA-FLIX-10/Awards%20%26%20TV%20Shows/"
+  },
+  {
     "id": "hindi_movies",
     "name": "Hindi Movies",
-    "group": "Movies",
+    "group": "Hindi Movies",
     "url": "http://172.16.50.14/DHAKA-FLIX-14/Hindi%20Movies/",
     "serverOrigin": "http://172.16.50.14",
     "href": "/DHAKA-FLIX-14/Hindi%20Movies/"
   },
   {
-    "id": "south_movies",
-    "name": "South Indian Movies",
-    "group": "Movies",
-    "url": "http://172.16.50.14/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/South%20Movies/",
-    "serverOrigin": "http://172.16.50.14",
-    "href": "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/South%20Movies/"
-  },
-  {
     "id": "south_movies_hindi_dubbed",
     "name": "South-Movie Hindi Dubbed",
-    "group": "Movies",
+    "group": "Hindi Movies",
     "url": "http://172.16.50.14/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/Hindi%20Dubbed/",
     "serverOrigin": "http://172.16.50.14",
     "href": "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/Hindi%20Dubbed/"
   },
   {
-    "id": "foreign_movies",
-    "name": "Foreign Movies",
-    "group": "Movies",
-    "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/",
-    "serverOrigin": "http://172.16.50.7",
-    "href": "/DHAKA-FLIX-7/Foreign%20Language%20Movies/"
-  },
-  {
-    "id": "kolkata_bangla_movies",
-    "name": "Kolkata Bangla Movies",
-    "group": "Movies",
-    "url": "http://172.16.50.7/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/",
-    "serverOrigin": "http://172.16.50.7",
-    "href": "/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/"
-  },
-  {
-    "id": "satyajit_ray_films",
-    "name": "Satyajit Ray Films",
-    "group": "Movies",
-    "url": "http://172.16.50.7/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/Satyajit%20Ray%20Films/",
-    "serverOrigin": "http://172.16.50.7",
-    "href": "/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/Satyajit%20Ray%20Films/"
-  },
-  {
     "id": "animation_movies",
     "name": "Animation Movies",
-    "group": "Movies",
+    "group": "Animation",
     "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies/",
     "serverOrigin": "http://172.16.50.14",
     "href": "/DHAKA-FLIX-14/Animation%20Movies/"
@@ -74,31 +50,23 @@
   {
     "id": "animation_movies_1080p",
     "name": "Animation Movies 1080p",
-    "group": "Movies",
+    "group": "Animation",
     "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/",
     "serverOrigin": "http://172.16.50.14",
     "href": "/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/"
   },
   {
-    "id": "movies_3d",
-    "name": "3D Movies",
-    "group": "Movies",
-    "url": "http://172.16.50.7/DHAKA-FLIX-7/3D%20Movies/",
+    "id": "foreign_movies",
+    "name": "Foreign Movies",
+    "group": "Other Movies",
+    "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/",
     "serverOrigin": "http://172.16.50.7",
-    "href": "/DHAKA-FLIX-7/3D%20Movies/"
-  },
-  {
-    "id": "tv_web_series",
-    "name": "TV & Web Series",
-    "group": "Series",
-    "url": "http://172.16.50.12/DHAKA-FLIX-12/TV-WEB-Series/",
-    "serverOrigin": "http://172.16.50.12",
-    "href": "/DHAKA-FLIX-12/TV-WEB-Series/"
+    "href": "/DHAKA-FLIX-7/Foreign%20Language%20Movies/"
   },
   {
     "id": "korean_series",
     "name": "Korean TV & Web Series",
-    "group": "Series",
+    "group": "TV & Web Series",
     "url": "http://172.16.50.14/DHAKA-FLIX-14/KOREAN%20TV%20%26%20WEB%20Series/",
     "serverOrigin": "http://172.16.50.14",
     "href": "/DHAKA-FLIX-14/KOREAN%20TV%20%26%20WEB%20Series/"
@@ -106,7 +74,7 @@
   {
     "id": "cartoon_tv_series",
     "name": "Cartoon TV Series",
-    "group": "Series",
+    "group": "TV & Web Series",
     "url": "http://172.16.50.10/DHAKA-FLIX-10/Anime%20%26%20Cartoon%20TV%20Series/",
     "serverOrigin": "http://172.16.50.10",
     "href": "/DHAKA-FLIX-10/Anime%20%26%20Cartoon%20TV%20Series/"
@@ -114,25 +82,57 @@
   {
     "id": "documentary",
     "name": "Documentary",
-    "group": "Other",
+    "group": "Other Movies",
     "url": "http://172.16.50.10/DHAKA-FLIX-10/Documentary/",
     "serverOrigin": "http://172.16.50.10",
     "href": "/DHAKA-FLIX-10/Documentary/"
   },
   {
+    "id": "movies_3d",
+    "name": "3D Movies",
+    "group": "Other Movies",
+    "url": "http://172.16.50.7/DHAKA-FLIX-7/3D%20Movies/",
+    "serverOrigin": "http://172.16.50.7",
+    "href": "/DHAKA-FLIX-7/3D%20Movies/"
+  },
+  {
+    "id": "south_movies",
+    "name": "South Indian Movies",
+    "group": "Regional Movies",
+    "url": "http://172.16.50.14/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/South%20Movies/",
+    "serverOrigin": "http://172.16.50.14",
+    "href": "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/South%20Movies/"
+  },
+  {
+    "id": "kolkata_bangla_movies",
+    "name": "Kolkata Bangla Movies",
+    "group": "Regional Movies",
+    "url": "http://172.16.50.7/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/",
+    "serverOrigin": "http://172.16.50.7",
+    "href": "/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/"
+  },
+  {
+    "id": "satyajit_ray_films",
+    "name": "Satyajit Ray Films",
+    "group": "Regional Movies",
+    "url": "http://172.16.50.7/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/Satyajit%20Ray%20Films/",
+    "serverOrigin": "http://172.16.50.7",
+    "href": "/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/Satyajit%20Ray%20Films/"
+  },
+  {
+    "id": "tv_web_series",
+    "name": "TV & Web Series",
+    "group": "TV & Web Series",
+    "url": "http://172.16.50.12/DHAKA-FLIX-12/TV-WEB-Series/",
+    "serverOrigin": "http://172.16.50.12",
+    "href": "/DHAKA-FLIX-12/TV-WEB-Series/"
+  },
+  {
     "id": "wwe_aew",
     "name": "WWE & AEW Wrestling",
-    "group": "Other",
+    "group": "TV & Web Series",
     "url": "http://172.16.50.10/DHAKA-FLIX-10/WWE%20%26%20AEW%20Wrestling/",
     "serverOrigin": "http://172.16.50.10",
     "href": "/DHAKA-FLIX-10/WWE%20%26%20AEW%20Wrestling/"
-  },
-  {
-    "id": "awards_tv_shows",
-    "name": "Awards & TV Shows",
-    "group": "Other",
-    "url": "http://172.16.50.10/DHAKA-FLIX-10/Awards%20%26%20TV%20Shows/",
-    "serverOrigin": "http://172.16.50.10",
-    "href": "/DHAKA-FLIX-10/Awards%20%26%20TV%20Shows/"
   }
 ]

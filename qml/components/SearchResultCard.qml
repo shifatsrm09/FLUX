@@ -53,7 +53,9 @@ Rectangle {
 
             Text {
                 Layout.fillWidth: true
-                text: root.parsed.subtitle
+                text: root.libraryName.length > 0
+                      ? (root.parsed.subtitle.length > 0 ? root.libraryName + "  •  " + root.parsed.subtitle : root.libraryName)
+                      : root.parsed.subtitle
                 color: "#8F96A3"
                 font.pixelSize: 12
                 font.family: "Segoe UI, -apple-system, sans-serif"

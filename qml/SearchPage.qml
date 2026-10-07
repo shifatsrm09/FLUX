@@ -18,7 +18,7 @@ Item {
         // =====================================================================
         ColumnLayout {
             anchors.centerIn: parent
-            width: Math.min(parent.width - 48, 640)
+            width: Math.min(parent.width - 48, 860)
             spacing: 24
             visible: !root.hasSearched
 
@@ -107,28 +107,11 @@ Item {
                 }
             }
 
-            // Category Navigation Below Search
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 10
-
-                Text {
-                    text: "Category:"
-                    color: "#5E6676"
-                    font.pixelSize: 12
-                }
-
-                CategorySelector {
-                    libraryModel: fluxLibrary
-                    selectedIndex: fluxSearch ? fluxSearch.selectedLibraryIndex : 0
-                    selectedName: fluxSearch ? fluxSearch.selectedLibraryName : ""
-                    selectedGroup: fluxSearch ? fluxSearch.selectedLibraryGroup : ""
-                    onCategorySelected: function(index, id, name) {
-                        if (fluxSearch) {
-                            fluxSearch.selectLibrary(index)
-                        }
-                    }
-                }
+            // Category Filter Section Below Search
+            CategoryFilterSection {
+                Layout.fillWidth: true
+                libraryModel: fluxLibrary
+                searchManager: fluxSearch
             }
         }
 
@@ -208,21 +191,6 @@ Item {
                 }
 
                 // Category Selector
-                CategorySelector {
-                    libraryModel: fluxLibrary
-                    selectedIndex: fluxSearch ? fluxSearch.selectedLibraryIndex : 0
-                    selectedName: fluxSearch ? fluxSearch.selectedLibraryName : ""
-                    selectedGroup: fluxSearch ? fluxSearch.selectedLibraryGroup : ""
-                    onCategorySelected: function(index, id, name) {
-                        if (fluxSearch) {
-                            fluxSearch.selectLibrary(index)
-                            if (topSearchInput.text.trim().length > 0) {
-                                fluxSearch.search(topSearchInput.text.trim())
-                            }
-                        }
-                    }
-                }
-
                 // Search Submit Button
                 Button {
                     id: topSearchSubmitBtn
@@ -254,6 +222,20 @@ Item {
                 }
             }
 
+            // Category Filter Section Below Search
+            CategoryFilterSection {
+                Layout.fillWidth: true
+                libraryModel: fluxLibrary
+                searchManager: fluxSearch
+                collapsible: true
+                isExpanded: false
+                onSelectionChanged: {
+                    if (fluxSearch && topSearchInput.text.trim().length > 0) {
+                        fluxSearch.search(topSearchInput.text.trim())
+                    }
+                }
+            }
+
             // Results Heading
             ColumnLayout {
                 Layout.fillWidth: true
@@ -270,7 +252,7 @@ Item {
                 }
 
                 Text {
-                    text: (fluxSearch ? fluxSearch.selectedLibraryName : "") + " · " + (fluxSearch ? fluxSearch.resultCount : 0) + " results"
+                    text: (fluxSearch ? fluxSearch.selectedCategoriesSummary : "") + " · " + (fluxSearch ? fluxSearch.resultCount : 0) + " results"
                     color: "#8F96A3"
                     font.pixelSize: 13
                 }
@@ -290,7 +272,7 @@ Item {
                 }
 
                 Text {
-                    text: "Searching " + (fluxSearch ? fluxSearch.selectedLibraryName : "") + "..."
+                    text: "Searching " + (fluxSearch ? fluxSearch.selectedCategoriesSummary : "") + "..."
                     color: "#8F96A3"
                     font.pixelSize: 14
                 }
@@ -313,7 +295,7 @@ Item {
 
                 Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: "Try a different title or choose another category from the dropdown."
+                    text: "Try a different title or select other categories above."
                     color: "#8F96A3"
                     font.pixelSize: 13
                 }
