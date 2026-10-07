@@ -21,7 +21,7 @@ Application::~Application() {
 }
 
 bool Application::initialize(QQmlApplicationEngine &engine) {
-    FLUX_LOG_INFO("Application", "Starting FLUX Media Player v0.0.1...");
+    FLUX_LOG_INFO("Application", "Starting FLUX Media Player v0.0.2...");
 
     // 1. Initialize libVLC instance once
     if (!VLCInstance::instance().initialize()) {
