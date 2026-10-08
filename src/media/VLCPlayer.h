@@ -4,6 +4,7 @@
 #include <QString>
 #include <QVariantList>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <vlc/vlc.h>
 
 namespace Flux {
@@ -112,6 +113,8 @@ private:
     void setupVlcEvents();
     void detachVlcEvents();
     void updateTracks();
+    void applyPendingSeek();
+    bool seekGuardActive() const;
     static void handleVlcEvent(const libvlc_event_t *event, void *opaque);
     static QString formatMilliseconds(qint64 ms);
 
@@ -135,6 +138,20 @@ private:
     QString m_errorMessage;
 
     QTimer *m_pollTimer = nullptr;
+
+    // Seek coalescing: rapid seeks (slider drag, repeated key presses) are merged
+    // into one libVLC call every few milliseconds instead of hammering the stream.
+    QTimer *m_seekTimer = nullptr;
+    bool m_hasPendingSeek = false;
+    bool m_pendingIsTime = false;
+    qint64 m_pendingTimeMs = 0;
+    qreal m_pendingPos = 0.0;
+    QElapsedTimer m_uptime;
+    qint64 m_seekGuardUntil = 0;   // ignore stale libVLC position until this uptime (ms)
+
+    // Backing values (libVLC cannot always be queried before audio output exists)
+    int m_volume = 100;            // 0..200 (%)
+    bool m_muted = false;
 };
 
 } // namespace Flux

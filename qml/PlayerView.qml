@@ -21,7 +21,21 @@ Rectangle {
 
     readonly property bool menuOpen: controlsBar.menuOpen
     readonly property bool hasError: (!!root.player && root.player.state === "Error")
-    readonly property bool showCenterPlay: (!!root.player && !root.player.isPlaying && !root.player.isBuffering && !root.hasError)
+    readonly property bool buffering: (!!root.player && root.player.isBuffering)
+    readonly property bool showCenterPlay: (!!root.player && !root.buffering && !root.hasError
+                                            && (root.player.state === "Paused"
+                                                || root.player.state === "Stopped"
+                                                || root.player.state === "Ended"))
+
+    // Spinner only appears if a buffer lasts longer than a blink, so quick
+    // seeks never flash a loading indicator.
+    property bool showSpinner: false
+
+    // On-screen indicator (volume / seek feedback)
+    property bool osdVisible: false
+    property string osdText: ""
+    property real osdLevel: -1
+    property real wheelAcc: 0
 
     function closeMenus() {
         controlsBar.closeMenus()
@@ -32,8 +46,50 @@ Rectangle {
         hideControlsTimer.restart()
     }
 
+    function showOsd(text, level) {
+        root.osdText = text
+        root.osdLevel = (level === undefined) ? -1 : level
+        root.osdVisible = true
+        osdTimer.restart()
+    }
+
+    // Volume goes 0..200% (libVLC software amplification)
+    function adjustVolume(delta) {
+        if (!root.player) return
+        var v = Math.max(0, Math.min(200, root.player.volume + delta))
+        if (root.player.muted && v > 0) root.player.muted = false
+        root.player.volume = v
+        root.showOsd("Volume " + v + "%", v)
+    }
+
+    function toggleMute() {
+        if (!root.player) return
+        root.player.muted = !root.player.muted
+        if (root.player.muted) {
+            root.showOsd("Muted", 0)
+        } else {
+            root.showOsd("Volume " + root.player.volume + "%", root.player.volume)
+        }
+    }
+
+    function seekBy(ms) {
+        if (!root.player) return
+        root.player.seekRelative(ms)
+        var s = Math.round(Math.abs(ms) / 1000)
+        root.showOsd((ms < 0 ? "\u2212" : "+") + s + "s", -1)
+    }
+
     onVisibleChanged: {
         if (root.visible) root.wakeControls()
+    }
+
+    onBufferingChanged: {
+        if (root.buffering) {
+            spinnerDelay.restart()
+        } else {
+            spinnerDelay.stop()
+            root.showSpinner = false
+        }
     }
 
     Timer {
@@ -42,6 +98,31 @@ Rectangle {
         running: !!root.player && root.player.isPlaying && !controlsBar.isUserInteracting && !topHover.hovered
         repeat: false
         onTriggered: root.showControls = false
+    }
+
+    Timer {
+        id: spinnerDelay
+        interval: 450
+        repeat: false
+        onTriggered: root.showSpinner = root.buffering
+    }
+
+    Timer {
+        id: osdTimer
+        interval: 1200
+        repeat: false
+        onTriggered: root.osdVisible = false
+    }
+
+    // Single click toggles pause; waiting briefly lets a double click (fullscreen)
+    // cancel it instead of pausing and resuming.
+    Timer {
+        id: clickTimer
+        interval: 250
+        repeat: false
+        onTriggered: {
+            if (root.player) root.player.togglePlay()
+        }
     }
 
     // Surface any state change (pause, buffering, error) by showing the chrome
@@ -60,14 +141,34 @@ Rectangle {
         player: root.player
     }
 
-    // Mouse tracking: wake controls, double click toggles fullscreen
+    // Mouse: click = play/pause, double click = fullscreen, wheel = volume
     MouseArea {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: root.showControls ? Qt.ArrowCursor : Qt.BlankCursor
+
         onPositionChanged: root.wakeControls()
-        onClicked: root.wakeControls()
-        onDoubleClicked: root.toggleFullscreenRequested()
+
+        onClicked: {
+            root.wakeControls()
+            clickTimer.restart()
+        }
+
+        onDoubleClicked: {
+            clickTimer.stop()
+            root.toggleFullscreenRequested()
+        }
+
+        onWheel: function(wheel) {
+            // 120 units (one mouse notch) = 5%; smooth touchpads accumulate
+            root.wheelAcc += wheel.angleDelta.y
+            var steps = Math.trunc(root.wheelAcc / 24)
+            if (steps !== 0) {
+                root.wheelAcc -= steps * 24
+                root.adjustVolume(steps)
+            }
+            wheel.accepted = true
+        }
     }
 
     // Paused dimmer
@@ -224,16 +325,16 @@ Rectangle {
         }
     }
 
-    // Buffering ring
+    // Buffering ring (only for buffers that last longer than a blink)
     ColumnLayout {
         anchors.centerIn: parent
         spacing: 12
-        visible: !!root.player && root.player.isBuffering
+        visible: root.showSpinner && root.buffering
 
         FluxSpinner {
             size: 64
             thickness: 4
-            running: !!root.player && root.player.isBuffering
+            running: root.showSpinner && root.buffering
             Layout.alignment: Qt.AlignHCenter
         }
 
@@ -245,6 +346,62 @@ Rectangle {
             color: "#E6FFFFFF"
             font.pixelSize: 13
             font.weight: Font.Medium
+        }
+    }
+
+    // On-screen indicator: volume level / seek amount
+    Rectangle {
+        id: osd
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: 118
+        implicitHeight: 44
+        width: osdRow.implicitWidth + 40
+        radius: 22
+        color: "#E6101015"
+        border.width: 1
+        border.color: "#26FFFFFF"
+        opacity: root.osdVisible ? 1.0 : 0.0
+        visible: opacity > 0.0
+
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+
+        RowLayout {
+            id: osdRow
+            anchors.centerIn: parent
+            spacing: 14
+
+            Text {
+                text: root.osdText
+                color: (root.osdLevel > 100) ? Theme.warning : "#FFFFFF"
+                font.pixelSize: 14
+                font.weight: Font.Bold
+            }
+
+            Rectangle {
+                visible: root.osdLevel >= 0
+                implicitWidth: 120
+                implicitHeight: 4
+                radius: 2
+                color: "#40FFFFFF"
+                Layout.alignment: Qt.AlignVCenter
+
+                Rectangle {
+                    width: parent.width * Math.min(1.0, Math.max(0.0, root.osdLevel / 200.0))
+                    height: parent.height
+                    radius: 2
+                    color: (root.osdLevel > 100) ? Theme.warning : "#FFFFFF"
+                }
+
+                // 100% marker
+                Rectangle {
+                    x: parent.width / 2 - 1
+                    y: -2
+                    width: 2
+                    height: parent.height + 4
+                    color: "#80FFFFFF"
+                }
+            }
         }
     }
 

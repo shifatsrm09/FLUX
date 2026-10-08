@@ -71,12 +71,13 @@ bool VLCInstance::initialize() {
 #endif
     }
 
+    // NOTE: --clock-jitter=0 / --clock-synchro=0 were removed. They disable libVLC's tolerance
+    // for timing wobble and its A/V clock sync, which makes network playback drop frames and
+    // stutter. libVLC's defaults are far smoother.
     std::vector<const char*> args = {
         "--no-video-title-show",
-        "--network-caching=2500",      // 2.5s network buffer for smooth HTTP Range streaming
+        "--network-caching=1500",      // short pre-roll: fast starts and seeks on the BDIX LAN
         "--http-reconnect",            // Auto reconnect HTTP byte ranges
-        "--clock-jitter=0",
-        "--clock-synchro=0",
         "--no-snapshot-preview",
         "--quiet"
     };

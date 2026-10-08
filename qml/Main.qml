@@ -87,15 +87,8 @@ ApplicationWindow {
         }
     }
 
-    Shortcut {
-        sequence: "Space"
-        onActivated: {
-            if (currentPage === "player" && fluxPlayer) {
-                fluxPlayer.togglePlay()
-            }
-        }
-    }
-
+    // Space / arrows / M / F are handled by the stage's Keys handler below (it owns keyboard
+    // focus while the player is open). Window-wide shortcuts that don't depend on focus:
     Shortcut {
         sequence: "Ctrl+D"
         onActivated: devDrawer.open()
@@ -106,57 +99,83 @@ ApplicationWindow {
         onActivated: toggleFullscreen()
     }
 
-    // Player-only conveniences
-    Shortcut {
-        sequence: "Left"
-        enabled: currentPage === "player"
-        onActivated: {
-            if (fluxPlayer) fluxPlayer.seekRelative(-10000)
+    // ---- Keyboard focus management -------------------------------------------------
+    onCurrentPageChanged: {
+        if (currentPage === "player") stage.forceActiveFocus()
+    }
+
+    onActiveChanged: {
+        if (active && currentPage === "player") stage.forceActiveFocus()
+    }
+
+    Connections {
+        target: playerView
+
+        function onMenuOpenChanged() {
+            // Popup closed: hand keyboard focus back so keys keep working
+            if (!playerView.menuOpen) stage.forceActiveFocus()
         }
     }
 
-    Shortcut {
-        sequence: "Right"
-        enabled: currentPage === "player"
-        onActivated: {
-            if (fluxPlayer) fluxPlayer.seekRelative(10000)
-        }
-    }
+    Connections {
+        target: devDrawer
 
-    Shortcut {
-        sequence: "Up"
-        enabled: currentPage === "player"
-        onActivated: {
-            if (fluxPlayer) fluxPlayer.volume = Math.min(100, fluxPlayer.volume + 5)
+        function onClosed() {
+            if (currentPage === "player") stage.forceActiveFocus()
         }
-    }
-
-    Shortcut {
-        sequence: "Down"
-        enabled: currentPage === "player"
-        onActivated: {
-            if (fluxPlayer) fluxPlayer.volume = Math.max(0, fluxPlayer.volume - 5)
-        }
-    }
-
-    Shortcut {
-        sequence: "M"
-        enabled: currentPage === "player"
-        onActivated: {
-            if (fluxPlayer) fluxPlayer.muted = !fluxPlayer.muted
-        }
-    }
-
-    Shortcut {
-        sequence: "F"
-        enabled: currentPage === "player"
-        onActivated: toggleFullscreen()
     }
 
     // ---- Stage: pages crossfade; nav bar floats on top ----------------------------------
     Item {
         id: stage
         anchors.fill: parent
+        focus: true
+
+        // Player keyboard controls
+        Keys.onPressed: function(event) {
+            if (currentPage !== "player") return
+
+            var shift = (event.modifiers & Qt.ShiftModifier) !== 0
+
+            switch (event.key) {
+            case Qt.Key_Space:
+                if (!event.isAutoRepeat && fluxPlayer) fluxPlayer.togglePlay()
+                event.accepted = true
+                break
+            case Qt.Key_Left:
+                playerView.seekBy(shift ? -60000 : -10000)
+                event.accepted = true
+                break
+            case Qt.Key_Right:
+                playerView.seekBy(shift ? 60000 : 10000)
+                event.accepted = true
+                break
+            case Qt.Key_Up:
+                playerView.adjustVolume(5)
+                event.accepted = true
+                break
+            case Qt.Key_Down:
+                playerView.adjustVolume(-5)
+                event.accepted = true
+                break
+            case Qt.Key_M:
+                if (!event.isAutoRepeat) playerView.toggleMute()
+                event.accepted = true
+                break
+            case Qt.Key_F:
+                if (!event.isAutoRepeat) window.toggleFullscreen()
+                event.accepted = true
+                break
+            }
+        }
+
+        // Any click while playing re-claims keyboard focus (without blocking the click)
+        TapHandler {
+            acceptedButtons: Qt.LeftButton
+            onTapped: {
+                if (currentPage === "player") stage.forceActiveFocus()
+            }
+        }
 
         // Search / browse experience
         SearchPage {

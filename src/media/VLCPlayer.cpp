@@ -2,6 +2,8 @@
 #include "VLCInstance.h"
 #include "../core/Logger.h"
 #include <QVariantMap>
+#include <algorithm>
+#include <cmath>
 
 namespace Flux {
 
@@ -28,16 +30,21 @@ VLCPlayer::VLCPlayer(QObject *parent)
     connect(m_pollTimer, &QTimer::timeout, this, [this]() {
         if (!m_mediaPlayer || !isPlaying()) return;
 
-        qint64 t = libvlc_media_player_get_time(m_mediaPlayer);
-        if (t >= 0 && t != m_timeMs) {
-            m_timeMs = t;
-            emit timeChanged();
-        }
+        // While a seek is pending/settling, libVLC keeps reporting the OLD position for a
+        // moment. Ignoring it stops the slider and clock jumping back and forth (the
+        // brief "freeze" feel after seeking).
+        if (!seekGuardActive()) {
+            qint64 t = libvlc_media_player_get_time(m_mediaPlayer);
+            if (t >= 0 && t != m_timeMs) {
+                m_timeMs = t;
+                emit timeChanged();
+            }
 
-        float p = libvlc_media_player_get_position(m_mediaPlayer);
-        if (p >= 0.0f && std::abs(p - static_cast<float>(m_position)) > 0.001f) {
-            m_position = p;
-            emit positionChanged();
+            float p = libvlc_media_player_get_position(m_mediaPlayer);
+            if (p >= 0.0f && std::abs(p - static_cast<float>(m_position)) > 0.001f) {
+                m_position = p;
+                emit positionChanged();
+            }
         }
 
         qint64 len = libvlc_media_player_get_length(m_mediaPlayer);
@@ -47,6 +54,13 @@ VLCPlayer::VLCPlayer(QObject *parent)
             updateTracks();
         }
     });
+
+    // Seek coalescing timer: at most one libVLC seek every 120ms, always with the latest target
+    m_uptime.start();
+    m_seekTimer = new QTimer(this);
+    m_seekTimer->setSingleShot(true);
+    m_seekTimer->setInterval(120);
+    connect(m_seekTimer, &QTimer::timeout, this, [this]() { applyPendingSeek(); });
 
     FLUX_LOG_INFO("VLCPlayer", "VLCPlayer created successfully");
 }
@@ -153,6 +167,10 @@ void VLCPlayer::handleVlcEvent(const libvlc_event_t *event, void *opaque) {
             player->m_state = "Playing";
             player->m_isBuffering = false;
             player->m_pollTimer->start();
+            // Re-apply the user's volume/mute: libVLC's audio output only exists once playback
+            // has started, and a brand-new stream would otherwise reset to 100%.
+            libvlc_audio_set_volume(player->m_mediaPlayer, player->m_volume);
+            libvlc_audio_set_mute(player->m_mediaPlayer, player->m_muted ? 1 : 0);
             emit player->stateChanged();
             emit player->bufferingChanged();
             player->updateTracks();
@@ -264,11 +282,23 @@ void VLCPlayer::play(const QString &mediaUrl) {
         return;
     }
 
-    // Configure options for progressive HTTP range streaming
-    libvlc_media_add_option(m_currentMedia, ":network-caching=2500");
+    // Configure options for progressive HTTP range streaming.
+    //  - network-caching: pre-roll (ms) that must be filled before playback resumes. This is
+    //    what you wait for after every seek, so keep it short on a fast LAN.
+    //  - prefetch-*: BYTE-level read-ahead in front of the demuxer. This is what makes
+    //    playback smooth and lets short forward seeks be served from memory with no new
+    //    HTTP request. (Sizes: KiB / bytes.) Unknown options are ignored harmlessly.
+    libvlc_media_add_option(m_currentMedia, ":network-caching=1500");
     libvlc_media_add_option(m_currentMedia, ":http-reconnect");
+    libvlc_media_add_option(m_currentMedia, ":prefetch-buffer-size=131072");
+    libvlc_media_add_option(m_currentMedia, ":prefetch-read-size=262144");
 
     libvlc_media_player_set_media(m_mediaPlayer, m_currentMedia);
+
+    // A new stream starts fresh: drop any seek still queued for the previous one
+    m_hasPendingSeek = false;
+    m_seekGuardUntil = 0;
+    if (m_seekTimer) m_seekTimer->stop();
 
     m_state = "Opening";
     m_isBuffering = true;
@@ -304,9 +334,15 @@ void VLCPlayer::resume() {
 }
 
 void VLCPlayer::togglePlay() {
-    if (isPlaying()) {
+    if (!m_mediaPlayer) return;
+
+    // Decide from libVLC's real state. The old check (isPlaying() == false => play())
+    // treated "Buffering"/"Opening" as stopped and RESTARTED the stream from the
+    // beginning whenever you clicked during a buffer.
+    libvlc_state_t st = libvlc_media_player_get_state(m_mediaPlayer);
+    if (st == libvlc_Playing || st == libvlc_Buffering || st == libvlc_Opening) {
         pause();
-    } else if (isPaused()) {
+    } else if (st == libvlc_Paused) {
         resume();
     } else if (!m_url.isEmpty()) {
         play();
@@ -328,24 +364,77 @@ void VLCPlayer::stop() {
     emit positionChanged();
 }
 
+bool VLCPlayer::seekGuardActive() const {
+    return m_uptime.isValid() && m_uptime.elapsed() < m_seekGuardUntil;
+}
+
 void VLCPlayer::seek(qreal pos) {
     if (!m_mediaPlayer) return;
     pos = std::clamp(pos, 0.0, 1.0);
-    FLUX_LOG_INFO("VLCPlayer", QString("Seeking to position: %1%").arg(QString::number(pos * 100.0, 'f', 1)));
-    libvlc_media_player_set_position(m_mediaPlayer, static_cast<float>(pos));
+
+    m_pendingIsTime = false;
+    m_pendingPos = pos;
+    m_hasPendingSeek = true;
+
+    // Optimistic UI update: the slider and clock move instantly while the actual
+    // (network) seek is coalesced and issued a moment later.
     m_position = pos;
+    if (m_durationMs > 0) {
+        m_timeMs = static_cast<qint64>(pos * static_cast<qreal>(m_durationMs));
+    }
+    m_seekGuardUntil = m_uptime.elapsed() + 900;
     emit positionChanged();
+    emit timeChanged();
+
+    if (m_seekTimer && !m_seekTimer->isActive()) {
+        m_seekTimer->start();
+    }
 }
 
 void VLCPlayer::seekRelative(qint64 deltaMs) {
     if (!m_mediaPlayer) return;
-    qint64 newTime = std::max(qint64(0), m_timeMs + deltaMs);
-    if (m_durationMs > 0) {
-        newTime = std::min(newTime, m_durationMs);
+
+    // m_timeMs already includes any seek that is still pending, so repeated presses
+    // accumulate (e.g. 6 presses of +10s become a single +60s seek).
+    qint64 newTime = std::max<qint64>(0, m_timeMs + deltaMs);
+    if (m_durationMs > 1000) {
+        newTime = std::min(newTime, m_durationMs - 1000);   // never seek past the very end
     }
-    libvlc_media_player_set_time(m_mediaPlayer, newTime);
+
+    m_pendingIsTime = true;
+    m_pendingTimeMs = newTime;
+    m_hasPendingSeek = true;
+
     m_timeMs = newTime;
+    if (m_durationMs > 0) {
+        m_position = static_cast<qreal>(newTime) / static_cast<qreal>(m_durationMs);
+    }
+    m_seekGuardUntil = m_uptime.elapsed() + 900;
     emit timeChanged();
+    emit positionChanged();
+
+    if (m_seekTimer && !m_seekTimer->isActive()) {
+        m_seekTimer->start();
+    }
+}
+
+void VLCPlayer::applyPendingSeek() {
+    if (!m_hasPendingSeek || !m_mediaPlayer) {
+        m_hasPendingSeek = false;
+        return;
+    }
+    m_hasPendingSeek = false;
+
+    if (m_pendingIsTime) {
+        FLUX_LOG_INFO("VLCPlayer", QString("Seeking to %1 ms").arg(m_pendingTimeMs));
+        libvlc_media_player_set_time(m_mediaPlayer, m_pendingTimeMs);
+    } else {
+        FLUX_LOG_INFO("VLCPlayer", QString("Seeking to position: %1%").arg(QString::number(m_pendingPos * 100.0, 'f', 1)));
+        libvlc_media_player_set_position(m_mediaPlayer, static_cast<float>(m_pendingPos));
+    }
+
+    // Give libVLC time to settle before trusting its reported position again
+    m_seekGuardUntil = m_uptime.elapsed() + 700;
 }
 
 bool VLCPlayer::isPlaying() const {
@@ -360,6 +449,7 @@ bool VLCPlayer::isPaused() const {
 
 qreal VLCPlayer::position() const {
     if (!m_mediaPlayer) return 0.0;
+    if (seekGuardActive()) return m_position;   // our own value is newer than libVLC's
     float p = libvlc_media_player_get_position(m_mediaPlayer);
     return (p >= 0.0f) ? static_cast<qreal>(p) : 0.0;
 }
@@ -369,26 +459,28 @@ void VLCPlayer::setPosition(qreal pos) {
 }
 
 int VLCPlayer::volume() const {
-    if (!m_mediaPlayer) return 100;
-    int v = libvlc_audio_get_volume(m_mediaPlayer);
-    return (v >= 0) ? v : 100;
+    return m_volume;
 }
 
 void VLCPlayer::setVolume(int vol) {
-    if (!m_mediaPlayer) return;
-    vol = std::clamp(vol, 0, 100);
-    libvlc_audio_set_volume(m_mediaPlayer, vol);
+    // libVLC supports software amplification up to 200%
+    vol = std::clamp(vol, 0, 200);
+    m_volume = vol;
+    if (m_mediaPlayer) {
+        libvlc_audio_set_volume(m_mediaPlayer, vol);
+    }
     emit volumeChanged();
 }
 
 bool VLCPlayer::isMuted() const {
-    if (!m_mediaPlayer) return false;
-    return libvlc_audio_get_mute(m_mediaPlayer) == 1;
+    return m_muted;
 }
 
 void VLCPlayer::setMuted(bool mute) {
-    if (!m_mediaPlayer) return;
-    libvlc_audio_set_mute(m_mediaPlayer, mute ? 1 : 0);
+    m_muted = mute;
+    if (m_mediaPlayer) {
+        libvlc_audio_set_mute(m_mediaPlayer, mute ? 1 : 0);
+    }
     emit muteChanged();
 }
 

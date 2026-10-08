@@ -26,6 +26,13 @@ Item {
 
     HoverHandler { id: controlsHover }
 
+    // Swallow clicks on empty parts of the bar so they don't pause the video underneath
+    MouseArea {
+        anchors.fill: parent
+        z: -1
+        acceptedButtons: Qt.LeftButton
+    }
+
     // Row in the track panel
     component TrackItem: Rectangle {
         id: trackItem
@@ -198,9 +205,9 @@ Item {
             spacing: 4
 
             IconButton {
-                iconName: (root.player && root.player.isPlaying) ? "pause" : "play"
+                iconName: (root.player && (root.player.isPlaying || root.player.isBuffering)) ? "pause" : "play"
                 iconSize: 30
-                tip: (root.player && root.player.isPlaying) ? "Pause (Space)" : "Play (Space)"
+                tip: (root.player && (root.player.isPlaying || root.player.isBuffering)) ? "Pause (Space)" : "Play (Space)"
 
                 onClicked: {
                     if (root.player) root.player.togglePlay()
@@ -241,7 +248,7 @@ Item {
                     id: muteBtn
                     iconName: {
                         if (!root.player || root.player.muted || root.player.volume === 0) return "volumeMuted"
-                        if (root.player.volume < 50) return "volumeLow"
+                        if (root.player.volume < 60) return "volumeLow"
                         return "volume"
                     }
                     iconSize: 28
@@ -253,11 +260,23 @@ Item {
                 }
 
                 Item {
-                    width: volumeGroup.expanded ? 108 : 0
+                    width: volumeGroup.expanded ? 170 : 0
                     height: muteBtn.height
                     clip: true
 
                     Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+
+                    Text {
+                        id: volumeLabel
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 46
+                        horizontalAlignment: Text.AlignRight
+                        text: Math.round(volumeSlider.value) + "%"
+                        color: volumeSlider.value > 100 ? Theme.warning : Theme.textDim
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
+                    }
 
                     Slider {
                         id: volumeSlider
@@ -265,10 +284,10 @@ Item {
                         anchors.left: parent.left
                         anchors.leftMargin: 6
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 96
+                        width: 108
                         height: 24
                         from: 0
-                        to: 100
+                        to: 200
                         padding: 0
                         focusPolicy: Qt.NoFocus
                         value: root.player ? (root.player.muted ? 0 : root.player.volume) : 100
@@ -290,7 +309,16 @@ Item {
                                     width: volumeSlider.visualPosition * parent.width
                                     height: parent.height
                                     radius: 2
-                                    color: "#FFFFFF"
+                                    color: volumeSlider.value > 100 ? Theme.warning : "#FFFFFF"
+                                }
+
+                                // 100% marker: everything right of it is software boost
+                                Rectangle {
+                                    x: parent.width / 2 - 1
+                                    y: -3
+                                    width: 2
+                                    height: parent.height + 6
+                                    color: "#80FFFFFF"
                                 }
                             }
                         }
@@ -301,7 +329,7 @@ Item {
                             width: 13
                             height: 13
                             radius: 6.5
-                            color: "#FFFFFF"
+                            color: volumeSlider.value > 100 ? Theme.warning : "#FFFFFF"
                         }
 
                         onMoved: {
