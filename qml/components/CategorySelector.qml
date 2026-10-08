@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Theme.js" as Theme
 
 Item {
     id: root
@@ -12,16 +13,16 @@ Item {
 
     signal categorySelected(int index, string id, string name)
 
-    implicitWidth: selectorRow.implicitWidth + 24
-    implicitHeight: 38
+    implicitWidth: selectorRow.implicitWidth + 36
+    implicitHeight: 40
 
     Rectangle {
         id: selectorBtn
         anchors.fill: parent
-        radius: 6
-        color: dropdownPopup.visible ? "#171A21" : (mouseArea.containsMouse ? "#14171E" : "#0E1015")
-        border.color: dropdownPopup.visible ? "#38BDF8" : (mouseArea.containsMouse ? "#2A2E3B" : "#1A1D26")
+        radius: height / 2
+        color: dropdownPopup.visible ? Theme.surfaceTop : (mouseArea.containsMouse ? Theme.surfaceHi : Theme.surface)
         border.width: 1
+        border.color: dropdownPopup.visible ? Theme.accent : (mouseArea.containsMouse ? Theme.borderHi : Theme.border)
 
         Behavior on color { ColorAnimation { duration: 100 } }
         Behavior on border.color { ColorAnimation { duration: 100 } }
@@ -33,15 +34,17 @@ Item {
 
             Text {
                 text: root.selectedName.length > 0 ? root.selectedName : "Select Library"
-                color: "#E2E8F0"
+                color: Theme.text
                 font.pixelSize: 13
-                font.weight: Font.Medium
+                font.weight: Font.DemiBold
             }
 
-            Text {
-                text: "▾"
-                color: "#8F96A3"
-                font.pixelSize: 11
+            FluxIcon {
+                name: "chevronDown"
+                size: 14
+                strokeWidth: 2.4
+                color: Theme.textDim
+                Layout.alignment: Qt.AlignVCenter
             }
         }
 
@@ -60,22 +63,22 @@ Item {
         }
     }
 
-    // Dropdown Popover
+    // Dropdown popover
     Popup {
         id: dropdownPopup
-        y: root.height + 6
-        width: 300
+        y: root.height + 8
+        width: 320
         height: Math.min(440, contentCol.implicitHeight + 16)
-        padding: 6
+        padding: 8
         modal: true
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         background: Rectangle {
-            color: "#0D0F14"
-            border.color: "#202430"
+            color: "#F2101015"
             border.width: 1
-            radius: 8
+            border.color: Theme.borderHi
+            radius: 14
         }
 
         contentItem: ScrollView {
@@ -98,30 +101,30 @@ Item {
 
                         Item {
                             width: parent.width
-                            height: 26
+                            height: 28
                             visible: itemCol.isFirstInGroup
 
                             Text {
                                 anchors.left: parent.left
-                                anchors.leftMargin: 10
+                                anchors.leftMargin: 12
                                 anchors.bottom: parent.bottom
                                 anchors.bottomMargin: 4
                                 text: model.group ? model.group.toUpperCase() : ""
-                                color: "#5E6676"
+                                color: Theme.textMute
                                 font.pixelSize: 10
                                 font.weight: Font.Bold
                                 font.letterSpacing: 1.2
                             }
                         }
 
-                        // Category Item Button
+                        // Category item
                         Rectangle {
                             width: parent.width
-                            height: 32
-                            radius: 4
+                            height: 34
+                            radius: 8
                             color: {
-                                if (index === root.selectedIndex) return "#171A24"
-                                if (itemMouse.containsMouse) return "#12141A"
+                                if (index === root.selectedIndex) return Theme.accentSoft
+                                if (itemMouse.containsMouse) return "#1FFFFFFF"
                                 return "transparent"
                             }
 
@@ -133,7 +136,7 @@ Item {
                                 Text {
                                     Layout.fillWidth: true
                                     text: model.name
-                                    color: (index === root.selectedIndex) ? "#38BDF8" : (itemMouse.containsMouse ? "#FFFFFF" : "#C7CBD4")
+                                    color: (index === root.selectedIndex) ? Theme.text : (itemMouse.containsMouse ? "#FFFFFF" : Theme.textDim)
                                     font.pixelSize: 12
                                     font.weight: (index === root.selectedIndex) ? Font.DemiBold : Font.Normal
                                     elide: Text.ElideRight
@@ -141,9 +144,10 @@ Item {
 
                                 Text {
                                     visible: index === root.selectedIndex
-                                    text: "✓"
-                                    color: "#38BDF8"
-                                    font.pixelSize: 11
+                                    text: "\u2713"
+                                    color: Theme.accentHover
+                                    font.pixelSize: 12
+                                    font.weight: Font.Bold
                                 }
                             }
 

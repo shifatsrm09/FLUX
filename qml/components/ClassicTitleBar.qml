@@ -2,20 +2,31 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import "Theme.js" as Theme
 
-Rectangle {
+// Frameless-window title bar styled as a streaming-service nav bar.
+//  - translucent gradient over hero content, solid once the page scrolls
+//  - overlayMode (player): brand/nav fade out, only window controls remain
+Item {
     id: root
 
     property var window: null
     property bool isMaximized: window ? window.visibility === Window.Maximized : false
     property bool showNowPlaying: false
 
+    property bool solid: false          // opaque background (scrolled / results page)
+    property bool overlayMode: false    // player mode: transparent, window controls only
+    property bool shown: true           // fade whole bar in / out
+
     signal homeClicked()
     signal nowPlayingClicked()
     signal devToolsClicked()
 
-    height: 36
-    color: "#08090C"
+    height: 48
+    opacity: root.shown ? 1.0 : 0.0
+    visible: opacity > 0.0
+
+    Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
     function toggleMaximize() {
         if (!root.window) return
@@ -26,7 +37,39 @@ Rectangle {
         }
     }
 
-    // Draggable / Double-click maximize area covering entire titlebar
+    // ---- Backgrounds ---------------------------------------------------------
+
+    // Soft gradient scrim (transparent nav over hero)
+    Rectangle {
+        anchors.fill: parent
+        opacity: (root.solid || root.overlayMode) ? 0.0 : 1.0
+
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "#E60A0A0D" }
+            GradientStop { position: 1.0; color: "#000A0A0D" }
+        }
+
+        Behavior on opacity { NumberAnimation { duration: 240 } }
+    }
+
+    // Solid bar with hairline
+    Rectangle {
+        anchors.fill: parent
+        color: "#F20A0A0D"
+        opacity: (root.solid && !root.overlayMode) ? 1.0 : 0.0
+
+        Behavior on opacity { NumberAnimation { duration: 240 } }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 1
+            color: Theme.border
+        }
+    }
+
+    // ---- Drag / double-click maximize area -------------------------------------
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
@@ -45,42 +88,79 @@ Rectangle {
         }
     }
 
-    // Left Title: Clickable FLUX Home Navigation
-    Item {
-        id: fluxHomeBtn
+    // ---- Left: brand + nav -------------------------------------------------------
+    RowLayout {
+        id: brandRow
+
         anchors.left: parent.left
-        anchors.leftMargin: 16
+        anchors.leftMargin: 32
         anchors.verticalCenter: parent.verticalCenter
-        implicitWidth: fluxText.implicitWidth + 8
-        implicitHeight: 24
+        spacing: 30
         z: 3
+        opacity: root.overlayMode ? 0.0 : 1.0
+        visible: opacity > 0.0
 
-        Text {
-            id: fluxText
-            anchors.centerIn: parent
-            text: "FLUX"
-            font.pixelSize: 12
-            font.weight: Font.Bold
-            font.letterSpacing: 2
-            color: fluxMouse.containsMouse ? "#38BDF8" : "#E2E8F0"
+        Behavior on opacity { NumberAnimation { duration: 200 } }
 
-            Behavior on color { ColorAnimation { duration: 120 } }
+        // Wordmark
+        Item {
+            implicitWidth: logoText.implicitWidth
+            implicitHeight: 32
+
+            Text {
+                id: logoText
+                anchors.centerIn: parent
+                text: "FLUX"
+                color: logoMouse.containsMouse ? Theme.accentHover : Theme.accent
+                font.pixelSize: 26
+                font.weight: Font.Black
+                font.letterSpacing: 4
+
+                Behavior on color { ColorAnimation { duration: 120 } }
+            }
+
+            MouseArea {
+                id: logoMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.homeClicked()
+            }
+
+            FluxToolTip {
+                visible: logoMouse.containsMouse
+                delay: 500
+                text: "Return to Home Page"
+            }
         }
 
-        MouseArea {
-            id: fluxMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.homeClicked()
-        }
+        // Home link
+        Item {
+            implicitWidth: homeText.implicitWidth
+            implicitHeight: 32
 
-        ToolTip.visible: fluxMouse.containsMouse
-        ToolTip.delay: 400
-        ToolTip.text: "Return to Home Page"
+            Text {
+                id: homeText
+                anchors.centerIn: parent
+                text: "Home"
+                color: homeMouse.containsMouse ? Theme.text : Theme.textDim
+                font.pixelSize: 14
+                font.weight: Font.Medium
+
+                Behavior on color { ColorAnimation { duration: 120 } }
+            }
+
+            MouseArea {
+                id: homeMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.homeClicked()
+            }
+        }
     }
 
-    // Right Controls
+    // ---- Right: now playing, dev tools, window controls -----------------------------
     RowLayout {
         anchors.right: parent.right
         anchors.top: parent.top
@@ -88,14 +168,39 @@ Rectangle {
         spacing: 0
         z: 2
 
-        // Return to Player if already streaming
-        Text {
+        // Return to the player while something is streaming
+        Rectangle {
+            id: nowPlayingPill
+
             visible: root.showNowPlaying
-            text: "Now Playing ▶"
-            color: nowPlayingMouse.containsMouse ? "#7DD3FC" : "#38BDF8"
-            font.pixelSize: 12
-            font.weight: Font.Medium
-            Layout.rightMargin: 14
+            Layout.alignment: Qt.AlignVCenter
+            Layout.rightMargin: 12
+            implicitHeight: 30
+            implicitWidth: nowPlayingRow.implicitWidth + 28
+            radius: 15
+            color: nowPlayingMouse.containsMouse ? "#40E50914" : Theme.accentSoft
+            border.width: 1
+            border.color: Theme.accentRing
+
+            Behavior on color { ColorAnimation { duration: 120 } }
+
+            RowLayout {
+                id: nowPlayingRow
+                anchors.centerIn: parent
+                spacing: 8
+
+                Equalizer {
+                    running: root.showNowPlaying && root.visible
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                Text {
+                    text: "Now Playing"
+                    color: Theme.text
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                }
+            }
 
             MouseArea {
                 id: nowPlayingMouse
@@ -106,18 +211,30 @@ Rectangle {
             }
         }
 
-        // Developer Tools Access
+        // Developer tools
         Item {
-            implicitWidth: 32
-            implicitHeight: 36
-            Layout.rightMargin: 6
+            id: devButton
 
-            Text {
+            Layout.alignment: Qt.AlignVCenter
+            Layout.rightMargin: 8
+            implicitWidth: 34
+            implicitHeight: 34
+            opacity: root.overlayMode ? 0.0 : 1.0
+            visible: opacity > 0.0
+
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: width / 2
+                color: devMouse.containsMouse ? "#26FFFFFF" : "transparent"
+            }
+
+            FluxIcon {
                 anchors.centerIn: parent
-                text: "···"
-                color: devMouse.containsMouse ? "#F5F5F5" : "#64748B"
-                font.pixelSize: 16
-                font.weight: Font.Bold
+                name: "dots"
+                size: 20
+                color: devMouse.containsMouse ? "#FFFFFF" : Theme.textDim
             }
 
             MouseArea {
@@ -128,88 +245,76 @@ Rectangle {
                 onClicked: root.devToolsClicked()
             }
 
-            ToolTip.visible: devMouse.containsMouse
-            ToolTip.delay: 500
-            ToolTip.text: "Developer Tools (Ctrl+D)"
+            FluxToolTip {
+                visible: devMouse.containsMouse
+                delay: 500
+                text: "Developer Tools (Ctrl+D)"
+            }
         }
 
-        // Minimize Button
+        // Minimize
         Rectangle {
-            id: minBtn
             Layout.preferredWidth: 46
             Layout.fillHeight: true
-            color: minMouse.containsPress ? "#262D3D" : (minMouse.containsMouse ? "#161B26" : "transparent")
+            color: minMouse.containsPress ? "#33FFFFFF" : (minMouse.containsMouse ? "#1FFFFFFF" : "transparent")
 
-            // Minimize Glyph
             Rectangle {
                 anchors.centerIn: parent
                 width: 10
                 height: 1
-                color: minMouse.containsMouse ? "#F1F5F9" : "#94A3B8"
+                color: minMouse.containsMouse ? "#FFFFFF" : "#B4B4BF"
             }
 
             MouseArea {
                 id: minMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                cursorShape: Qt.ArrowCursor
                 onClicked: {
                     if (root.window) root.window.showMinimized()
                 }
             }
-
-            ToolTip.visible: minMouse.containsMouse
-            ToolTip.delay: 500
-            ToolTip.text: "Minimize"
         }
 
-        // Maximize / Restore Button
+        // Maximize / Restore
         Rectangle {
-            id: maxBtn
             Layout.preferredWidth: 46
             Layout.fillHeight: true
-            color: maxMouse.containsPress ? "#262D3D" : (maxMouse.containsMouse ? "#161B26" : "transparent")
+            color: maxMouse.containsPress ? "#33FFFFFF" : (maxMouse.containsMouse ? "#1FFFFFFF" : "transparent")
 
-            // Maximize / Restore Glyph
             Item {
                 anchors.centerIn: parent
                 width: 10
                 height: 10
 
-                // Normal state: Single clean square outline
+                // Normal state: single square outline
                 Rectangle {
                     visible: !root.isMaximized
                     anchors.fill: parent
                     color: "transparent"
-                    border.color: maxMouse.containsMouse ? "#F1F5F9" : "#94A3B8"
                     border.width: 1
+                    border.color: maxMouse.containsMouse ? "#FFFFFF" : "#B4B4BF"
                 }
 
-                // Maximized state: Restore icon (overlapping dual squares)
+                // Maximized state: two overlapping squares (back square drawn as an L)
                 Item {
                     visible: root.isMaximized
                     anchors.fill: parent
 
-                    // Back square
                     Rectangle {
-                        x: 2
-                        y: 0
-                        width: 8
-                        height: 8
-                        color: "transparent"
-                        border.color: maxMouse.containsMouse ? "#F1F5F9" : "#94A3B8"
-                        border.width: 1
+                        x: 2; y: 0; width: 8; height: 1
+                        color: maxMouse.containsMouse ? "#FFFFFF" : "#B4B4BF"
                     }
 
-                    // Front square
                     Rectangle {
-                        x: 0
-                        y: 2
-                        width: 8
-                        height: 8
-                        color: maxMouse.containsPress ? "#262D3D" : (maxMouse.containsMouse ? "#161B26" : "#08090C")
-                        border.color: maxMouse.containsMouse ? "#F1F5F9" : "#94A3B8"
+                        x: 9; y: 0; width: 1; height: 8
+                        color: maxMouse.containsMouse ? "#FFFFFF" : "#B4B4BF"
+                    }
+
+                    Rectangle {
+                        x: 0; y: 2; width: 8; height: 8
+                        color: "transparent"
                         border.width: 1
+                        border.color: maxMouse.containsMouse ? "#FFFFFF" : "#B4B4BF"
                     }
                 }
             }
@@ -218,23 +323,16 @@ Rectangle {
                 id: maxMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                cursorShape: Qt.ArrowCursor
                 onClicked: root.toggleMaximize()
             }
-
-            ToolTip.visible: maxMouse.containsMouse
-            ToolTip.delay: 500
-            ToolTip.text: root.isMaximized ? "Restore Down" : "Maximize"
         }
 
-        // Close Button
+        // Close
         Rectangle {
-            id: closeBtn
             Layout.preferredWidth: 46
             Layout.fillHeight: true
             color: closeMouse.containsPress ? "#B91C1C" : (closeMouse.containsMouse ? "#E81123" : "transparent")
 
-            // Close Glyph ('✕')
             Item {
                 anchors.centerIn: parent
                 width: 10
@@ -242,20 +340,20 @@ Rectangle {
 
                 Rectangle {
                     anchors.centerIn: parent
-                    width: 12
+                    width: 13
                     height: 1.2
                     rotation: 45
-                    color: closeMouse.containsMouse ? "#FFFFFF" : "#94A3B8"
                     antialiasing: true
+                    color: closeMouse.containsMouse ? "#FFFFFF" : "#B4B4BF"
                 }
 
                 Rectangle {
                     anchors.centerIn: parent
-                    width: 12
+                    width: 13
                     height: 1.2
                     rotation: -45
-                    color: closeMouse.containsMouse ? "#FFFFFF" : "#94A3B8"
                     antialiasing: true
+                    color: closeMouse.containsMouse ? "#FFFFFF" : "#B4B4BF"
                 }
             }
 
@@ -263,24 +361,10 @@ Rectangle {
                 id: closeMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                cursorShape: Qt.ArrowCursor
                 onClicked: {
                     if (root.window) root.window.close()
                 }
             }
-
-            ToolTip.visible: closeMouse.containsMouse
-            ToolTip.delay: 500
-            ToolTip.text: "Close"
         }
-    }
-
-    // Hairline Bottom Separator Border
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: 1
-        color: "#141721"
     }
 }

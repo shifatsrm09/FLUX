@@ -1,7 +1,10 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Theme.js" as Theme
 
+// Category picker: one column per group, items stacked underneath.
+// Used on the home page (always open) and as a collapsible filter on the results page.
 Item {
     id: root
 
@@ -62,104 +65,148 @@ Item {
         }
     ]
 
-    // Responsive column count based on available width
-    // Mobile (< 520px): 1 column
-    // Tablet (< 800px): 2 columns
-    // Desktop (>= 800px): 3 columns
-    readonly property int numColumns: {
-        if (width < 520) return 1
-        if (width < 800) return 2
-        return 3
-    }
+    readonly property bool groupsOpen: !root.collapsible || root.isExpanded
+    readonly property int rowHeight: root.collapsible ? 38 : 44
 
-    readonly property real colSpacing: 14
-    readonly property real rowSpacing: 14
-    readonly property real colWidth: numColumns === 1
-        ? width
-        : Math.floor((width - (numColumns - 1) * colSpacing) / numColumns)
+    // Responsive columns: as many equal-width group columns as fit (max 6)
+    readonly property real colSpacing: 20
+    readonly property int colMinWidth: 200
+    readonly property int columnCount: Math.max(1, Math.min(6, Math.floor((root.width + root.colSpacing) / (root.colMinWidth + root.colSpacing))))
+    readonly property real colWidth: Math.max(160, Math.floor((root.width - (root.columnCount - 1) * root.colSpacing) / root.columnCount))
 
     implicitHeight: mainColumn.implicitHeight
 
-    ColumnLayout {
-        id: mainColumn
-        anchors.left: parent.left
-        anchors.right: parent.right
-        spacing: 12
+    // =========================================================================
+    // One selectable category row
+    // =========================================================================
+    Component {
+        id: itemDelegate
 
-        // =====================================================================
-        // SECTION 1: "All" Category Option (At the Top)
-        // =====================================================================
         Rectangle {
-            id: allBar
-            Layout.fillWidth: true
-            implicitHeight: 40
-            radius: 6
+            id: item
 
-            readonly property bool isAllChecked: root.searchManager ? root.searchManager.isAllSelected : true
+            required property var modelData
 
-            color: allBarMouse.containsMouse ? "#131722" : "#0D1017"
-            border.color: allBarMouse.containsMouse ? "#2E384D" : "#1B212D"
+            readonly property string catId: item.modelData.id
+            readonly property bool isSelected: root.searchManager
+                                               ? root.searchManager.selectedCategoryIds.indexOf(item.catId) !== -1
+                                               : true
+
+            width: root.colWidth
+            height: root.rowHeight
+            radius: 10
+            color: itemMouse.containsMouse ? Theme.surfaceHi : Theme.surface
             border.width: 1
+            border.color: itemMouse.containsMouse ? Theme.borderHi : Theme.border
 
             Behavior on color { ColorAnimation { duration: 120 } }
             Behavior on border.color { ColorAnimation { duration: 120 } }
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                spacing: 12
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
+                spacing: 10
 
-                // Left: Clickable All checkbox and title
+                Text {
+                    Layout.fillWidth: true
+                    text: item.modelData.name
+                    color: item.isSelected ? Theme.text : Theme.textDim
+                    font.pixelSize: 13
+                    elide: Text.ElideRight
+                }
+
+                // Selected state: just a check mark
+                Text {
+                    visible: item.isSelected
+                    text: "\u2713"
+                    color: Theme.accentHover
+                    font.pixelSize: 16
+                    font.weight: Font.Bold
+                }
+            }
+
+            MouseArea {
+                id: itemMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+
+                onClicked: {
+                    if (root.searchManager) {
+                        root.searchManager.toggleCategory(item.catId)
+                        root.selectionChanged()
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // Layout
+    // =========================================================================
+    ColumnLayout {
+        id: mainColumn
+
+        anchors.left: parent.left
+        anchors.right: parent.right
+        spacing: 20
+
+        // ---- "All categories" bar ------------------------------------------------
+        Rectangle {
+            id: allBar
+
+            Layout.fillWidth: true
+            Layout.preferredHeight: 56
+            radius: 12
+
+            readonly property bool isAllChecked: root.searchManager ? root.searchManager.isAllSelected : true
+
+            color: allMouse.containsMouse ? Theme.surfaceHi : Theme.surface
+            border.width: 1
+            border.color: allMouse.containsMouse ? Theme.borderHi : Theme.border
+
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on border.color { ColorAnimation { duration: 120 } }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 14
+                spacing: 14
+
+                // Clickable toggle area (label + check mark)
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
 
                     RowLayout {
                         anchors.fill: parent
-                        spacing: 10
+                        spacing: 12
 
-                        // Checkbox Square for "All"
-                        Rectangle {
-                            implicitWidth: 15
-                            implicitHeight: 15
-                            radius: 3
-                            color: allBar.isAllChecked ? "#0284C7" : "#10131B"
-                            border.color: allBar.isAllChecked ? "#0284C7" : (allBarMouse.containsMouse ? "#3A475F" : "#283142")
-                            border.width: 1
-
-                            Text {
-                                anchors.centerIn: parent
-                                visible: allBar.isAllChecked
-                                text: "✓"
-                                color: "#FFFFFF"
-                                font.pixelSize: 10
-                                font.weight: Font.Bold
-                            }
-                        }
-
-                        // Checkbox Label & Subtitle
                         Text {
+                            Layout.fillWidth: true
                             text: "All Categories"
-                            color: allBar.isAllChecked ? "#F0F6FC" : "#D1D5DB"
-                            font.pixelSize: 12
+                            color: allBar.isAllChecked ? Theme.text : Theme.textDim
+                            font.pixelSize: 14
                             font.weight: Font.DemiBold
                         }
 
                         Text {
-                            text: "• Select all 17 DhakaFlix categories"
-                            color: "#5C6677"
-                            font.pixelSize: 11
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
+                            visible: allBar.isAllChecked
+                            text: "\u2713"
+                            color: Theme.accentHover
+                            font.pixelSize: 16
+                            font.weight: Font.Bold
                         }
                     }
 
                     MouseArea {
-                        id: allBarMouse
+                        id: allMouse
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
+
                         onClicked: {
                             if (root.searchManager) {
                                 root.searchManager.toggleAll()
@@ -169,200 +216,128 @@ Item {
                     }
                 }
 
-                // Selected Counter Badge
+                // Selected counter
                 Rectangle {
-                    implicitHeight: 22
-                    implicitWidth: countText.implicitWidth + 14
-                    radius: 11
-                    color: "#131722"
-                    border.color: "#1F2633"
+                    implicitHeight: 26
+                    implicitWidth: countText.implicitWidth + 22
+                    radius: 13
+                    color: Theme.surfaceHi
                     border.width: 1
+                    border.color: Theme.border
 
                     Text {
                         id: countText
                         anchors.centerIn: parent
-                        text: {
-                            if (!root.searchManager) return "17 / 17"
-                            var cnt = root.searchManager.selectedCount
-                            return cnt + " / 17 selected"
-                        }
-                        color: allBar.isAllChecked ? "#38BDF8" : "#8F96A3"
+                        text: root.searchManager ? (root.searchManager.selectedCount + " / 17 selected") : "17 / 17"
+                        color: Theme.textDim
                         font.pixelSize: 11
-                        font.weight: Font.Medium
+                        font.weight: Font.DemiBold
                     }
                 }
 
-                // Collapsible Toggle Button (if collapsible is enabled)
+                // Expand / collapse (results page)
                 Rectangle {
                     visible: root.collapsible
-                    implicitHeight: 24
-                    implicitWidth: toggleRow.implicitWidth + 14
-                    radius: 4
-                    color: toggleMouse.containsMouse ? "#1E2638" : "#131824"
-                    border.color: toggleMouse.containsMouse ? "#3B4860" : "#222B3D"
-                    border.width: 1
+                    implicitHeight: 32
+                    implicitWidth: toggleRow.implicitWidth + 28
+                    radius: 16
+                    color: toggleMouse.containsMouse ? "#33FFFFFF" : "#1FFFFFFF"
+
+                    Behavior on color { ColorAnimation { duration: 120 } }
 
                     RowLayout {
                         id: toggleRow
                         anchors.centerIn: parent
-                        spacing: 5
+                        spacing: 6
 
                         Text {
                             text: "Categories"
-                            color: "#94A3B8"
-                            font.pixelSize: 11
-                            font.weight: Font.Medium
+                            color: Theme.text
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
                         }
 
-                        Text {
-                            text: root.isExpanded ? "▲" : "▼"
-                            color: "#64748B"
-                            font.pixelSize: 8
+                        FluxIcon {
+                            name: root.isExpanded ? "chevronUp" : "chevronDown"
+                            size: 14
+                            strokeWidth: 2.4
+                            color: Theme.textDim
+                            Layout.alignment: Qt.AlignVCenter
                         }
                     }
 
                     MouseArea {
                         id: toggleMouse
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
                         hoverEnabled: true
-                        onClicked: {
-                            root.isExpanded = !root.isExpanded
-                        }
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.isExpanded = !root.isExpanded
                     }
                 }
             }
         }
 
-        // =====================================================================
-        // SECTION 2: Responsive Columns of Logical Category Groups
-        // =====================================================================
-        Grid {
-            id: groupsGrid
+        // ---- Category columns ----------------------------------------------------------
+        Item {
+            id: groupsWrapper
+
             Layout.fillWidth: true
-            columns: root.numColumns
-            columnSpacing: root.colSpacing
-            rowSpacing: root.rowSpacing
-            visible: !root.collapsible || root.isExpanded
+            Layout.preferredHeight: root.groupsOpen ? groupsFlow.implicitHeight : 0
+            clip: true
+            opacity: root.groupsOpen ? 1.0 : 0.0
+            visible: height > 0.5 || opacity > 0.0
 
-            Repeater {
-                model: root.categoryGroups
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: 200 } }
 
-                delegate: Rectangle {
-                    id: groupCard
-                    width: root.colWidth
-                    implicitHeight: groupCol.implicitHeight + 20
-                    radius: 6
-                    color: "#0A0D14"
-                    border.color: "#181E29"
-                    border.width: 1
+            Flow {
+                id: groupsFlow
 
-                    ColumnLayout {
-                        id: groupCol
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.margins: 10
-                        spacing: 6
+                width: parent.width
+                spacing: root.colSpacing
 
-                        // Group Section Heading
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 6
+                Repeater {
+                    model: root.categoryGroups
+
+                    delegate: Column {
+                        id: groupColumn
+
+                        required property var modelData
+
+                        width: root.colWidth
+                        spacing: 8
+
+                        // Column heading
+                        Item {
+                            width: parent.width
+                            height: 30
 
                             Rectangle {
-                                implicitWidth: 3
-                                implicitHeight: 11
+                                id: headingBar
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 3
+                                height: 14
                                 radius: 1.5
-                                color: "#38BDF8"
-                                opacity: 0.85
+                                color: Theme.accent
                             }
 
                             Text {
-                                text: modelData.title.toUpperCase()
-                                color: "#8E9AA8"
-                                font.pixelSize: 10
-                                font.weight: Font.DemiBold
-                                font.letterSpacing: 0.6
-                                Layout.fillWidth: true
+                                anchors.left: headingBar.right
+                                anchors.leftMargin: 9
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: groupColumn.modelData.title
+                                color: Theme.text
+                                font.pixelSize: 14
+                                font.weight: Font.Bold
                                 elide: Text.ElideRight
                             }
                         }
 
-                        // Category Items inside this Group
                         Repeater {
-                            model: modelData.items
-
-                            delegate: Rectangle {
-                                id: itemRow
-                                Layout.fillWidth: true
-                                implicitHeight: 28
-                                radius: 4
-
-                                readonly property string catId: modelData.id
-                                readonly property bool isSelected: {
-                                    if (!root.searchManager) return true
-                                    return root.searchManager.selectedCategoryIds.indexOf(catId) !== -1
-                                }
-
-                                // Clean background: subtle hover only, no full outline border when selected
-                                color: itemMouse.containsMouse ? "#141822" : "transparent"
-                                border.color: "transparent"
-                                border.width: 0
-
-                                Behavior on color { ColorAnimation { duration: 100 } }
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 8
-                                    anchors.rightMargin: 8
-                                    spacing: 8
-
-                                    // Checkbox Box - only the check mark indicates selection
-                                    Rectangle {
-                                        implicitWidth: 14
-                                        implicitHeight: 14
-                                        radius: 3
-                                        color: itemRow.isSelected ? "#0284C7" : "#0F121A"
-                                        border.color: itemRow.isSelected ? "#0284C7" : (itemMouse.containsMouse ? "#3A465B" : "#242B38")
-                                        border.width: 1
-
-                                        Text {
-                                            anchors.centerIn: parent
-                                            visible: itemRow.isSelected
-                                            text: "✓"
-                                            color: "#FFFFFF"
-                                            font.pixelSize: 9
-                                            font.weight: Font.Bold
-                                        }
-                                    }
-
-                                    // Category Name (Entire Row Clickable)
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: modelData.name
-                                        color: itemRow.isSelected
-                                            ? "#F0F6FC"
-                                            : (itemMouse.containsMouse ? "#CBD5E1" : "#8B949E")
-                                        font.pixelSize: 11
-                                        font.weight: itemRow.isSelected ? Font.Medium : Font.Normal
-                                        elide: Text.ElideRight
-                                    }
-                                }
-
-                                MouseArea {
-                                    id: itemMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (root.searchManager) {
-                                            root.searchManager.toggleCategory(itemRow.catId)
-                                            root.selectionChanged()
-                                        }
-                                    }
-                                }
-                            }
+                            model: groupColumn.modelData.items
+                            delegate: itemDelegate
                         }
                     }
                 }

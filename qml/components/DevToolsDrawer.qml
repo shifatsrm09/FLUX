@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Theme.js" as Theme
 
 Drawer {
     id: root
@@ -12,14 +13,22 @@ Drawer {
     signal playTestRequested(string url, string title)
 
     edge: Qt.RightEdge
-    width: Math.min(460, parent.width * 0.85)
+    width: Math.min(480, parent.width * 0.85)
     height: parent.height
 
     background: Rectangle {
-        color: "#0B0D12"
-        border.color: "#181C26"
-        border.width: 1
+        color: Theme.bgRaised
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 1
+            color: Theme.border
+        }
     }
+
+    Overlay.modal: Rectangle { color: "#99000000" }
 
     ColumnLayout {
         anchors.fill: parent
@@ -33,34 +42,29 @@ Drawer {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
+
                 Text {
-                    text: "FLUX v0.0.2 • Developer & Diagnostics"
-                    color: "#F5F5F5"
-                    font.pixelSize: 16
-                    font.weight: Font.DemiBold
+                    text: "FLUX v0.0.2 \u2022 Developer & Diagnostics"
+                    color: Theme.text
+                    font.pixelSize: 17
+                    font.weight: Font.Bold
                 }
+
                 Text {
                     text: "Test catalog and libVLC diagnostic output"
-                    color: "#5E6676"
-                    font.pixelSize: 11
+                    color: Theme.textMute
+                    font.pixelSize: 12
                 }
             }
 
-            Button {
-                id: closeBtn
-                implicitWidth: 28
-                implicitHeight: 28
-                background: Rectangle {
-                    radius: 14
-                    color: closeBtn.hovered ? "#1C202B" : "transparent"
-                }
-                contentItem: Text {
-                    text: "✕"
-                    color: "#8F96A3"
-                    font.pixelSize: 11
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
+            IconButton {
+                iconName: "close"
+                iconSize: 16
+                iconColor: Theme.textDim
+                implicitWidth: 34
+                implicitHeight: 34
+                tip: "Close"
+                tipAbove: false
                 onClicked: root.close()
             }
         }
@@ -68,7 +72,7 @@ Drawer {
         Rectangle {
             Layout.fillWidth: true
             height: 1
-            color: "#181C26"
+            color: Theme.border
         }
 
         ScrollView {
@@ -78,21 +82,21 @@ Drawer {
 
             ColumnLayout {
                 width: parent.width
-                spacing: 20
+                spacing: 24
 
                 // -------------------------------------------------------------
                 // Section 1: Pre-verified Test Media
                 // -------------------------------------------------------------
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: 10
 
                     Text {
                         text: "PRE-VERIFIED TEST MEDIA"
-                        color: "#5E6676"
+                        color: Theme.textMute
                         font.pixelSize: 10
                         font.weight: Font.Bold
-                        font.letterSpacing: 1.2
+                        font.letterSpacing: 1.4
                     }
 
                     Repeater {
@@ -100,40 +104,55 @@ Drawer {
 
                         delegate: Rectangle {
                             Layout.fillWidth: true
-                            implicitHeight: 64
-                            radius: 6
-                            color: itemMouse.containsMouse ? "#141720" : "#0F1117"
-                            border.color: (root.player && root.player.url === model.url) ? "#38BDF8" : "#1A1D26"
+                            implicitHeight: 66
+                            radius: 12
+                            color: itemMouse.containsMouse ? Theme.surfaceHi : Theme.surface
                             border.width: 1
+                            border.color: (root.player && root.player.url === model.url) ? Theme.accent : Theme.border
+
+                            Behavior on color { ColorAnimation { duration: 120 } }
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: 12
+                                anchors.margins: 14
                                 spacing: 12
 
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 2
+                                    spacing: 3
+
                                     Text {
                                         Layout.fillWidth: true
                                         text: model.title
-                                        color: "#F5F5F5"
-                                        font.pixelSize: 13
-                                        font.weight: Font.Medium
+                                        color: Theme.text
+                                        font.pixelSize: 14
+                                        font.weight: Font.DemiBold
                                         elide: Text.ElideRight
                                     }
+
                                     Text {
                                         Layout.fillWidth: true
-                                        text: model.year + " · " + model.badge
-                                        color: "#8F96A3"
-                                        font.pixelSize: 11
+                                        text: model.year + " \u00B7 " + model.badge
+                                        color: Theme.textDim
+                                        font.pixelSize: 12
                                     }
                                 }
 
-                                Text {
-                                    text: "▶"
-                                    color: itemMouse.containsMouse ? "#38BDF8" : "#5E6676"
-                                    font.pixelSize: 12
+                                Rectangle {
+                                    implicitWidth: 34
+                                    implicitHeight: 34
+                                    radius: 17
+                                    color: itemMouse.containsMouse ? Theme.accent : "#1FFFFFFF"
+
+                                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                                    FluxIcon {
+                                        anchors.centerIn: parent
+                                        anchors.horizontalCenterOffset: 1
+                                        name: "play"
+                                        size: 16
+                                        color: "#FFFFFF"
+                                    }
                                 }
                             }
 
@@ -156,60 +175,48 @@ Drawer {
                 // -------------------------------------------------------------
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: 10
 
                     Text {
                         text: "DIRECT URL STREAM TEST"
-                        color: "#5E6676"
+                        color: Theme.textMute
                         font.pixelSize: 10
                         font.weight: Font.Bold
-                        font.letterSpacing: 1.2
+                        font.letterSpacing: 1.4
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
+                        spacing: 10
 
                         Rectangle {
                             Layout.fillWidth: true
-                            implicitHeight: 36
-                            radius: 4
-                            color: "#0E1016"
-                            border.color: "#1E222D"
-                            border.width: 1
+                            implicitHeight: 42
+                            radius: 21
+                            color: Theme.surface
+                            border.width: directUrlInput.activeFocus ? 2 : 1
+                            border.color: directUrlInput.activeFocus ? Theme.accent : Theme.border
 
                             TextField {
                                 id: directUrlInput
                                 anchors.fill: parent
-                                anchors.leftMargin: 10
-                                anchors.rightMargin: 10
+                                anchors.leftMargin: 16
+                                anchors.rightMargin: 16
                                 placeholderText: "http://172.16.50.x/... (MKV/MP4)"
-                                placeholderTextColor: "#444A57"
-                                font.pixelSize: 11
-                                font.family: "Consolas, monospace"
-                                color: "#F5F5F5"
+                                placeholderTextColor: Theme.textMute
+                                font.pixelSize: 12
+                                font.family: Theme.monoFamily
+                                color: Theme.text
+                                selectionColor: Theme.accent
                                 background: null
                             }
                         }
 
-                        Button {
+                        FluxButton {
                             id: directPlayBtn
-                            implicitWidth: 60
-                            implicitHeight: 36
-                            background: Rectangle {
-                                color: directPlayBtn.hovered ? "#0EA5E9" : "#171A21"
-                                border.color: "#232734"
-                                border.width: 1
-                                radius: 4
-                            }
-                            contentItem: Text {
-                                text: "Play"
-                                color: "#F5F5F5"
-                                font.pixelSize: 11
-                                font.weight: Font.Medium
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
+                            text: "Play"
+                            implicitHeight: 42
+
                             onClicked: {
                                 if (directUrlInput.text.trim().length > 0) {
                                     root.playTestRequested(directUrlInput.text.trim(), "Direct Stream")
@@ -225,45 +232,45 @@ Drawer {
                 // -------------------------------------------------------------
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: 10
 
                     Text {
                         text: "LIBVLC DIAGNOSTIC LOGS"
-                        color: "#5E6676"
+                        color: Theme.textMute
                         font.pixelSize: 10
                         font.weight: Font.Bold
-                        font.letterSpacing: 1.2
+                        font.letterSpacing: 1.4
                     }
 
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 200
-                        color: "#08090C"
-                        border.color: "#181C26"
+                        implicitHeight: 220
+                        color: Theme.bg
                         border.width: 1
-                        radius: 4
+                        border.color: Theme.border
+                        radius: 12
 
                         ScrollView {
                             anchors.fill: parent
-                            anchors.margins: 10
+                            anchors.margins: 12
                             clip: true
 
                             ListView {
                                 width: parent.width
                                 model: root.logger ? root.logger.recentLogs : []
-                                spacing: 2
+                                spacing: 3
 
                                 delegate: Text {
                                     width: parent.width
                                     text: modelData
                                     color: {
-                                        if (modelData.indexOf("[ERROR]") !== -1) return "#F87171"
-                                        if (modelData.indexOf("[WARN ]") !== -1) return "#FBBF24"
-                                        if (modelData.indexOf("[VLC  ]") !== -1) return "#38BDF8"
-                                        return "#7E8696"
+                                        if (modelData.indexOf("[ERROR]") !== -1) return Theme.danger
+                                        if (modelData.indexOf("[WARN ]") !== -1) return Theme.warning
+                                        if (modelData.indexOf("[VLC  ]") !== -1) return "#5CB8FF"
+                                        return Theme.textDim
                                     }
                                     font.pixelSize: 10
-                                    font.family: "Consolas, monospace"
+                                    font.family: Theme.monoFamily
                                     wrapMode: Text.WrapAnywhere
                                 }
                             }

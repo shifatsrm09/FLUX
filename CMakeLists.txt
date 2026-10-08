@@ -82,6 +82,15 @@ qt_add_qml_module(FLUX
         qml/components/CategoryCheckpoints.qml
         qml/components/CategoryFilterSection.qml
         qml/components/MediaFormatter.js
+        qml/components/Theme.js
+        qml/components/FluxIcon.qml
+        qml/components/FluxButton.qml
+        qml/components/IconButton.qml
+        qml/components/FluxToolTip.qml
+        qml/components/FluxScrollBar.qml
+        qml/components/FluxSpinner.qml
+        qml/components/GlowOrb.qml
+        qml/components/Equalizer.qml
 )
 
 target_link_libraries(FLUX PRIVATE

@@ -13,13 +13,20 @@ namespace Flux {
 SearchManager::SearchManager(QObject *parent)
     : QAbstractListModel(parent)
     , m_libraryModel(std::make_unique<MediaLibraryModel>(this)) {
-    // Default to All selected
-    m_isAllSelected = true;
-    m_selectedLibraryIndex = 0;
+    // Default selection: English Movies only (falls back to All if the id is missing)
     int count = m_libraryModel->rowCount();
-    m_selectedIndices.reserve(count);
-    for (int i = 0; i < count; ++i) {
-        m_selectedIndices.push_back(i);
+    int defaultIdx = m_libraryModel->indexOfId("english_movies");
+    if (defaultIdx >= 0) {
+        m_isAllSelected = (count == 1);
+        m_selectedLibraryIndex = defaultIdx;
+        m_selectedIndices.push_back(defaultIdx);
+    } else {
+        m_isAllSelected = true;
+        m_selectedLibraryIndex = 0;
+        m_selectedIndices.reserve(count);
+        for (int i = 0; i < count; ++i) {
+            m_selectedIndices.push_back(i);
+        }
     }
 }
 

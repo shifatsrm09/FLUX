@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import "components"
+import "components/Theme.js" as Theme
 
 ApplicationWindow {
     id: window
@@ -13,7 +14,8 @@ ApplicationWindow {
     minimumWidth: 960
     minimumHeight: 600
     title: "FLUX"
-    color: "#08090C"
+    color: Theme.bg
+    font.family: Theme.fontFamily
     flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowMinMaxButtonsHint
 
     property bool isFullscreen: false
@@ -68,13 +70,19 @@ ApplicationWindow {
         currentPage = "search"
     }
 
+    // ---- Shortcuts ---------------------------------------------------------------
+
     Shortcut {
         sequence: "Escape"
         onActivated: {
             if (isFullscreen) {
                 toggleFullscreen()
             } else if (currentPage === "player") {
-                window.returnToSearch()
+                if (playerView.menuOpen) {
+                    playerView.closeMenus()
+                } else {
+                    window.returnToSearch()
+                }
             }
         }
     }
@@ -98,50 +106,108 @@ ApplicationWindow {
         onActivated: toggleFullscreen()
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 0
+    // Player-only conveniences
+    Shortcut {
+        sequence: "Left"
+        enabled: currentPage === "player"
+        onActivated: {
+            if (fluxPlayer) fluxPlayer.seekRelative(-10000)
+        }
+    }
 
-        // =====================================================================
-        // Classic Custom Titlebar (Native Window Controls)
-        // =====================================================================
+    Shortcut {
+        sequence: "Right"
+        enabled: currentPage === "player"
+        onActivated: {
+            if (fluxPlayer) fluxPlayer.seekRelative(10000)
+        }
+    }
+
+    Shortcut {
+        sequence: "Up"
+        enabled: currentPage === "player"
+        onActivated: {
+            if (fluxPlayer) fluxPlayer.volume = Math.min(100, fluxPlayer.volume + 5)
+        }
+    }
+
+    Shortcut {
+        sequence: "Down"
+        enabled: currentPage === "player"
+        onActivated: {
+            if (fluxPlayer) fluxPlayer.volume = Math.max(0, fluxPlayer.volume - 5)
+        }
+    }
+
+    Shortcut {
+        sequence: "M"
+        enabled: currentPage === "player"
+        onActivated: {
+            if (fluxPlayer) fluxPlayer.muted = !fluxPlayer.muted
+        }
+    }
+
+    Shortcut {
+        sequence: "F"
+        enabled: currentPage === "player"
+        onActivated: toggleFullscreen()
+    }
+
+    // ---- Stage: pages crossfade; nav bar floats on top ----------------------------------
+    Item {
+        id: stage
+        anchors.fill: parent
+
+        // Search / browse experience
+        SearchPage {
+            id: searchPage
+
+            anchors.fill: parent
+            topInset: customTitleBar.height
+            opacity: currentPage === "search" ? 1.0 : 0.0
+            visible: opacity > 0.0
+
+            Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+
+            onPlayMediaRequested: function(url, title) {
+                window.playMedia(url, title)
+            }
+        }
+
+        // Cinematic full-viewport player
+        PlayerView {
+            id: playerView
+
+            anchors.fill: parent
+            opacity: currentPage === "player" ? 1.0 : 0.0
+            visible: opacity > 0.0
+            player: fluxPlayer
+            mediaTitle: window.currentPlayingTitle
+            isFullscreen: window.isFullscreen
+
+            Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+
+            onToggleFullscreenRequested: window.toggleFullscreen()
+            onBackRequested: window.returnToSearch()
+        }
+
+        // Nav / title bar (frameless window chrome)
         ClassicTitleBar {
             id: customTitleBar
-            Layout.fillWidth: true
-            height: 36
+
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            z: 100
             window: window
-            visible: !window.isFullscreen
-            showNowPlaying: fluxPlayer && fluxPlayer.isPlaying && currentPage !== "player"
+            solid: searchPage.navSolid
+            overlayMode: currentPage === "player"
+            shown: !window.isFullscreen && (currentPage !== "player" || playerView.showControls)
+            showNowPlaying: !!fluxPlayer && fluxPlayer.isPlaying && currentPage !== "player"
+
             onNowPlayingClicked: currentPage = "player"
             onDevToolsClicked: devDrawer.open()
             onHomeClicked: window.returnToHome()
-        }
-
-        // =====================================================================
-        // Content Area (Search View or Player View)
-        // =====================================================================
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-
-            // Search Experience
-            SearchPage {
-                anchors.fill: parent
-                visible: currentPage === "search"
-                onPlayMediaRequested: function(url, title) {
-                    window.playMedia(url, title)
-                }
-            }
-
-            // Cinematic Full-Viewport Player
-            PlayerView {
-                anchors.fill: parent
-                visible: currentPage === "player"
-                player: fluxPlayer
-                mediaTitle: window.currentPlayingTitle
-                onToggleFullscreenRequested: window.toggleFullscreen()
-                onBackRequested: window.returnToSearch()
-            }
         }
     }
 

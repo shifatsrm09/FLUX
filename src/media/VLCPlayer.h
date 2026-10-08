@@ -89,6 +89,7 @@ public slots:
     Q_INVOKABLE void seekRelative(qint64 deltaMs);
     Q_INVOKABLE void selectAudioTrack(int trackId);
     Q_INVOKABLE void selectSubtitleTrack(int spuId);
+    Q_INVOKABLE void refreshTracks();
 
 signals:
     void urlChanged();

@@ -436,6 +436,16 @@ void VLCPlayer::updateTracks() {
     }
     m_subtitleTracks = subList;
     emit subtitleTracksChanged();
+
+    // 3. Current selections. libVLC reports these live, but QML only re-reads a
+    // property when its NOTIFY signal fires, so announce them whenever the track
+    // lists are refreshed (otherwise the UI keeps the stale initial value).
+    emit selectedAudioTrackChanged();
+    emit selectedSubtitleTrackChanged();
+}
+
+void VLCPlayer::refreshTracks() {
+    updateTracks();
 }
 
 int VLCPlayer::selectedAudioTrack() const {

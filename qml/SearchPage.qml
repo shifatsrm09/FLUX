@@ -2,161 +2,95 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "components"
+import "components/Theme.js" as Theme
 
 Item {
     id: root
 
+    // Space reserved at the top for the overlaid nav bar
+    property real topInset: 0
+
     signal playMediaRequested(string url, string title)
 
-    readonly property bool hasSearched: (fluxSearch && (fluxSearch.hasResults || fluxSearch.isSearching || fluxSearch.query.length > 0))
+    readonly property bool hasSearched: (!!fluxSearch && (fluxSearch.hasResults || fluxSearch.isSearching || fluxSearch.query.length > 0))
+    readonly property bool searching: (!!fluxSearch && fluxSearch.isSearching)
+    readonly property bool navSolid: root.hasSearched || homeFlick.contentY > 24
+    readonly property real pageMargin: Math.max(32, Math.round((root.width - 1240) / 2))
 
-    Item {
+    // =========================================================================
+    // VIEW A: Home (before search): search bar + category columns
+    // =========================================================================
+    Flickable {
+        id: homeFlick
+
         anchors.fill: parent
+        visible: !root.hasSearched
+        clip: true
+        contentWidth: width
+        contentHeight: homeColumn.implicitHeight
+        boundsBehavior: Flickable.StopAtBounds
 
-        // =====================================================================
-        // VIEW A: Centered Initial State (Before Search)
-        // =====================================================================
-        ColumnLayout {
-            anchors.centerIn: parent
-            width: Math.min(parent.width - 48, 860)
-            spacing: 24
-            visible: !root.hasSearched
+        ScrollBar.vertical: FluxScrollBar { }
 
-            ColumnLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 8
+        Column {
+            id: homeColumn
+            width: homeFlick.width
+            spacing: 0
 
-                Text {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: "Search your library"
-                    color: "#F5F5F5"
-                    font.pixelSize: 34
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: -0.5
+            // ---- Search ---------------------------------------------------------------
+            Item {
+                id: searchArea
+
+                width: homeColumn.width
+                height: root.topInset + 150
+                clip: true
+
+                // One subtle ambient glow behind the search box
+                GlowOrb {
+                    width: 900
+                    height: 900
+                    x: searchArea.width / 2 - 450
+                    y: -520
+                    color: Theme.accent
+                    strength: 0.16
                 }
 
-                Text {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: "Stream directly across high-speed BDIX media mirrors"
-                    color: "#8F96A3"
-                    font.pixelSize: 14
-                }
-            }
-
-            // Search Box & Action
-            Rectangle {
-                Layout.fillWidth: true
-                height: 52
-                radius: 8
-                color: "#101218"
-                border.color: initialInput.activeFocus ? "#38BDF8" : "#1A1D26"
-                border.width: 1
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 18
-                    anchors.rightMargin: 8
-                    spacing: 12
-
-                    TextField {
-                        id: initialInput
-                        Layout.fillWidth: true
-                        placeholderText: "Search movies, shows, episodes..."
-                        placeholderTextColor: "#555C6A"
-                        font.pixelSize: 14
-                        color: "#F5F5F5"
-                        selectedTextColor: "#FFFFFF"
-                        selectionColor: "#0284C7"
-                        background: null
-
-                        onAccepted: {
-                            if (fluxSearch && text.trim().length > 0) {
-                                fluxSearch.search(text.trim())
-                            }
-                        }
-                    }
-
-                    Button {
-                        id: initialSearchBtn
-                        implicitWidth: 80
-                        implicitHeight: 36
-                        enabled: !(fluxSearch && fluxSearch.isSearching)
-
-                        background: Rectangle {
-                            radius: 6
-                            color: initialSearchBtn.down ? "#0284C7" : (initialSearchBtn.hovered ? "#0EA5E9" : "#171A21")
-                            border.color: initialSearchBtn.hovered ? "#0EA5E9" : "#232734"
-                            border.width: 1
-                        }
-
-                        contentItem: Text {
-                            text: "Search"
-                            color: initialSearchBtn.hovered ? "#FFFFFF" : "#E2E8F0"
-                            font.pixelSize: 13
-                            font.weight: Font.Medium
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-
-                        onClicked: {
-                            if (fluxSearch && initialInput.text.trim().length > 0) {
-                                fluxSearch.search(initialInput.text.trim())
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Category Filter Section Below Search
-            CategoryFilterSection {
-                Layout.fillWidth: true
-                libraryModel: fluxLibrary
-                searchManager: fluxSearch
-            }
-        }
-
-        // =====================================================================
-        // VIEW B: Active Results State (Top Search + Results List)
-        // =====================================================================
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.topMargin: 24
-            anchors.bottomMargin: 16
-            anchors.leftMargin: Math.max(24, (parent.width - 920) / 2)
-            anchors.rightMargin: Math.max(24, (parent.width - 920) / 2)
-            spacing: 20
-            visible: root.hasSearched
-
-            // Top Compact Search Bar
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 12
-
-                // Search Field
                 Rectangle {
-                    Layout.fillWidth: true
-                    height: 44
-                    radius: 6
-                    color: "#101218"
-                    border.color: topSearchInput.activeFocus ? "#38BDF8" : "#1A1D26"
-                    border.width: 1
+                    id: heroSearch
+
+                    width: Math.min(searchArea.width - 64, 720)
+                    height: 62
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: root.topInset + 40
+                    radius: 31
+                    color: "#D915151A"
+                    border.width: initialInput.activeFocus ? 2 : 1
+                    border.color: initialInput.activeFocus ? Theme.accent : "#38FFFFFF"
+
+                    Behavior on border.color { ColorAnimation { duration: 140 } }
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 8
-                        spacing: 10
+                        anchors.leftMargin: 24
+                        anchors.rightMargin: 9
+                        spacing: 14
+
+                        FluxIcon {
+                            name: "search"
+                            size: 22
+                            color: initialInput.activeFocus ? Theme.text : Theme.textMute
+                            Layout.alignment: Qt.AlignVCenter
+                        }
 
                         TextField {
-                            id: topSearchInput
+                            id: initialInput
                             Layout.fillWidth: true
-                            text: fluxSearch ? fluxSearch.query : ""
                             placeholderText: "Search movies, shows, episodes..."
-                            placeholderTextColor: "#555C6A"
-                            font.pixelSize: 13
-                            color: "#F5F5F5"
+                            placeholderTextColor: Theme.textMute
+                            font.pixelSize: 16
+                            color: Theme.text
                             selectedTextColor: "#FFFFFF"
-                            selectionColor: "#0284C7"
+                            selectionColor: Theme.accent
                             background: null
 
                             onAccepted: {
@@ -166,193 +100,351 @@ Item {
                             }
                         }
 
-                        Button {
-                            id: topClearBtn
-                            visible: topSearchInput.text.length > 0
-                            implicitWidth: 28
-                            implicitHeight: 28
-                            background: Rectangle {
-                                radius: 14
-                                color: topClearBtn.hovered ? "#1E222D" : "transparent"
-                            }
-                            contentItem: Text {
-                                text: "✕"
-                                color: "#8F96A3"
-                                font.pixelSize: 10
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
+                        FluxButton {
+                            id: initialSearchBtn
+                            text: "Search"
+                            implicitHeight: 44
+                            enabled: !(fluxSearch && fluxSearch.isSearching)
+
                             onClicked: {
-                                topSearchInput.text = ""
-                                if (fluxSearch) fluxSearch.clear()
+                                if (fluxSearch && initialInput.text.trim().length > 0) {
+                                    fluxSearch.search(initialInput.text.trim())
+                                }
                             }
-                        }
-                    }
-                }
-
-                // Category Selector
-                // Search Submit Button
-                Button {
-                    id: topSearchSubmitBtn
-                    implicitWidth: 76
-                    implicitHeight: 44
-                    enabled: !(fluxSearch && fluxSearch.isSearching)
-
-                    background: Rectangle {
-                        radius: 6
-                        color: topSearchSubmitBtn.down ? "#0284C7" : (topSearchSubmitBtn.hovered ? "#0EA5E9" : "#171A21")
-                        border.color: topSearchSubmitBtn.hovered ? "#0EA5E9" : "#232734"
-                        border.width: 1
-                    }
-
-                    contentItem: Text {
-                        text: "Search"
-                        color: topSearchSubmitBtn.hovered ? "#FFFFFF" : "#E2E8F0"
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-
-                    onClicked: {
-                        if (fluxSearch && topSearchInput.text.trim().length > 0) {
-                            fluxSearch.search(topSearchInput.text.trim())
                         }
                     }
                 }
             }
 
-            // Category Filter Section Below Search
-            CategoryFilterSection {
+            // ---- Categories -------------------------------------------------------------
+            Item {
+                id: browse
+
+                width: homeColumn.width
+                height: browseColumn.implicitHeight + 80
+
+                ColumnLayout {
+                    id: browseColumn
+
+                    x: root.pageMargin
+                    y: 0
+                    width: parent.width - root.pageMargin * 2
+                    spacing: 0
+
+                    CategoryFilterSection {
+                        Layout.fillWidth: true
+                        libraryModel: fluxLibrary
+                        searchManager: fluxSearch
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // VIEW B: Active results (search bar, filters, poster grid)
+    // =========================================================================
+    ColumnLayout {
+        id: resultsView
+
+        anchors.fill: parent
+        anchors.topMargin: root.topInset + 10
+        anchors.leftMargin: root.pageMargin
+        anchors.rightMargin: root.pageMargin
+        spacing: 16
+        visible: root.hasSearched
+
+        // Compact search bar
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 12
+
+            Rectangle {
                 Layout.fillWidth: true
-                libraryModel: fluxLibrary
-                searchManager: fluxSearch
-                collapsible: true
-                isExpanded: false
-                onSelectionChanged: {
+                Layout.preferredHeight: 48
+                radius: 24
+                color: Theme.surface
+                border.width: topSearchInput.activeFocus ? 2 : 1
+                border.color: topSearchInput.activeFocus ? Theme.accent : Theme.border
+
+                Behavior on border.color { ColorAnimation { duration: 140 } }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 18
+                    anchors.rightMargin: 8
+                    spacing: 12
+
+                    FluxIcon {
+                        name: "search"
+                        size: 20
+                        color: topSearchInput.activeFocus ? Theme.text : Theme.textMute
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    TextField {
+                        id: topSearchInput
+                        Layout.fillWidth: true
+                        text: fluxSearch ? fluxSearch.query : ""
+                        placeholderText: "Search movies, shows, episodes..."
+                        placeholderTextColor: Theme.textMute
+                        font.pixelSize: 14
+                        color: Theme.text
+                        selectedTextColor: "#FFFFFF"
+                        selectionColor: Theme.accent
+                        background: null
+
+                        onAccepted: {
+                            if (fluxSearch && text.trim().length > 0) {
+                                fluxSearch.search(text.trim())
+                            }
+                        }
+                    }
+
+                    IconButton {
+                        id: topClearBtn
+                        visible: topSearchInput.text.length > 0
+                        iconName: "close"
+                        iconSize: 14
+                        iconColor: Theme.textDim
+                        implicitWidth: 30
+                        implicitHeight: 30
+                        tip: "Clear"
+                        tipAbove: false
+
+                        onClicked: {
+                            topSearchInput.text = ""
+                            if (fluxSearch) fluxSearch.clear()
+                        }
+                    }
+                }
+            }
+
+            FluxButton {
+                id: topSearchSubmitBtn
+                text: "Search"
+                implicitHeight: 48
+                enabled: !(fluxSearch && fluxSearch.isSearching)
+
+                onClicked: {
                     if (fluxSearch && topSearchInput.text.trim().length > 0) {
                         fluxSearch.search(topSearchInput.text.trim())
                     }
                 }
             }
+        }
 
-            // Results Heading
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 2
-                visible: fluxSearch && !fluxSearch.isSearching && fluxSearch.hasResults
+        // Category filters
+        CategoryFilterSection {
+            Layout.fillWidth: true
+            libraryModel: fluxLibrary
+            searchManager: fluxSearch
+            collapsible: true
+            isExpanded: false
 
-                Text {
-                    text: fluxSearch ? ("\"" + fluxSearch.query + "\"") : ""
-                    color: "#F5F5F5"
-                    font.pixelSize: 22
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: -0.3
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    text: (fluxSearch ? fluxSearch.selectedCategoriesSummary : "") + " · " + (fluxSearch ? fluxSearch.resultCount : 0) + " results"
-                    color: "#8F96A3"
-                    font.pixelSize: 13
+            onSelectionChanged: {
+                if (fluxSearch && topSearchInput.text.trim().length > 0) {
+                    fluxSearch.search(topSearchInput.text.trim())
                 }
             }
+        }
 
-            // State: Searching Feedback
-            RowLayout {
+        // Results heading
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 2
+            visible: !!fluxSearch && !fluxSearch.isSearching && fluxSearch.hasResults
+
+            Text {
                 Layout.fillWidth: true
-                Layout.topMargin: 20
-                spacing: 12
-                visible: fluxSearch && fluxSearch.isSearching
+                text: fluxSearch ? ("Results for \u201C" + fluxSearch.query + "\u201D") : ""
+                color: Theme.text
+                font.pixelSize: 26
+                font.weight: Font.Bold
+                font.letterSpacing: -0.4
+                elide: Text.ElideRight
+            }
 
-                BusyIndicator {
-                    implicitWidth: 16
-                    implicitHeight: 16
-                    running: true
+            Text {
+                text: (fluxSearch ? fluxSearch.selectedCategoriesSummary : "") + "  \u00B7  " + (fluxSearch ? fluxSearch.resultCount : 0) + " results"
+                color: Theme.textDim
+                font.pixelSize: 13
+            }
+        }
+
+        // State: searching (skeleton tiles)
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 6
+            spacing: 18
+            visible: root.searching
+
+            RowLayout {
+                spacing: 12
+
+                FluxSpinner {
+                    size: 22
+                    thickness: 3
+                    running: root.searching
+                    Layout.alignment: Qt.AlignVCenter
                 }
 
                 Text {
                     text: "Searching " + (fluxSearch ? fluxSearch.selectedCategoriesSummary : "") + "..."
-                    color: "#8F96A3"
+                    color: Theme.textDim
                     font.pixelSize: 14
                 }
             }
 
-            // State: No Results
-            ColumnLayout {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 60
-                spacing: 8
-                visible: fluxSearch && !fluxSearch.isSearching && !fluxSearch.hasResults && !fluxSearch.hasError && fluxSearch.query.length > 0
+            Flow {
+                id: skeletonFlow
 
-                Text {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: "No results found"
-                    color: "#F5F5F5"
-                    font.pixelSize: 18
-                    font.weight: Font.Medium
-                }
+                readonly property int cols: Math.max(1, Math.floor((width + 14) / (250 + 14)))
+                readonly property real cellW: Math.floor((width - (cols - 1) * 14) / cols)
 
-                Text {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: "Try a different title or select other categories above."
-                    color: "#8F96A3"
-                    font.pixelSize: 13
-                }
-            }
-
-            // State: Error
-            ColumnLayout {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 60
-                spacing: 8
-                visible: fluxSearch && fluxSearch.hasError
-
-                Text {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: "Unable to reach this library"
-                    color: "#F87171"
-                    font.pixelSize: 16
-                    font.weight: Font.Medium
-                }
-
-                Text {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: "Check your connection to the BDIX network."
-                    color: "#8F96A3"
-                    font.pixelSize: 13
-                }
-            }
-
-            // Results List
-            ScrollView {
-                id: resultsScroll
                 Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-                visible: fluxSearch && !fluxSearch.isSearching && fluxSearch.hasResults
+                spacing: 14
 
-                ListView {
-                    id: resultsList
-                    width: resultsScroll.width
-                    model: fluxSearch
-                    spacing: 2
+                Repeater {
+                    model: 12
 
-                    delegate: SearchResultCard {
-                        width: resultsList.width
-                        title: model.title
-                        parentPath: model.parentPath
-                        isFolder: model.isFolder
-                        formattedSize: model.formattedSize
-                        extension: model.extension
-                        playUrl: model.playUrl
-                        libraryName: model.libraryName
-                        isPlaying: (fluxPlayer && fluxPlayer.url === model.playUrl && fluxPlayer.isPlaying)
+                    delegate: Rectangle {
+                        width: skeletonFlow.cellW
+                        height: Math.round(skeletonFlow.cellW * 0.62)
+                        radius: 12
+                        color: Theme.surface
 
-                        onPlayRequested: function(url, itemTitle) {
-                            root.playMediaRequested(url, itemTitle)
+                        SequentialAnimation on opacity {
+                            running: root.searching
+                            loops: Animation.Infinite
+
+                            NumberAnimation { from: 0.35; to: 0.85; duration: 800; easing.type: Easing.InOutSine }
+                            NumberAnimation { from: 0.85; to: 0.35; duration: 800; easing.type: Easing.InOutSine }
                         }
                     }
+                }
+            }
+        }
+
+        // State: no results
+        ColumnLayout {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.topMargin: 70
+            spacing: 10
+            visible: !!fluxSearch && !fluxSearch.isSearching && !fluxSearch.hasResults && !fluxSearch.hasError && fluxSearch.query.length > 0
+
+            Rectangle {
+                Layout.alignment: Qt.AlignHCenter
+                implicitWidth: 72
+                implicitHeight: 72
+                radius: 36
+                color: Theme.surface
+                border.width: 1
+                border.color: Theme.border
+
+                FluxIcon {
+                    anchors.centerIn: parent
+                    name: "search"
+                    size: 30
+                    color: Theme.textMute
+                }
+            }
+
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 8
+                text: "No results found"
+                color: Theme.text
+                font.pixelSize: 20
+                font.weight: Font.DemiBold
+            }
+
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: "Try a different title or select other categories above."
+                color: Theme.textDim
+                font.pixelSize: 14
+            }
+        }
+
+        // State: error
+        ColumnLayout {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.topMargin: 70
+            spacing: 10
+            visible: !!fluxSearch && fluxSearch.hasError
+
+            Rectangle {
+                Layout.alignment: Qt.AlignHCenter
+                implicitWidth: 72
+                implicitHeight: 72
+                radius: 36
+                color: "#26FF5D5D"
+                border.width: 1
+                border.color: "#66FF5D5D"
+
+                FluxIcon {
+                    anchors.centerIn: parent
+                    name: "alert"
+                    size: 30
+                    color: Theme.danger
+                }
+            }
+
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 8
+                text: "Unable to reach this library"
+                color: Theme.danger
+                font.pixelSize: 18
+                font.weight: Font.DemiBold
+            }
+
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: "Check your connection to the BDIX network."
+                color: Theme.textDim
+                font.pixelSize: 14
+            }
+        }
+
+        // Results grid
+        GridView {
+            id: resultsGrid
+
+            readonly property int columns: Math.max(1, Math.floor(width / 250))
+
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: !!fluxSearch && !fluxSearch.isSearching && fluxSearch.hasResults
+            clip: true
+            model: fluxSearch
+            cellWidth: Math.floor(width / columns)
+            cellHeight: Math.round(cellWidth * 0.62) + 14
+            boundsBehavior: Flickable.StopAtBounds
+            cacheBuffer: 800
+
+            ScrollBar.vertical: FluxScrollBar { }
+
+            footer: Item {
+                width: resultsGrid.width
+                height: 32
+            }
+
+            delegate: SearchResultCard {
+                width: resultsGrid.cellWidth
+                height: resultsGrid.cellHeight
+                title: model.title
+                parentPath: model.parentPath
+                isFolder: model.isFolder
+                formattedSize: model.formattedSize
+                extension: model.extension
+                playUrl: model.playUrl
+                libraryName: model.libraryName
+                isPlaying: (!!fluxPlayer && fluxPlayer.url === model.playUrl && fluxPlayer.isPlaying)
+
+                onPlayRequested: function(url, itemTitle) {
+                    root.playMediaRequested(url, itemTitle)
                 }
             }
         }

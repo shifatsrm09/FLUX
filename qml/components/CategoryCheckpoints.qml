@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Theme.js" as Theme
 
 Item {
     id: root
@@ -15,22 +16,20 @@ Item {
         id: flowLayout
         anchors.left: parent.left
         anchors.right: parent.right
-        spacing: 6
+        spacing: 8
 
-        // =====================================================================
-        // CHECKPOINT 1: "All" Option
-        // =====================================================================
+        // ---- "All" chip ---------------------------------------------------------
         Rectangle {
             id: allChip
-            implicitHeight: 28
-            implicitWidth: allRow.implicitWidth + 18
-            radius: 5
+            implicitHeight: 34
+            implicitWidth: allRow.implicitWidth + 28
+            radius: 17
 
             readonly property bool isChecked: root.searchManager ? root.searchManager.isAllSelected : true
 
-            color: isChecked ? "#132338" : (allMouse.containsMouse ? "#151922" : "#0D1017")
-            border.color: isChecked ? "#0284C7" : (allMouse.containsMouse ? "#334155" : "#1E2433")
+            color: isChecked ? Theme.accentSoft : (allMouse.containsMouse ? Theme.surfaceHi : Theme.surface)
             border.width: 1
+            border.color: isChecked ? Theme.accentRing : (allMouse.containsMouse ? Theme.borderHi : Theme.border)
 
             Behavior on color { ColorAnimation { duration: 120 } }
             Behavior on border.color { ColorAnimation { duration: 120 } }
@@ -40,30 +39,18 @@ Item {
                 anchors.centerIn: parent
                 spacing: 7
 
-                // Checkbox Box
-                Rectangle {
-                    width: 13
-                    height: 13
-                    radius: 3
-                    color: allChip.isChecked ? "#0284C7" : "#10131B"
-                    border.color: allChip.isChecked ? "#0284C7" : "#2A3347"
-                    border.width: 1
-
-                    Text {
-                        anchors.centerIn: parent
-                        visible: allChip.isChecked
-                        text: "✓"
-                        color: "#FFFFFF"
-                        font.pixelSize: 9
-                        font.weight: Font.Bold
-                    }
+                Text {
+                    visible: allChip.isChecked
+                    text: "\u2713"
+                    color: Theme.accentHover
+                    font.pixelSize: 12
+                    font.weight: Font.Bold
                 }
 
-                // Checkpoint Label
                 Text {
                     text: "All"
-                    color: allChip.isChecked ? "#F0F6FC" : "#8B949E"
-                    font.pixelSize: 11
+                    color: allChip.isChecked ? Theme.text : Theme.textDim
+                    font.pixelSize: 12
                     font.weight: allChip.isChecked ? Font.DemiBold : Font.Normal
                 }
             }
@@ -81,34 +68,34 @@ Item {
                 }
             }
 
-            ToolTip.visible: allMouse.containsMouse
-            ToolTip.delay: 500
-            ToolTip.text: allChip.isChecked
-                          ? "All categories selected (click to unlock individual categories)"
-                          : "Select all categories at once"
+            FluxToolTip {
+                visible: allMouse.containsMouse
+                delay: 500
+                text: allChip.isChecked
+                      ? "All categories selected (click to unlock individual categories)"
+                      : "Select all categories at once"
+            }
         }
 
-        // =====================================================================
-        // CHECKPOINTS 2..N: Individual Categories
-        // =====================================================================
+        // ---- Individual categories ---------------------------------------------------
         Repeater {
             model: root.libraryModel
 
             delegate: Rectangle {
                 id: catChip
-                implicitHeight: 28
-                implicitWidth: catRow.implicitWidth + 18
-                radius: 5
+                implicitHeight: 34
+                implicitWidth: catRow.implicitWidth + 28
+                radius: 17
 
                 readonly property bool isLocked: root.searchManager ? root.searchManager.isAllSelected : true
                 readonly property bool isChecked: !isLocked && root.searchManager && root.searchManager.isLibrarySelected(index)
 
-                opacity: isLocked ? 0.38 : 1.0
+                opacity: isLocked ? 0.4 : 1.0
                 Behavior on opacity { NumberAnimation { duration: 150 } }
 
-                color: isChecked ? "#132338" : (!isLocked && catMouse.containsMouse ? "#151922" : "#0D1017")
-                border.color: isChecked ? "#0284C7" : (!isLocked && catMouse.containsMouse ? "#334155" : "#1E2433")
+                color: isChecked ? Theme.accentSoft : (!isLocked && catMouse.containsMouse ? Theme.surfaceHi : Theme.surface)
                 border.width: 1
+                border.color: isChecked ? Theme.accentRing : (!isLocked && catMouse.containsMouse ? Theme.borderHi : Theme.border)
 
                 Behavior on color { ColorAnimation { duration: 120 } }
                 Behavior on border.color { ColorAnimation { duration: 120 } }
@@ -118,40 +105,18 @@ Item {
                     anchors.centerIn: parent
                     spacing: 7
 
-                    // Checkbox Box (shows lock icon if All is selected)
-                    Rectangle {
-                        width: 13
-                        height: 13
-                        radius: 3
-                        color: catChip.isChecked ? "#0284C7" : "#10131B"
-                        border.color: catChip.isChecked ? "#0284C7" : (catChip.isLocked ? "#1A202C" : "#2A3347")
-                        border.width: 1
-
-                        // Checkmark icon
-                        Text {
-                            anchors.centerIn: parent
-                            visible: catChip.isChecked
-                            text: "✓"
-                            color: "#FFFFFF"
-                            font.pixelSize: 9
-                            font.weight: Font.Bold
-                        }
-
-                        // Locked indicator (small lock symbol when All is active)
-                        Text {
-                            anchors.centerIn: parent
-                            visible: catChip.isLocked
-                            text: "🔒"
-                            font.pixelSize: 7
-                            opacity: 0.6
-                        }
+                    Text {
+                        visible: catChip.isChecked
+                        text: "\u2713"
+                        color: Theme.accentHover
+                        font.pixelSize: 12
+                        font.weight: Font.Bold
                     }
 
-                    // Checkpoint Label
                     Text {
                         text: model.name
-                        color: catChip.isChecked ? "#F0F6FC" : (catChip.isLocked ? "#556070" : "#8B949E")
-                        font.pixelSize: 11
+                        color: catChip.isChecked ? Theme.text : Theme.textDim
+                        font.pixelSize: 12
                         font.weight: catChip.isChecked ? Font.DemiBold : Font.Normal
                     }
                 }
@@ -163,7 +128,7 @@ Item {
                     cursorShape: catChip.isLocked ? Qt.ForbiddenCursor : Qt.PointingHandCursor
                     onClicked: {
                         if (catChip.isLocked) {
-                            return // Locked! User must uncheck All first
+                            return // Locked: user must uncheck All first
                         }
                         if (root.searchManager) {
                             root.searchManager.toggleLibrary(index)
@@ -172,11 +137,13 @@ Item {
                     }
                 }
 
-                ToolTip.visible: catMouse.containsMouse
-                ToolTip.delay: 400
-                ToolTip.text: catChip.isLocked
-                              ? "Locked because 'All' is selected. Uncheck 'All' to select individual categories."
-                              : (catChip.isChecked ? "Click to deselect" : "Click to select")
+                FluxToolTip {
+                    visible: catMouse.containsMouse
+                    delay: 400
+                    text: catChip.isLocked
+                          ? "Locked because 'All' is selected. Uncheck 'All' to select individual categories."
+                          : (catChip.isChecked ? "Click to deselect" : "Click to select")
+                }
             }
         }
     }
