@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
         Flux::Logger::instance().log(level, "Qt", msg);
     });
 
-    FLUX_LOG_INFO("Main", QString("Initializing FLUX v0.0.2 Native Desktop Player... Log path: %1")
+    FLUX_LOG_INFO("Main", QString("Initializing FLUX v0.0.3 Native Desktop Player... Log path: %1")
                               .arg(Flux::Logger::instance().logFilePath()));
 
     QQmlApplicationEngine engine;

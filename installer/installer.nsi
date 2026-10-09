@@ -3,7 +3,7 @@
 
 ; General
 Name "FLUX"
-OutFile "..\dist\FLUX-0.0.2-Setup.exe"
+OutFile "..\dist\Release-v0.0.3\FLUX-0.0.3-Setup.exe"
 Unicode True
 InstallDir "$PROGRAMFILES64\FLUX"
 InstallDirRegKey HKLM "Software\FLUX" "Install_Dir"
@@ -30,21 +30,21 @@ RequestExecutionLevel admin
 !insertmacro MUI_LANGUAGE "English"
 
 ; Version Info
-VIProductVersion "0.0.2.0"
+VIProductVersion "0.0.3.0"
 VIAddVersionKey "ProductName" "FLUX"
 VIAddVersionKey "Comments" "Internal Media Streaming Client"
 VIAddVersionKey "CompanyName" "FLUX"
 VIAddVersionKey "LegalCopyright" "FLUX"
 VIAddVersionKey "FileDescription" "FLUX \x2014 Internal Media Streaming Client Installer"
-VIAddVersionKey "FileVersion" "0.0.2.0"
-VIAddVersionKey "ProductVersion" "0.0.2.0"
+VIAddVersionKey "FileVersion" "0.0.3.0"
+VIAddVersionKey "ProductVersion" "0.0.3.0"
 
 Section "FLUX (required)" SecMain
     SectionIn RO
     SetRegView 64
 
     SetOutPath "$INSTDIR"
-    File /r "..\dist\FLUX-0.0.2\*.*"
+    File /r "..\dist\FLUX-0.0.3\*.*"
 
     ; Write uninstaller
     WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -54,7 +54,7 @@ Section "FLUX (required)" SecMain
 
     ; Windows Add/Remove Programs
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "DisplayName" "FLUX"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "DisplayVersion" "0.0.2"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "DisplayVersion" "0.0.3"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "Publisher" "FLUX"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "DisplayIcon" "$INSTDIR\resources\flux.ico"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "UninstallString" '"$INSTDIR\Uninstall.exe"'

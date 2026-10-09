@@ -44,7 +44,7 @@ Drawer {
                 spacing: 2
 
                 Text {
-                    text: "FLUX v0.0.2 \u2022 Developer & Diagnostics"
+                    text: "FLUX v0.0.3 \u2022 Developer & Diagnostics"
                     color: Theme.text
                     font.pixelSize: 17
                     font.weight: Font.Bold

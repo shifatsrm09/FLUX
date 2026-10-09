@@ -3,8 +3,8 @@
 IDI_ICON1 ICON "flux.ico"
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION     0,0,2,0
-PRODUCTVERSION  0,0,2,0
+FILEVERSION     0,0,3,0
+PRODUCTVERSION  0,0,3,0
 FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
 FILEFLAGS       0x0L
 FILEOS          VOS_NT_WINDOWS32
@@ -17,12 +17,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "FLUX\0"
             VALUE "FileDescription",  "FLUX \x2014 Internal Media Streaming Client\0"
-            VALUE "FileVersion",      "0.0.2.0\0"
+            VALUE "FileVersion",      "0.0.3.0\0"
             VALUE "InternalName",     "FLUX\0"
             VALUE "LegalCopyright",   "FLUX\0"
             VALUE "OriginalFilename", "FLUX.exe\0"
             VALUE "ProductName",      "FLUX\0"
-            VALUE "ProductVersion",   "0.0.2.0\0"
+            VALUE "ProductVersion",   "0.0.3.0\0"
         END
     END
     BLOCK "VarFileInfo"
