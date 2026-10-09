@@ -12,7 +12,6 @@
                 "C:/Qt/6.8.0/msvc2022_64/include/QtQuick",
                 "C:/Qt/6.8.0/msvc2022_64/include/QtQuickControls2",
                 "C:/Qt/6.8.0/msvc2022_64/include/QtNetwork",
-                "${workspaceFolder}/build/FLUX_autogen/include",
                 "${workspaceFolder}/build/FLUX_autogen/include_Release"
             ],
             "defines": [
