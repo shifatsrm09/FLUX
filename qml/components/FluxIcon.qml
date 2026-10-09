@@ -8,7 +8,7 @@ import "Theme.js" as Theme
 //
 // Names: play pause back chevronLeft chevronRight chevronDown chevronUp close
 //        check search replay10 forward10 volume volumeLow volumeMuted subtitles
-//        fullscreen fullscreenExit folder dots info home refresh alert
+//        fullscreen fullscreenExit folder dots info home refresh alert download settings
 Item {
     id: root
 
@@ -233,6 +233,35 @@ Item {
             poly(ctx, [10, 1.8, 13.4, 4.5, 10, 7.2], false)
             ctx.stroke()
             break
+
+        case "download":
+            poly(ctx, [12, 4, 12, 15], false)
+            ctx.stroke()
+            poly(ctx, [7.5, 10.8, 12, 15.3, 16.5, 10.8], false)
+            ctx.stroke()
+            poly(ctx, [4.5, 15.5, 4.5, 19.5, 19.5, 19.5, 19.5, 15.5], false)
+            ctx.stroke()
+            break
+
+        case "settings": {
+            // Cog: 8 teeth around a ring, plus a hub circle
+            var teeth = 8
+            var pts = []
+            for (var i = 0; i < teeth; i++) {
+                var a = i * 2 * PI / teeth
+                var span = [[-17, 7.4], [-10, 9.9], [10, 9.9], [17, 7.4]]
+                for (var k = 0; k < span.length; k++) {
+                    var ang = a + span[k][0] * PI / 180
+                    pts.push(12 + Math.cos(ang) * span[k][1], 12 + Math.sin(ang) * span[k][1])
+                }
+            }
+            poly(ctx, pts, true)
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(12, 12, 3.1, 0, PI * 2, false)
+            ctx.stroke()
+            break
+        }
 
         case "alert":
             poly(ctx, [12, 3.5, 21.5, 20, 2.5, 20], true)

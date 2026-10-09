@@ -55,6 +55,8 @@ qt_add_executable(FLUX WIN32
     src/search/SearchManager.cpp
     src/search/FolderBrowser.h
     src/search/FolderBrowser.cpp
+    src/downloads/DownloadManager.h
+    src/downloads/DownloadManager.cpp
     src/core/Logger.h
     src/core/Logger.cpp
     src/core/UserStore.h
@@ -100,6 +102,9 @@ qt_add_qml_module(FLUX
         qml/components/Breadcrumbs.qml
         qml/components/NextEpisodeCard.qml
         qml/components/ResumeToast.qml
+        qml/components/SettingsPanel.qml
+        qml/components/DownloadsPanel.qml
+        qml/components/FolderPicker.qml
 )
 
 target_link_libraries(FLUX PRIVATE

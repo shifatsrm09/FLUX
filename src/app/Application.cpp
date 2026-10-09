@@ -17,6 +17,7 @@ Application::~Application() {
     FLUX_LOG_INFO("Application", "Shutting down FLUX Application...");
     // The user store records final watch progress from the player, so it goes first
     m_userStore.reset();
+    m_downloads.reset();   // aborts transfers (leaving resumable .part files) before the browser goes
     m_folderBrowser.reset();
     m_player.reset();
     m_testMedia.reset();
@@ -38,6 +39,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     m_testMedia = std::make_unique<TestMediaModel>(this);
     m_searchManager = std::make_unique<SearchManager>(this);
     m_folderBrowser = std::make_unique<FolderBrowser>(this);
+    m_downloads = std::make_unique<DownloadManager>(m_folderBrowser.get(), this);
     m_userStore = std::make_unique<UserStore>(this);
 
     // 2b. Restore saved user settings
@@ -78,6 +80,16 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
             store->setValue("categories/selected", search->selectedCategoryIds());
         });
 
+        // Download location (defaults to <Downloads>/FLUX when nothing is saved)
+        DownloadManager *downloads = m_downloads.get();
+        const QString savedLocation = store->value("downloads/location").toString();
+        if (!savedLocation.isEmpty()) {
+            downloads->changeLocation(savedLocation);
+        }
+        connect(downloads, &DownloadManager::locationChanged, store, [store, downloads]() {
+            store->setValue("downloads/location", downloads->downloadLocation());
+        });
+
         // Watch progress (resume / continue watching / watched)
         store->attachPlayer(player);
         connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, store, &UserStore::shutdown);
@@ -94,6 +106,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     rootContext->setContextProperty("testMediaModel", m_testMedia.get());
     rootContext->setContextProperty("fluxSearch", m_searchManager.get());
     rootContext->setContextProperty("fluxBrowser", m_folderBrowser.get());
+    rootContext->setContextProperty("fluxDownloads", m_downloads.get());
     rootContext->setContextProperty("fluxUser", m_userStore.get());
     rootContext->setContextProperty("fluxLibrary", m_searchManager->libraryModel());
     rootContext->setContextProperty("fluxLogger", &Logger::instance());

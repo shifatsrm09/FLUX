@@ -12,6 +12,13 @@ Item {
 
     signal playMediaRequested(string url, string title)
 
+    // Downloads: a single file goes to Individuals, a folder (pack) goes to Series
+    function startDownload(url, title, isPack) {
+        if (!fluxDownloads) return
+        if (isPack) fluxDownloads.downloadPack(url, title)
+        else fluxDownloads.downloadFile(url, title)
+    }
+
     readonly property bool hasSearched: (!!fluxSearch && (fluxSearch.hasResults || fluxSearch.isSearching || fluxSearch.query.length > 0))
     readonly property bool searching: (!!fluxSearch && fluxSearch.isSearching)
     readonly property bool browsing: (!!fluxBrowser && fluxBrowser.active)
@@ -576,6 +583,8 @@ Item {
 
                 width: resultsGrid.cellWidth
                 height: resultsGrid.cellHeight
+                showDownload: true
+                onDownloadRequested: function(url, itemTitle, isPack) { root.startDownload(url, itemTitle, isPack) }
                 title: model.title
                 parentPath: model.parentPath
                 isFolder: model.isFolder
@@ -640,10 +649,15 @@ Item {
         }
 
         // Folder heading
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 16
+            visible: !!fluxBrowser && fluxBrowser.active
+
         ColumnLayout {
             Layout.fillWidth: true
+            Layout.alignment: Qt.AlignVCenter
             spacing: 2
-            visible: !!fluxBrowser && fluxBrowser.active
 
             Text {
                 Layout.fillWidth: true
@@ -661,6 +675,19 @@ Item {
                 color: Theme.textDim
                 font.pixelSize: 13
             }
+        }
+
+        // Download everything in this folder (videos in subfolders included) as a pack
+        FluxButton {
+            text: "Download all"
+            iconName: "download"
+            iconSize: 18
+            variant: "secondary"
+            Layout.alignment: Qt.AlignVCenter
+            visible: !!fluxBrowser && !fluxBrowser.isLoading && !fluxBrowser.hasError && fluxBrowser.itemCount > 0
+
+            onClicked: root.startDownload(fluxBrowser.currentUrl, fluxBrowser.folderName, true)
+        }
         }
 
         // State: loading
@@ -793,6 +820,8 @@ Item {
 
                 width: browserGrid.cellWidth
                 height: browserGrid.cellHeight
+                showDownload: true
+                onDownloadRequested: function(url, itemTitle, isPack) { root.startDownload(url, itemTitle, isPack) }
                 title: model.title
                 parentPath: model.parentPath
                 isFolder: model.isFolder

@@ -24,6 +24,78 @@ ApplicationWindow {
     property string currentPage: "search" // "search" | "player"
     property string currentPlayingTitle: ""
 
+    // Round floating button for the bottom-right dock (optional badge = active downloads)
+    component DockButton: Rectangle {
+        id: dockBtn
+
+        property string iconName: "settings"
+        property string tip: ""
+        property int badge: 0
+        property bool active: false
+        signal clicked()
+
+        width: 48
+        height: 48
+        radius: 24
+        color: dockMouse.pressed ? Theme.surfaceTop
+                                 : (dockMouse.containsMouse || dockBtn.active ? Theme.surfaceHi : "#E615151A")
+        border.width: 1
+        border.color: (dockMouse.containsMouse || dockBtn.active) ? Theme.borderHi : Theme.border
+        scale: dockMouse.pressed ? 0.94 : 1.0
+
+        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on scale { NumberAnimation { duration: 90 } }
+
+        FluxIcon {
+            anchors.centerIn: parent
+            name: dockBtn.iconName
+            size: 22
+            color: dockMouse.containsMouse ? "#FFFFFF" : Theme.textDim
+            rotation: (dockBtn.iconName === "settings" && dockMouse.containsMouse) ? 30 : 0
+
+            Behavior on rotation { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+        }
+
+        Rectangle {
+            visible: dockBtn.badge > 0
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.rightMargin: -3
+            anchors.topMargin: -3
+            implicitWidth: Math.max(20, badgeText.implicitWidth + 10)
+            implicitHeight: 20
+            width: implicitWidth
+            height: implicitHeight
+            radius: 10
+            color: Theme.accent
+            border.width: 2
+            border.color: Theme.bg
+
+            Text {
+                id: badgeText
+                anchors.centerIn: parent
+                text: dockBtn.badge
+                color: "#FFFFFF"
+                font.pixelSize: 10
+                font.weight: Font.Bold
+            }
+        }
+
+        MouseArea {
+            id: dockMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: dockBtn.clicked()
+        }
+
+        FluxToolTip {
+            visible: dockMouse.containsMouse && dockBtn.tip.length > 0
+            text: dockBtn.tip
+            above: true
+        }
+    }
+
     function toggleMaximize() {
         if (window.visibility === Window.Maximized) {
             window.showNormal()
@@ -94,6 +166,16 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         onActivated: {
+            // Dialogs first: Escape closes the topmost one
+            if (settingsPanel.opened) {
+                settingsPanel.dismiss()
+                return
+            }
+            if (downloadsPanel.opened) {
+                downloadsPanel.close()
+                return
+            }
+
             if (isFullscreen) {
                 toggleFullscreen()
             } else if (currentPage === "player") {
@@ -271,6 +353,43 @@ ApplicationWindow {
             onDevToolsClicked: devDrawer.open()
             onHomeClicked: window.returnToHome()
         }
+
+        // Bottom-right dock: downloads + settings (browsing pages only)
+        Row {
+            id: dock
+
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.rightMargin: 22
+            anchors.bottomMargin: 22
+            spacing: 10
+            z: 90
+            visible: currentPage === "search" && !window.isFullscreen
+
+            DockButton {
+                iconName: "download"
+                tip: "Downloads"
+                badge: fluxDownloads ? fluxDownloads.activeCount : 0
+                active: downloadsPanel.opened
+                onClicked: downloadsPanel.opened ? downloadsPanel.close() : downloadsPanel.open()
+            }
+
+            DockButton {
+                iconName: "settings"
+                tip: "Settings"
+                active: settingsPanel.opened
+                onClicked: settingsPanel.open()
+            }
+        }
+    }
+
+    // Settings dialog and download manager
+    SettingsPanel {
+        id: settingsPanel
+    }
+
+    DownloadsPanel {
+        id: downloadsPanel
     }
 
     // Unobtrusive Developer Slide-Out Drawer

@@ -306,6 +306,17 @@ void FolderBrowser::reload() {
     load();
 }
 
+void FolderBrowser::listFolder(const QString &folderUrl,
+                               std::function<void(bool, std::vector<SearchResult>)> done) {
+    QString origin, href;
+    if (!splitUrl(folderUrl, origin, href)) {
+        done(false, {});
+        return;
+    }
+    if (!href.endsWith('/')) href += QLatin1Char('/');
+    requestListing(origin, href, QString(), QString(), std::move(done));
+}
+
 // ----------------------------------------------------------------------------
 // Loading
 // ----------------------------------------------------------------------------

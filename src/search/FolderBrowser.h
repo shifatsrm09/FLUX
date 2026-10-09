@@ -69,6 +69,10 @@ public:
     Q_INVOKABLE void findNext(const QString &currentFileUrl);
     Q_INVOKABLE void clearNext();
 
+    // One-shot listing of any server directory (folders + video files, naturally sorted).
+    // Independent of the browsed location; used by the download manager to scan packs.
+    void listFolder(const QString &folderUrl, std::function<void(bool, std::vector<SearchResult>)> done);
+
 signals:
     void activeChanged();
     void isLoadingChanged();

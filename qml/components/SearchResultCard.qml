@@ -25,17 +25,22 @@ Item {
     property bool showRemove: false    // "x" button on hover (Continue Watching row)
     property string extraInfo: ""      // e.g. "23 min left"
 
+    // Hover download button (files: download; folders: download the whole pack)
+    property bool showDownload: false
+    property bool dlFlash: false       // brief "added" confirmation
+
     // Entrance animation stagger (ms)
     property int introDelay: 0
 
     signal playRequested(string url, string title)
     signal folderRequested(string url, string libraryName)
     signal removeRequested(string url)
+    signal downloadRequested(string url, string title, bool isPack)
 
     // Parsed presentation values
     readonly property var parsed: Formatter.formatMedia(root.title, root.isFolder, root.formattedSize)
     readonly property var meta: Formatter.describe(root.title, root.isFolder, root.formattedSize)
-    readonly property bool hovered: rowMouse.containsMouse || removeMouse.containsMouse
+    readonly property bool hovered: rowMouse.containsMouse || removeMouse.containsMouse || dlMouse.containsMouse
     readonly property string posterTop: Theme.posterTop(root.title)
     readonly property string posterBottom: Theme.posterBottom(root.title)
 
@@ -455,6 +460,63 @@ Item {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: root.removeRequested(root.playUrl)
+        }
+    }
+
+    // Download (declared after rowMouse so it sits on top). Plain shapes + a text glyph, so no
+    // Canvas is created per card.
+    Rectangle {
+        visible: root.showDownload && root.playUrl.length > 0
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.rightMargin: 17
+        anchors.topMargin: 43
+        width: 30
+        height: 30
+        radius: 15
+        color: root.dlFlash ? Theme.success : (dlMouse.containsMouse ? "#F2FFFFFF" : "#CC000000")
+        border.width: 1
+        border.color: "#40FFFFFF"
+        opacity: (root.hovered || root.dlFlash) ? 1.0 : 0.0
+        scale: dlMouse.containsMouse ? 1.1 : 1.0
+
+        Behavior on opacity { NumberAnimation { duration: 180 } }
+        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on scale { NumberAnimation { duration: 120 } }
+
+        Text {
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: -1
+            text: root.dlFlash ? "\u2713" : "\u2193"
+            color: (dlMouse.containsMouse && !root.dlFlash) ? Theme.bg : "#FFFFFF"
+            font.pixelSize: 17
+            font.weight: Font.Bold
+        }
+
+        MouseArea {
+            id: dlMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+
+            onClicked: {
+                root.downloadRequested(root.playUrl, root.title, root.isFolder)
+                root.dlFlash = true
+                dlFlashTimer.restart()
+            }
+        }
+
+        Timer {
+            id: dlFlashTimer
+            interval: 1600
+            onTriggered: root.dlFlash = false
+        }
+
+        FluxToolTip {
+            visible: dlMouse.containsMouse
+            text: root.dlFlash ? "Added to downloads"
+                               : (root.isFolder ? "Download whole folder" : "Download")
+            above: false
         }
     }
 
