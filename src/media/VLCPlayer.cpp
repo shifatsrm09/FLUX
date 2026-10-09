@@ -5,6 +5,7 @@
 #include <QRegularExpression>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace Flux {
 
@@ -29,6 +30,22 @@ VLCPlayer::VLCPlayer(QObject *parent)
     m_pollTimer = new QTimer(this);
     m_pollTimer->setInterval(250);
     connect(m_pollTimer, &QTimer::timeout, this, [this]() {
+        // Seek mute: lift it as soon as playback has actually landed near the seek target
+        // (checked before the isPlaying() bail-out because libVLC reports Buffering, not
+        // Playing, while the new range request is in flight).
+        if (m_seekMuted && m_mediaPlayer && !m_hasPendingSeek) {
+            const libvlc_state_t st = libvlc_media_player_get_state(m_mediaPlayer);
+            if (st == libvlc_Paused || st == libvlc_Stopped || st == libvlc_Ended || st == libvlc_Error) {
+                endSeekMute();
+            } else if (st == libvlc_Playing && !m_isBuffering) {
+                const qint64 t = libvlc_media_player_get_time(m_mediaPlayer);
+                const bool landed = (m_seekMuteTargetMs >= 0)
+                    ? (t >= 0 && std::llabs(t - m_seekMuteTargetMs) <= 3000)
+                    : !seekGuardActive();
+                if (landed) endSeekMute();
+            }
+        }
+
         if (!m_mediaPlayer || !isPlaying()) return;
 
         // While a seek is pending/settling, libVLC keeps reporting the OLD position for a
@@ -62,6 +79,12 @@ VLCPlayer::VLCPlayer(QObject *parent)
     m_seekTimer->setSingleShot(true);
     m_seekTimer->setInterval(120);
     connect(m_seekTimer, &QTimer::timeout, this, [this]() { applyPendingSeek(); });
+
+    // Failsafe: never stay seek-muted for more than a few seconds, whatever happens
+    m_seekMuteTimer = new QTimer(this);
+    m_seekMuteTimer->setSingleShot(true);
+    m_seekMuteTimer->setInterval(6000);
+    connect(m_seekMuteTimer, &QTimer::timeout, this, [this]() { endSeekMute(); });
 
     FLUX_LOG_INFO("VLCPlayer", "VLCPlayer created successfully");
 }
@@ -171,7 +194,7 @@ void VLCPlayer::handleVlcEvent(const libvlc_event_t *event, void *opaque) {
             // Re-apply the user's volume/mute: libVLC's audio output only exists once playback
             // has started, and a brand-new stream would otherwise reset to 100%.
             libvlc_audio_set_volume(player->m_mediaPlayer, player->m_volume);
-            libvlc_audio_set_mute(player->m_mediaPlayer, player->m_muted ? 1 : 0);
+            player->applyMute();
             emit player->stateChanged();
             emit player->bufferingChanged();
             player->updateTracks();
@@ -182,6 +205,7 @@ void VLCPlayer::handleVlcEvent(const libvlc_event_t *event, void *opaque) {
     case libvlc_MediaPlayerPaused:
         QMetaObject::invokeMethod(player, [player]() {
             player->m_state = "Paused";
+            player->endSeekMute();   // pause is now real; safe to restore audio for resume
             emit player->stateChanged();
             FLUX_LOG_INFO("VLCPlayer", "Playback paused");
         }, Qt::QueuedConnection);
@@ -289,7 +313,7 @@ void VLCPlayer::play(const QString &mediaUrl) {
     //  - prefetch-*: BYTE-level read-ahead in front of the demuxer. This is what makes
     //    playback smooth and lets short forward seeks be served from memory with no new
     //    HTTP request. (Sizes: KiB / bytes.) Unknown options are ignored harmlessly.
-    libvlc_media_add_option(m_currentMedia, ":network-caching=1500");
+    libvlc_media_add_option(m_currentMedia, ":network-caching=600");
     libvlc_media_add_option(m_currentMedia, ":http-reconnect");
     libvlc_media_add_option(m_currentMedia, ":prefetch-buffer-size=131072");
     libvlc_media_add_option(m_currentMedia, ":prefetch-read-size=262144");
@@ -343,7 +367,11 @@ void VLCPlayer::pause() {
     if (!m_mediaPlayer) return;
     libvlc_state_t st = libvlc_media_player_get_state(m_mediaPlayer);
     if (st == libvlc_Playing || st == libvlc_Buffering || st == libvlc_Opening) {
-        libvlc_media_player_pause(m_mediaPlayer);
+        // Silence first: libVLC's audio queue keeps draining for a moment after pause is
+        // requested, which is the "lag" you hear. Muting is instant; the mute is lifted when
+        // libVLC reports Paused (see the Paused event handler) so resume is unaffected.
+        beginSeekMute(-1);
+        libvlc_media_player_set_pause(m_mediaPlayer, 1);   // idempotent, unlike the toggle
         m_state = "Paused";
         emit stateChanged();
         FLUX_LOG_INFO("VLCPlayer", "Playback paused immediately");
@@ -373,6 +401,7 @@ void VLCPlayer::togglePlay() {
 }
 
 void VLCPlayer::stop() {
+    endSeekMute();
     if (m_mediaPlayer) {
         libvlc_media_player_stop(m_mediaPlayer);
     }
@@ -409,6 +438,9 @@ void VLCPlayer::seek(qreal pos) {
     emit positionChanged();
     emit timeChanged();
 
+    // Silence the stale audio immediately; it is restored once playback lands on the target
+    beginSeekMute(m_durationMs > 0 ? m_timeMs : -1);
+
     if (m_seekTimer && !m_seekTimer->isActive()) {
         m_seekTimer->start();
     }
@@ -436,6 +468,8 @@ void VLCPlayer::seekRelative(qint64 deltaMs) {
     emit timeChanged();
     emit positionChanged();
 
+    beginSeekMute(newTime);
+
     if (m_seekTimer && !m_seekTimer->isActive()) {
         m_seekTimer->start();
     }
@@ -458,6 +492,33 @@ void VLCPlayer::applyPendingSeek() {
 
     // Give libVLC time to settle before trusting its reported position again
     m_seekGuardUntil = m_uptime.elapsed() + 700;
+}
+
+void VLCPlayer::applyMute() {
+    if (!m_mediaPlayer) return;
+    libvlc_audio_set_mute(m_mediaPlayer, (m_muted || m_seekMuted) ? 1 : 0);
+}
+
+void VLCPlayer::beginSeekMute(qint64 targetMs) {
+    if (!m_mediaPlayer) return;
+    // Only needed while audio is actually flowing; a paused/stopped player has nothing stale
+    const libvlc_state_t st = libvlc_media_player_get_state(m_mediaPlayer);
+    if (st != libvlc_Playing && st != libvlc_Buffering) return;
+
+    m_seekMuteTargetMs = targetMs;
+    if (!m_seekMuted) {
+        m_seekMuted = true;
+        applyMute();
+    }
+    if (m_seekMuteTimer) m_seekMuteTimer->start();   // (re)arm failsafe
+}
+
+void VLCPlayer::endSeekMute() {
+    if (m_seekMuteTimer) m_seekMuteTimer->stop();
+    m_seekMuteTargetMs = -1;
+    if (!m_seekMuted) return;
+    m_seekMuted = false;
+    applyMute();
 }
 
 bool VLCPlayer::isPlaying() const {
@@ -489,10 +550,10 @@ void VLCPlayer::setVolume(int vol) {
     // libVLC supports software amplification up to 200%
     vol = std::clamp(vol, 0, 200);
     m_volume = vol;
+    emit volumeChanged();   // update the UI readout first so it never waits on libVLC
     if (m_mediaPlayer) {
         libvlc_audio_set_volume(m_mediaPlayer, vol);
     }
-    emit volumeChanged();
 }
 
 bool VLCPlayer::isMuted() const {
@@ -501,9 +562,7 @@ bool VLCPlayer::isMuted() const {
 
 void VLCPlayer::setMuted(bool mute) {
     m_muted = mute;
-    if (m_mediaPlayer) {
-        libvlc_audio_set_mute(m_mediaPlayer, mute ? 1 : 0);
-    }
+    applyMute();   // combines the user's mute with any active seek mute
     emit muteChanged();
 }
 

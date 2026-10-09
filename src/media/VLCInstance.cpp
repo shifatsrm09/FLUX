@@ -76,7 +76,7 @@ bool VLCInstance::initialize() {
     // stutter. libVLC's defaults are far smoother.
     std::vector<const char*> args = {
         "--no-video-title-show",
-        "--network-caching=1500",      // short pre-roll: fast starts and seeks on the BDIX LAN
+        "--network-caching=600",      // short pre-roll: fast starts/seeks and a shallow audio queue (volume changes are heard sooner)
         "--http-reconnect",            // Auto reconnect HTTP byte ranges
         "--no-snapshot-preview",
         "--quiet"

@@ -126,6 +126,9 @@ private:
     void updateTracks();
     void applyPendingSeek();
     bool seekGuardActive() const;
+    void applyMute();
+    void beginSeekMute(qint64 targetMs);
+    void endSeekMute();
     void applyLanguagePreferences();
     void learnAudioChoice(int trackId);
     void learnSubtitleChoice(int spuId);
@@ -167,6 +170,12 @@ private:
     // Backing values (libVLC cannot always be queried before audio output exists)
     int m_volume = 100;            // 0..200 (%)
     bool m_muted = false;
+
+    // Seek mute: silence the (stale) audio the instant a seek starts and restore it once
+    // playback has landed near the target. Independent of the user's own mute setting.
+    QTimer *m_seekMuteTimer = nullptr;   // failsafe so we can never stay muted
+    bool m_seekMuted = false;
+    qint64 m_seekMuteTargetMs = -1;      // -1 = unknown target
 
     // Resume support: one-shot start offset consumed by the next play()
     qint64 m_startTimeMs = 0;
