@@ -53,8 +53,12 @@ qt_add_executable(FLUX WIN32
     src/search/MediaLibrary.cpp
     src/search/SearchManager.h
     src/search/SearchManager.cpp
+    src/search/FolderBrowser.h
+    src/search/FolderBrowser.cpp
     src/core/Logger.h
     src/core/Logger.cpp
+    src/core/UserStore.h
+    src/core/UserStore.cpp
     resources/flux.rc
 )
 
@@ -91,6 +95,11 @@ qt_add_qml_module(FLUX
         qml/components/FluxSpinner.qml
         qml/components/GlowOrb.qml
         qml/components/Equalizer.qml
+        qml/components/PosterArt.qml
+        qml/components/ToggleSwitch.qml
+        qml/components/Breadcrumbs.qml
+        qml/components/NextEpisodeCard.qml
+        qml/components/ResumeToast.qml
 )
 
 target_link_libraries(FLUX PRIVATE

@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 #include <QTimer>
 #include <QElapsedTimer>
@@ -38,6 +39,10 @@ class VLCPlayer : public QObject {
     Q_PROPERTY(int selectedSubtitleTrack READ selectedSubtitleTrack WRITE selectSubtitleTrack NOTIFY selectedSubtitleTrackChanged)
 
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorOccurred)
+
+    // Learned / configured language preferences (used to auto-pick tracks)
+    Q_PROPERTY(QStringList preferredAudio READ preferredAudio NOTIFY languagePreferencesChanged)
+    Q_PROPERTY(QString preferredSubtitle READ preferredSubtitle NOTIFY languagePreferencesChanged)
 
 public:
     explicit VLCPlayer(QObject *parent = nullptr);
@@ -91,6 +96,11 @@ public slots:
     Q_INVOKABLE void selectAudioTrack(int trackId);
     Q_INVOKABLE void selectSubtitleTrack(int spuId);
     Q_INVOKABLE void refreshTracks();
+    Q_INVOKABLE void playFrom(const QString &url, qint64 startMs);
+    Q_INVOKABLE void setLanguagePreferences(const QStringList &audio, const QString &subtitle);
+
+    QStringList preferredAudio() const { return m_preferredAudio; }
+    QString preferredSubtitle() const { return m_preferredSubtitle; }
 
 signals:
     void urlChanged();
@@ -108,6 +118,7 @@ signals:
     void selectedSubtitleTrackChanged();
     void errorOccurred(const QString &message);
     void mediaPlayerRecreated();
+    void languagePreferencesChanged();
 
 private:
     void setupVlcEvents();
@@ -115,6 +126,10 @@ private:
     void updateTracks();
     void applyPendingSeek();
     bool seekGuardActive() const;
+    void applyLanguagePreferences();
+    void learnAudioChoice(int trackId);
+    void learnSubtitleChoice(int spuId);
+    static QString languageKey(const QString &trackName);
     static void handleVlcEvent(const libvlc_event_t *event, void *opaque);
     static QString formatMilliseconds(qint64 ms);
 
@@ -152,6 +167,16 @@ private:
     // Backing values (libVLC cannot always be queried before audio output exists)
     int m_volume = 100;            // 0..200 (%)
     bool m_muted = false;
+
+    // Resume support: one-shot start offset consumed by the next play()
+    qint64 m_startTimeMs = 0;
+
+    // Language auto-selection
+    QStringList m_preferredAudio;
+    QString m_preferredSubtitle;       // "" = leave default, "off" = disable, else language
+    bool m_audioPrefApplied = false;
+    bool m_subPrefApplied = false;
+    int m_autoTrackAttempts = 0;
 };
 
 } // namespace Flux

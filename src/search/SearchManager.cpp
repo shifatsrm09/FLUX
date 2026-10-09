@@ -237,6 +237,27 @@ void SearchManager::selectAllCategories() {
     setAllSelected(true);
 }
 
+void SearchManager::restoreSelection(const QStringList &ids) {
+    if (!m_libraryModel) return;
+
+    std::vector<int> restored;
+    for (const QString &id : ids) {
+        int idx = m_libraryModel->indexOfId(id);
+        if (idx >= 0 && std::find(restored.begin(), restored.end(), idx) == restored.end()) {
+            restored.push_back(idx);
+        }
+    }
+    if (restored.empty()) return;   // nothing valid saved: keep the built-in default
+
+    m_selectedIndices = restored;
+    m_selectedLibraryIndex = restored.front();
+    m_isAllSelected = (static_cast<int>(restored.size()) == m_libraryModel->count());
+
+    emit selectedLibrariesChanged();
+    emit selectedLibraryChanged();
+    FLUX_LOG_INFO("Search", QString("Restored %1 saved categories").arg(restored.size()));
+}
+
 void SearchManager::searchInLibrary(const QString &query, int libraryIndex) {
     selectLibrary(libraryIndex);
     search(query);
@@ -410,7 +431,7 @@ void SearchManager::onSingleReplyFinished(QNetworkReply *reply, quint64 searchId
 
                     m_accumulatedResults.push_back(
                         SearchResult::fromJson(href, size, isSizeNull, activeRoot.serverOrigin,
-                                               activeRoot.name, activeRoot.group)
+                                               activeRoot.id, activeRoot.name, activeRoot.group)
                     );
                 }
             }

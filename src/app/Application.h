@@ -7,6 +7,8 @@
 #include "../media/VLCPlayer.h"
 #include "../models/TestMedia.h"
 #include "../search/SearchManager.h"
+#include "../search/FolderBrowser.h"
+#include "../core/UserStore.h"
 
 namespace Flux {
 
@@ -30,6 +32,8 @@ private:
     std::unique_ptr<VLCPlayer> m_player;
     std::unique_ptr<TestMediaModel> m_testMedia;
     std::unique_ptr<SearchManager> m_searchManager;
+    std::unique_ptr<FolderBrowser> m_folderBrowser;
+    std::unique_ptr<UserStore> m_userStore;
 };
 
 } // namespace Flux

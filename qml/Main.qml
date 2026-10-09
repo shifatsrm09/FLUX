@@ -4,13 +4,15 @@ import QtQuick.Layouts
 import QtQuick.Window
 import "components"
 import "components/Theme.js" as Theme
+import "components/MediaFormatter.js" as Formatter
 
 ApplicationWindow {
     id: window
 
     visible: true
-    width: 1280
-    height: 800
+    // Restore the last window size (clamped to the minimum); position is left to the OS
+    width: fluxUser ? Math.max(960, fluxUser.intValue("window/width", 1280)) : 1280
+    height: fluxUser ? Math.max(600, fluxUser.intValue("window/height", 800)) : 800
     minimumWidth: 960
     minimumHeight: 600
     title: "FLUX"
@@ -42,8 +44,22 @@ ApplicationWindow {
     function playMedia(url, title) {
         currentPlayingTitle = title
         currentPage = "player"
+
+        // Read the saved position BEFORE noteStart() touches the history entry
+        var resumeMs = fluxUser ? fluxUser.resumePositionFor(url) : 0
+        if (fluxUser) fluxUser.noteStart(url, title)
+
+        // Look up the next episode in the background (for the "Up next" card)
+        if (fluxBrowser) fluxBrowser.findNext(url)
+
+        playerView.offerResume(resumeMs)
+
         if (fluxPlayer) {
-            fluxPlayer.play(url)
+            if (resumeMs > 0) {
+                fluxPlayer.playFrom(url, resumeMs)
+            } else {
+                fluxPlayer.play(url)
+            }
         }
     }
 
@@ -55,6 +71,9 @@ ApplicationWindow {
             toggleFullscreen()
         }
         currentPage = "search"
+        if (fluxBrowser) {
+            fluxBrowser.close()
+        }
         if (fluxSearch) {
             fluxSearch.clear()
         }
@@ -83,6 +102,9 @@ ApplicationWindow {
                 } else {
                     window.returnToSearch()
                 }
+            } else if (currentPage === "search" && fluxBrowser && fluxBrowser.active) {
+                // Inside a folder: step out one level (closes the browser at the top)
+                fluxBrowser.goUp()
             }
         }
     }
@@ -100,6 +122,21 @@ ApplicationWindow {
     }
 
     // ---- Keyboard focus management -------------------------------------------------
+    Component.onCompleted: {
+        if (fluxUser && fluxUser.boolValue("window/maximized", false)) {
+            window.showMaximized()
+        }
+    }
+
+    onClosing: function(close) {
+        if (!fluxUser) return
+        fluxUser.setValue("window/maximized", window.visibility === Window.Maximized)
+        // Only remember the size of a normal window (not maximized / fullscreen)
+        if (window.visibility === Window.Windowed) {
+            fluxUser.setValue("window/width", window.width)
+            fluxUser.setValue("window/height", window.height)
+        }
+    }
     onCurrentPageChanged: {
         if (currentPage === "player") stage.forceActiveFocus()
     }
@@ -203,11 +240,17 @@ ApplicationWindow {
             player: fluxPlayer
             mediaTitle: window.currentPlayingTitle
             isFullscreen: window.isFullscreen
+            nextUrl: fluxBrowser ? fluxBrowser.nextUrl : ""
+            nextName: fluxBrowser ? fluxBrowser.nextName : ""
+            autoplayNext: fluxUser ? fluxUser.autoplayNext : true
 
             Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
             onToggleFullscreenRequested: window.toggleFullscreen()
             onBackRequested: window.returnToSearch()
+            onPlayNextRequested: function(url, name) {
+                window.playMedia(url, Formatter.formatMedia(name, false, "").title)
+            }
         }
 
         // Nav / title bar (frameless window chrome)

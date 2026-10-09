@@ -2,6 +2,7 @@
 #include "VLCInstance.h"
 #include "../core/Logger.h"
 #include <QVariantMap>
+#include <QRegularExpression>
 #include <algorithm>
 #include <cmath>
 
@@ -293,12 +294,34 @@ void VLCPlayer::play(const QString &mediaUrl) {
     libvlc_media_add_option(m_currentMedia, ":prefetch-buffer-size=131072");
     libvlc_media_add_option(m_currentMedia, ":prefetch-read-size=262144");
 
+    // Resume: begin directly at the saved position instead of starting at 0 and seeking
+    // (avoids a wasted buffer at the start of the file). One-shot.
+    const qint64 startMs = m_startTimeMs;
+    m_startTimeMs = 0;
+    if (startMs > 1000) {
+        const QByteArray startOpt = QString(":start-time=%1").arg(static_cast<double>(startMs) / 1000.0, 0, 'f', 2).toUtf8();
+        libvlc_media_add_option(m_currentMedia, startOpt.constData());
+        FLUX_LOG_INFO("VLCPlayer", QString("Resuming from %1 ms").arg(startMs));
+    }
+
     libvlc_media_player_set_media(m_mediaPlayer, m_currentMedia);
 
     // A new stream starts fresh: drop any seek still queued for the previous one
     m_hasPendingSeek = false;
     m_seekGuardUntil = 0;
     if (m_seekTimer) m_seekTimer->stop();
+
+    // New stream: language auto-selection starts over
+    m_audioPrefApplied = false;
+    m_subPrefApplied = false;
+    m_autoTrackAttempts = 0;
+
+    // Show the resume position immediately instead of flashing 00:00
+    if (startMs > 1000) {
+        m_timeMs = startMs;
+        emit timeChanged();
+        m_seekGuardUntil = m_uptime.elapsed() + 2000;
+    }
 
     m_state = "Opening";
     m_isBuffering = true;
@@ -534,6 +557,155 @@ void VLCPlayer::updateTracks() {
     // lists are refreshed (otherwise the UI keeps the stale initial value).
     emit selectedAudioTrackChanged();
     emit selectedSubtitleTrackChanged();
+
+    // 4. Auto-pick preferred audio / subtitle language once tracks are known
+    applyLanguagePreferences();
+}
+
+void VLCPlayer::playFrom(const QString &url, qint64 startMs) {
+    m_startTimeMs = std::max<qint64>(0, startMs);
+    play(url);
+}
+
+void VLCPlayer::setLanguagePreferences(const QStringList &audio, const QString &subtitle) {
+    m_preferredAudio.clear();
+    for (const QString &a : audio) {
+        if (!a.trimmed().isEmpty()) m_preferredAudio.append(a.trimmed());
+    }
+    m_preferredSubtitle = subtitle.trimmed();
+}
+
+QString VLCPlayer::languageKey(const QString &trackName) {
+    // libVLC names look like "Track 1 - [English]"; the bracket text is the language.
+    static const QRegularExpression bracket(QStringLiteral("\\[([^\\]]+)\\]"));
+    const QRegularExpressionMatch m = bracket.match(trackName);
+    if (m.hasMatch()) return m.captured(1).trimmed();
+
+    // A bare "Track 2" carries no language information: useless as a preference
+    static const QRegularExpression generic(QStringLiteral("^\\s*(Track|Subtitle|Audio)\\s*\\d+\\s*$"),
+                                            QRegularExpression::CaseInsensitiveOption);
+    if (generic.match(trackName).hasMatch()) return QString();
+    return trackName.trimmed();
+}
+
+void VLCPlayer::applyLanguagePreferences() {
+    if (!m_mediaPlayer || m_state != "Playing") return;
+    if (m_audioPrefApplied && m_subPrefApplied) return;
+    ++m_autoTrackAttempts;
+
+    // libVLC lists a "Disable" entry with id -1; only real tracks are candidates.
+    auto realTracks = [](const QVariantList &list) {
+        QVariantList out;
+        for (const QVariant &v : list) {
+            if (v.toMap().value("id").toInt() >= 0) out.append(v);
+        }
+        return out;
+    };
+
+    // ---- Audio ----
+    if (!m_audioPrefApplied) {
+        const QVariantList real = realTracks(m_audioTracks);
+        if (!real.isEmpty()) {
+            m_audioPrefApplied = true;
+            if (real.size() > 1) {
+                const int current = libvlc_audio_get_track(m_mediaPlayer);
+                bool done = false;
+                for (const QString &pref : m_preferredAudio) {
+                    for (const QVariant &v : real) {
+                        const QVariantMap t = v.toMap();
+                        if (t.value("name").toString().contains(pref, Qt::CaseInsensitive)) {
+                            const int id = t.value("id").toInt();
+                            if (id != current) {
+                                FLUX_LOG_INFO("VLCPlayer", QString("Auto-selecting preferred audio '%1' (track %2)").arg(pref).arg(id));
+                                libvlc_audio_set_track(m_mediaPlayer, id);
+                                emit selectedAudioTrackChanged();
+                            }
+                            done = true;
+                            break;
+                        }
+                    }
+                    if (done) break;
+                }
+            }
+        }
+    }
+
+    // ---- Subtitles ----
+    if (!m_subPrefApplied) {
+        const QString pref = m_preferredSubtitle.trimmed();
+        if (pref.isEmpty()) {
+            m_subPrefApplied = true;
+        } else if (pref.compare(QStringLiteral("off"), Qt::CaseInsensitive) == 0) {
+            m_subPrefApplied = true;
+            if (libvlc_video_get_spu(m_mediaPlayer) != -1) {
+                libvlc_video_set_spu(m_mediaPlayer, -1);
+                emit selectedSubtitleTrackChanged();
+            }
+        } else {
+            const QVariantList real = realTracks(m_subtitleTracks);
+            if (!real.isEmpty()) {
+                m_subPrefApplied = true;
+                for (const QVariant &v : real) {
+                    const QVariantMap t = v.toMap();
+                    if (t.value("name").toString().contains(pref, Qt::CaseInsensitive)) {
+                        const int id = t.value("id").toInt();
+                        if (id != libvlc_video_get_spu(m_mediaPlayer)) {
+                            FLUX_LOG_INFO("VLCPlayer", QString("Auto-selecting preferred subtitle '%1' (track %2)").arg(pref).arg(id));
+                            libvlc_video_set_spu(m_mediaPlayer, id);
+                            emit selectedSubtitleTrackChanged();
+                        }
+                        break;
+                    }
+                }
+            } else if (m_autoTrackAttempts > 8) {
+                m_subPrefApplied = true;   // stream has no subtitles; stop trying
+            }
+        }
+    }
+}
+
+void VLCPlayer::learnAudioChoice(int trackId) {
+    QString name;
+    for (const QVariant &v : m_audioTracks) {
+        const QVariantMap t = v.toMap();
+        if (t.value("id").toInt() == trackId) { name = t.value("name").toString(); break; }
+    }
+    const QString key = languageKey(name);
+    if (key.isEmpty() || trackId < 0) return;
+
+    QStringList updated;
+    updated.append(key);
+    for (const QString &p : m_preferredAudio) {
+        if (p.compare(key, Qt::CaseInsensitive) != 0) updated.append(p);
+    }
+    while (updated.size() > 4) updated.removeLast();
+
+    if (updated != m_preferredAudio) {
+        m_preferredAudio = updated;
+        FLUX_LOG_INFO("VLCPlayer", QString("Learned audio preference: %1").arg(m_preferredAudio.join(", ")));
+        emit languagePreferencesChanged();
+    }
+}
+
+void VLCPlayer::learnSubtitleChoice(int spuId) {
+    QString key;
+    if (spuId < 0) {
+        key = QStringLiteral("off");
+    } else {
+        QString name;
+        for (const QVariant &v : m_subtitleTracks) {
+            const QVariantMap t = v.toMap();
+            if (t.value("id").toInt() == spuId) { name = t.value("name").toString(); break; }
+        }
+        key = languageKey(name);
+    }
+    if (key.isEmpty()) return;
+
+    if (key != m_preferredSubtitle) {
+        m_preferredSubtitle = key;
+        FLUX_LOG_INFO("VLCPlayer", QString("Learned subtitle preference: %1").arg(m_preferredSubtitle));
+        emit languagePreferencesChanged();
+    }
 }
 
 void VLCPlayer::refreshTracks() {
@@ -550,6 +722,7 @@ void VLCPlayer::selectAudioTrack(int trackId) {
     FLUX_LOG_INFO("VLCPlayer", QString("Switching audio track to ID %1").arg(trackId));
     libvlc_audio_set_track(m_mediaPlayer, trackId);
     emit selectedAudioTrackChanged();
+    learnAudioChoice(trackId);   // remember this language for future streams
 }
 
 int VLCPlayer::selectedSubtitleTrack() const {
@@ -562,6 +735,7 @@ void VLCPlayer::selectSubtitleTrack(int spuId) {
     FLUX_LOG_INFO("VLCPlayer", QString("Switching subtitle track to ID %1").arg(spuId));
     libvlc_video_set_spu(m_mediaPlayer, spuId);
     emit selectedSubtitleTrackChanged();
+    learnSubtitleChoice(spuId);  // remember this choice for future streams
 }
 
 QString VLCPlayer::formattedTime() const {

@@ -9,6 +9,7 @@ Item {
 
     property var player: null
     property bool isFullscreen: false
+    property bool hasNext: false
 
     readonly property bool menuOpen: tracksPopup.visible
     property bool isUserInteracting: (seekSlider.pressed || volumeSlider.pressed || tracksPopup.visible || controlsHover.hovered)
@@ -17,6 +18,7 @@ Item {
     property double popupClosedAt: 0
 
     signal toggleFullscreenRequested()
+    signal nextRequested()
 
     function closeMenus() {
         tracksPopup.close()
@@ -234,6 +236,15 @@ Item {
                 }
             }
 
+            IconButton {
+                visible: root.hasNext
+                iconName: "next"
+                iconSize: 28
+                tip: "Next episode"
+
+                onClicked: root.nextRequested()
+            }
+
             // Volume: icon + slider that slides open on hover
             Row {
                 id: volumeGroup
@@ -404,7 +415,10 @@ Item {
             border.color: "#2EFFFFFF"
         }
 
-        contentItem: RowLayout {
+        contentItem: ColumnLayout {
+            spacing: 16
+
+            RowLayout {
             spacing: 24
 
             // Audio
@@ -501,6 +515,44 @@ Item {
                         onActivated: {
                             if (root.player) root.player.selectSubtitleTrack(modelData.id)
                         }
+                    }
+                }
+            }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 1
+                color: "#1FFFFFFF"
+            }
+
+            // Playback preference
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 1
+
+                    Text {
+                        text: "Autoplay next episode"
+                        color: Theme.text
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+
+                    Text {
+                        text: "Continue with the next file in the folder when this one ends"
+                        color: Theme.textMute
+                        font.pixelSize: 11
+                    }
+                }
+
+                ToggleSwitch {
+                    checked: !!fluxUser && fluxUser.autoplayNext
+                    onToggled: function(value) {
+                        if (fluxUser) fluxUser.autoplayNext = value
                     }
                 }
             }

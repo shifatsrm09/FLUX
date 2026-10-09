@@ -120,6 +120,16 @@ Item {
             ctx.fillText("10", 12, 13.4)
             break
 
+        case "next":
+            poly(ctx, [5.5, 5, 16, 12, 5.5, 19], true)
+            ctx.fill()
+            ctx.lineWidth = 1.4
+            ctx.stroke()
+            ctx.lineWidth = 2.6
+            poly(ctx, [19.5, 5, 19.5, 19], false)
+            ctx.stroke()
+            break
+
         case "volume":
         case "volumeLow":
         case "volumeMuted":

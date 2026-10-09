@@ -4,6 +4,7 @@
 #include "../media/VLCVideoItem.h"
 #include "../models/TestMedia.h"
 #include "../core/Logger.h"
+#include <QCoreApplication>
 #include <QQmlContext>
 
 namespace Flux {
@@ -14,6 +15,9 @@ Application::Application(QObject *parent)
 
 Application::~Application() {
     FLUX_LOG_INFO("Application", "Shutting down FLUX Application...");
+    // The user store records final watch progress from the player, so it goes first
+    m_userStore.reset();
+    m_folderBrowser.reset();
     m_player.reset();
     m_testMedia.reset();
     m_searchManager.reset();
@@ -33,6 +37,51 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     m_player = std::make_unique<VLCPlayer>(this);
     m_testMedia = std::make_unique<TestMediaModel>(this);
     m_searchManager = std::make_unique<SearchManager>(this);
+    m_folderBrowser = std::make_unique<FolderBrowser>(this);
+    m_userStore = std::make_unique<UserStore>(this);
+
+    // 2b. Restore saved user settings
+    {
+        UserStore *store = m_userStore.get();
+        VLCPlayer *player = m_player.get();
+        SearchManager *search = m_searchManager.get();
+
+        // Audio
+        player->setVolume(store->intValue("audio/volume", 100));
+        player->setMuted(store->boolValue("audio/muted", false));
+
+        // Preferred languages: learned choices first, Hindi then English by default
+        QStringList audioPrefs = store->value("audio/preferredAudio").toStringList();
+        audioPrefs.removeAll(QString());
+        if (audioPrefs.isEmpty()) {
+            audioPrefs = QStringList{QStringLiteral("Hindi"), QStringLiteral("English")};
+        }
+        player->setLanguagePreferences(audioPrefs, store->value("audio/preferredSubtitle").toString());
+
+        // Selected categories (falls back to the built-in default when nothing is saved)
+        QStringList savedCategories = store->value("categories/selected").toStringList();
+        savedCategories.removeAll(QString());
+        search->restoreSelection(savedCategories);
+
+        // 2c. Persist changes as they happen
+        connect(player, &VLCPlayer::volumeChanged, store, [store, player]() {
+            store->setValue("audio/volume", player->volume());
+        });
+        connect(player, &VLCPlayer::muteChanged, store, [store, player]() {
+            store->setValue("audio/muted", player->isMuted());
+        });
+        connect(player, &VLCPlayer::languagePreferencesChanged, store, [store, player]() {
+            store->setValue("audio/preferredAudio", player->preferredAudio());
+            store->setValue("audio/preferredSubtitle", player->preferredSubtitle());
+        });
+        connect(search, &SearchManager::selectedLibrariesChanged, store, [store, search]() {
+            store->setValue("categories/selected", search->selectedCategoryIds());
+        });
+
+        // Watch progress (resume / continue watching / watched)
+        store->attachPlayer(player);
+        connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, store, &UserStore::shutdown);
+    }
 
     // 3. Register QML types
     qmlRegisterType<VLCVideoItem>("Flux.Media", 1, 0, "VLCVideoItem");
@@ -44,6 +93,8 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     rootContext->setContextProperty("fluxPlayer", m_player.get());
     rootContext->setContextProperty("testMediaModel", m_testMedia.get());
     rootContext->setContextProperty("fluxSearch", m_searchManager.get());
+    rootContext->setContextProperty("fluxBrowser", m_folderBrowser.get());
+    rootContext->setContextProperty("fluxUser", m_userStore.get());
     rootContext->setContextProperty("fluxLibrary", m_searchManager->libraryModel());
     rootContext->setContextProperty("fluxLogger", &Logger::instance());
 

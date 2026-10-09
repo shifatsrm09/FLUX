@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import Flux.Media 1.0
 import "components"
 import "components/Theme.js" as Theme
+import "components/MediaFormatter.js" as Formatter
 
 Rectangle {
     id: root
@@ -13,6 +14,88 @@ Rectangle {
     property bool isFullscreen: false
     signal toggleFullscreenRequested()
     signal backRequested()
+    signal playNextRequested(string url, string name)
+
+    // ---- Next episode / autoplay ---------------------------------------------------
+    property string nextUrl: ""
+    property string nextName: ""
+    property bool autoplayNext: true
+
+    readonly property bool hasNext: root.nextUrl.length > 0
+    readonly property bool ended: (!!root.player && root.player.state === "Ended")
+    readonly property real remainingMs: (!!root.player && root.player.durationMs > 0)
+                                        ? (root.player.durationMs - root.player.timeMs) : -1
+    readonly property bool nearEnd: (root.hasNext && !!root.player && root.player.durationMs > 120000
+                                     && root.remainingMs >= 0 && root.remainingMs < 30000)
+    property bool nextDismissed: false
+    readonly property bool showNextCard: (root.hasNext && !root.nextDismissed && (root.ended || root.nearEnd))
+    readonly property var nextInfo: root.nextName.length > 0
+                                    ? Formatter.describe(root.nextName, false, "")
+                                    : ({ title: "", episode: "", year: "" })
+    property int countdown: -1          // seconds until autoplay, -1 = not counting
+    readonly property int countdownTotal: 6
+
+    // ---- Resume toast -----------------------------------------------------------------
+    property real resumeMs: 0
+    property bool resumeToastVisible: false
+
+    function offerResume(ms) {
+        root.resumeMs = ms
+        root.resumeToastVisible = ms > 0
+        if (ms > 0) resumeTimer.restart()
+    }
+
+    function playNext() {
+        if (!root.hasNext) return
+        var u = root.nextUrl
+        var n = root.nextName
+        countdownTimer.stop()
+        root.countdown = -1
+        root.playNextRequested(u, n)
+    }
+
+    function dismissNext() {
+        root.nextDismissed = true
+        countdownTimer.stop()
+        root.countdown = -1
+    }
+
+    onNextUrlChanged: {
+        root.nextDismissed = false
+        countdownTimer.stop()
+        root.countdown = -1
+    }
+
+    // When the episode finishes, count down and continue automatically
+    onEndedChanged: {
+        if (root.ended && root.hasNext && !root.nextDismissed && root.autoplayNext) {
+            root.countdown = root.countdownTotal
+            countdownTimer.restart()
+        } else {
+            countdownTimer.stop()
+            root.countdown = -1
+        }
+    }
+
+    Timer {
+        id: countdownTimer
+        interval: 1000
+        repeat: true
+        onTriggered: {
+            root.countdown = root.countdown - 1
+            if (root.countdown <= 0) {
+                countdownTimer.stop()
+                root.playNext()
+            }
+        }
+    }
+
+    Timer {
+        id: resumeTimer
+        interval: 7000
+        repeat: false
+        onTriggered: root.resumeToastVisible = false
+    }
 
     color: "#000000"
     clip: true
@@ -516,11 +599,62 @@ Rectangle {
         anchors.bottomMargin: 18
         player: root.player
         isFullscreen: root.isFullscreen
+        hasNext: root.hasNext
         opacity: root.showControls ? 1.0 : 0.0
         visible: opacity > 0.0
 
         Behavior on opacity { NumberAnimation { duration: 200 } }
 
         onToggleFullscreenRequested: root.toggleFullscreenRequested()
+        onNextRequested: root.playNext()
+    }
+
+    // =========================================================================
+    // Floating cards: resume toast (left) and "Up next" (right). They glide up and
+    // down with the controls bar.
+    // =========================================================================
+    ResumeToast {
+        id: resumeToast
+
+        anchors.left: parent.left
+        anchors.leftMargin: 32
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: root.showControls ? 150 : 40
+        text: "Resumed from " + Theme.formatTime(root.resumeMs)
+        opacity: root.resumeToastVisible ? 1.0 : 0.0
+        visible: opacity > 0.0
+        scale: root.resumeToastVisible ? 1.0 : 0.94
+
+        Behavior on anchors.bottomMargin { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+
+        onStartOver: {
+            if (root.player) root.player.seek(0)
+            root.resumeToastVisible = false
+        }
+    }
+
+    NextEpisodeCard {
+        id: nextCard
+
+        anchors.right: parent.right
+        anchors.rightMargin: 32
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: root.showControls ? 150 : 40
+        title: root.nextInfo.title
+        subtitle: root.nextInfo.episode.length > 0 ? root.nextInfo.episode : root.nextInfo.year
+        countdownSeconds: root.countdown
+        countdownFraction: root.countdown >= 0 ? (root.countdown / root.countdownTotal) : 0
+        opacity: root.showNextCard ? 1.0 : 0.0
+        visible: opacity > 0.0
+        scale: root.showNextCard ? 1.0 : 0.94
+
+        Behavior on anchors.bottomMargin { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: 340; easing.type: Easing.OutCubic } }
+
+        onPlayNow: root.playNext()
+        onDismissed: root.dismissNext()
     }
 }

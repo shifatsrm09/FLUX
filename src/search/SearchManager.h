@@ -94,6 +94,7 @@ public:
     Q_INVOKABLE void selectOnlyLibrary(int index);
     Q_INVOKABLE void clearCategorySelection();
     Q_INVOKABLE void selectAllCategories();
+    Q_INVOKABLE void restoreSelection(const QStringList &ids);
 
     Q_INVOKABLE void search(const QString &query);
     Q_INVOKABLE void searchInLibrary(const QString &query, int libraryIndex);

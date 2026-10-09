@@ -73,6 +73,11 @@ function posterTop(key) {
     return posterPalette[paletteIndex(key)][0]
 }
 
+// Which of the 6 decorative poster compositions this title gets (stable per title)
+function posterStyle(key) {
+    return Math.floor(hash(String(key) + "#") / 7) % 6
+}
+
 function posterBottom(key) {
     return posterPalette[paletteIndex(key)][1]
 }

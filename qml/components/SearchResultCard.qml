@@ -4,8 +4,8 @@ import QtQuick.Layouts
 import "MediaFormatter.js" as Formatter
 import "Theme.js" as Theme
 
-// Streaming-service style tile for one search result.
-// Sized by its parent (GridView cell); the visible card is inset by 7px so
+// Streaming-service style tile for one file or folder.
+// Sized by its parent (GridView / ListView cell); the visible card is inset by 7px so the
 // hover-zoom has room to breathe.
 Item {
     id: root
@@ -19,18 +19,41 @@ Item {
     property string libraryName: ""
     property bool isPlaying: false
 
-    signal playRequested(string url, string title)
+    // Watch state
+    property real progress: 0          // 0..1, shows a progress bar when > 0
+    property bool watched: false
+    property bool showRemove: false    // "x" button on hover (Continue Watching row)
+    property string extraInfo: ""      // e.g. "23 min left"
 
-    // Formatted presentation values
+    // Entrance animation stagger (ms)
+    property int introDelay: 0
+
+    signal playRequested(string url, string title)
+    signal folderRequested(string url, string libraryName)
+    signal removeRequested(string url)
+
+    // Parsed presentation values
     readonly property var parsed: Formatter.formatMedia(root.title, root.isFolder, root.formattedSize)
     readonly property var meta: Formatter.describe(root.title, root.isFolder, root.formattedSize)
-    readonly property bool hovered: rowMouse.containsMouse
+    readonly property bool hovered: rowMouse.containsMouse || removeMouse.containsMouse
     readonly property string posterTop: Theme.posterTop(root.title)
     readonly property string posterBottom: Theme.posterBottom(root.title)
+
+    // Big outlined mark on the poster: episode number > year > first letter
+    readonly property string bigText: {
+        if (root.isFolder) return ""
+        if (root.meta.episode.length > 0) {
+            var m = root.meta.episode.match(/E(\d+)/)
+            return m ? ("E" + m[1]) : root.meta.episode
+        }
+        if (root.meta.year.length > 0) return root.meta.year
+        return root.parsed.title.length > 0 ? root.parsed.title.charAt(0).toUpperCase() : ""
+    }
 
     readonly property string infoLine: {
         if (root.isFolder) return "Folder"
         var parts = []
+        if (root.extraInfo.length > 0) parts.push(root.extraInfo)
         if (root.meta.episode.length > 0) parts.push(root.meta.episode)
         else if (root.meta.year.length > 0) parts.push(root.meta.year)
         if (root.meta.source.length > 0) parts.push(root.meta.source)
@@ -41,6 +64,27 @@ Item {
 
     // Raise the hovered tile above its neighbours while it is scaled up
     z: root.hovered ? 20 : 0
+
+    // ---- Entrance animation: fade + rise, staggered per card --------------------------
+    property bool shown: false
+
+    opacity: root.shown ? 1.0 : 0.0
+    transform: Translate {
+        y: root.shown ? 0 : 18
+
+        Behavior on y { NumberAnimation { duration: 520; easing.type: Easing.OutCubic } }
+    }
+
+    Behavior on opacity { NumberAnimation { duration: 420; easing.type: Easing.OutCubic } }
+
+    Component.onCompleted: introTimer.start()
+
+    Timer {
+        id: introTimer
+        interval: root.introDelay
+        repeat: false
+        onTriggered: root.shown = true
+    }
 
     // Small label chip
     component Badge: Rectangle {
@@ -72,13 +116,22 @@ Item {
         anchors.margins: 7
         radius: 12
         clip: true
-        scale: (root.hovered && !root.isFolder) ? 1.045 : (root.hovered ? 1.015 : 1.0)
+        scale: root.hovered ? 1.045 : 1.0
 
-        Behavior on scale { NumberAnimation { duration: 170; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
 
         gradient: Gradient {
             GradientStop { position: 0.0; color: root.isFolder ? Theme.surfaceHi : root.posterTop }
             GradientStop { position: 1.0; color: root.isFolder ? Theme.surface : root.posterBottom }
+        }
+
+        // Typographic poster artwork
+        PosterArt {
+            anchors.fill: parent
+            seed: root.title
+            bigText: root.bigText
+            isFolder: root.isFolder
+            hovered: root.hovered
         }
 
         // Soft top gloss
@@ -86,36 +139,10 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            height: parent.height * 0.55
+            height: parent.height * 0.5
             gradient: Gradient {
-                GradientStop { position: 0.0; color: "#1AFFFFFF" }
+                GradientStop { position: 0.0; color: "#16FFFFFF" }
                 GradientStop { position: 1.0; color: "#00FFFFFF" }
-            }
-        }
-
-        // Giant faded initial: typographic poster art
-        Text {
-            visible: !root.isFolder
-            anchors.right: parent.right
-            anchors.rightMargin: -card.width * 0.03
-            anchors.top: parent.top
-            anchors.topMargin: -card.height * 0.2
-            text: root.parsed.title.length > 0 ? root.parsed.title.charAt(0).toUpperCase() : ""
-            color: "#14FFFFFF"
-            font.pixelSize: card.height * 1.25
-            font.weight: Font.Black
-        }
-
-        // Folder glyph
-        Loader {
-            active: root.isFolder
-            anchors.centerIn: parent
-            anchors.verticalCenterOffset: -12
-            sourceComponent: FluxIcon {
-                name: "folder"
-                size: 46
-                strokeWidth: 1.6
-                color: "#4DFFFFFF"
             }
         }
 
@@ -125,7 +152,6 @@ Item {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             height: parent.height * 0.8
-            radius: card.radius
             gradient: Gradient {
                 GradientStop { position: 0.0; color: "#00000000" }
                 GradientStop { position: 0.55; color: "#99000000" }
@@ -140,8 +166,17 @@ Item {
             anchors.bottom: parent.bottom
             anchors.leftMargin: 14
             anchors.rightMargin: 14
-            anchors.bottomMargin: 12
+            anchors.bottomMargin: root.progress > 0 ? 16 : 12
             spacing: 3
+
+            // Brand accent rule
+            Rectangle {
+                implicitWidth: 18
+                implicitHeight: 2
+                radius: 1
+                color: root.isPlaying ? "#FFFFFF" : Theme.accent
+                Layout.bottomMargin: 2
+            }
 
             Text {
                 Layout.fillWidth: true
@@ -175,7 +210,7 @@ Item {
             }
         }
 
-        // Quality badges (top-left)
+        // Quality / watched badges (top-left)
         RowLayout {
             anchors.left: parent.left
             anchors.top: parent.top
@@ -194,11 +229,17 @@ Item {
                 label: root.meta.hdr
                 labelColor: Theme.warning
             }
+
+            Badge {
+                visible: root.watched
+                label: "\u2713 WATCHED"
+                labelColor: Theme.success
+            }
         }
 
-        // Extension (top-right) or live "playing" chip
+        // Extension (top-right) / folder tag / live "playing" chip
         Badge {
-            visible: !root.isPlaying && !root.isFolder && root.extension.length > 0
+            visible: !root.isPlaying && !root.isFolder && !root.showRemove && root.extension.length > 0
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: 10
@@ -246,16 +287,17 @@ Item {
             }
         }
 
-        // Hover dim + play button
+        // Hover dim
         Rectangle {
             anchors.fill: parent
-            radius: card.radius
             color: "#000000"
-            opacity: (root.hovered && !root.isFolder) ? 0.3 : (root.hovered ? 0.1 : 0.0)
+            opacity: root.hovered ? 0.32 : 0.0
 
-            Behavior on opacity { NumberAnimation { duration: 160 } }
+            Behavior on opacity { NumberAnimation { duration: 220 } }
         }
 
+        // Hover action: play button (files) / open pill (folders). Pure shapes, no
+        // Canvas, so nothing gets created at hover time.
         Rectangle {
             visible: !root.isFolder
             anchors.centerIn: parent
@@ -265,26 +307,85 @@ Item {
             radius: 27
             color: "#F2FFFFFF"
             opacity: root.hovered ? 1.0 : 0.0
-            scale: root.hovered ? 1.0 : 0.65
+            scale: root.hovered ? 1.0 : 0.6
 
-            Behavior on opacity { NumberAnimation { duration: 160 } }
-            Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+            Behavior on scale { NumberAnimation { duration: 280; easing.type: Easing.OutBack } }
 
-            Loader {
-                active: root.hovered && !root.isFolder
+            // Play triangle = right half of a rotated square
+            Item {
                 anchors.centerIn: parent
                 anchors.horizontalCenterOffset: 2
-                sourceComponent: FluxIcon {
-                    name: "play"
-                    size: 28
+                width: 11
+                height: 22
+                clip: true
+
+                Rectangle {
+                    x: -7.75
+                    y: 3.25
+                    width: 15.5
+                    height: 15.5
+                    rotation: 45
+                    antialiasing: true
                     color: Theme.bg
                 }
             }
         }
 
-        // Now-playing progress accent
         Rectangle {
-            visible: root.isPlaying
+            visible: root.isFolder
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: 4
+            implicitHeight: 34
+            implicitWidth: openRow.implicitWidth + 30
+            radius: 17
+            color: "#F2FFFFFF"
+            opacity: root.hovered ? 1.0 : 0.0
+            scale: root.hovered ? 1.0 : 0.85
+
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+            Behavior on scale { NumberAnimation { duration: 280; easing.type: Easing.OutBack } }
+
+            RowLayout {
+                id: openRow
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text {
+                    text: "Open"
+                    color: Theme.bg
+                    font.pixelSize: 13
+                    font.weight: Font.Bold
+                }
+
+                Text {
+                    text: "\u203A"
+                    color: Theme.bg
+                    font.pixelSize: 18
+                    font.weight: Font.Bold
+                }
+            }
+        }
+
+        // Watch progress bar
+        Rectangle {
+            visible: root.progress > 0
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 4
+            color: "#4DFFFFFF"
+
+            Rectangle {
+                width: parent.width * Math.max(0, Math.min(1, root.progress))
+                height: parent.height
+                color: Theme.accent
+            }
+        }
+
+        // Now-playing accent
+        Rectangle {
+            visible: root.isPlaying && root.progress <= 0
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
@@ -299,9 +400,9 @@ Item {
             color: "transparent"
             border.width: root.isPlaying ? 2 : 1
             border.color: root.isPlaying ? Theme.accent
-                                         : (root.hovered && !root.isFolder ? "#66FFFFFF" : "#1FFFFFFF")
+                                         : (root.hovered ? "#66FFFFFF" : "#1FFFFFFF")
 
-            Behavior on border.color { ColorAnimation { duration: 140 } }
+            Behavior on border.color { ColorAnimation { duration: 180 } }
         }
     }
 
@@ -310,18 +411,56 @@ Item {
         anchors.fill: parent
         anchors.margins: 7
         hoverEnabled: true
-        cursorShape: root.isFolder ? Qt.ArrowCursor : Qt.PointingHandCursor
+        cursorShape: Qt.PointingHandCursor
 
         onClicked: {
-            if (!root.isFolder && root.playUrl.length > 0) {
+            if (root.isFolder) {
+                if (root.playUrl.length > 0) root.folderRequested(root.playUrl, root.libraryName)
+            } else if (root.playUrl.length > 0) {
                 root.playRequested(root.playUrl, root.parsed.title)
             }
         }
     }
 
+    // Remove from "Continue Watching" (declared after rowMouse so it sits on top)
+    Rectangle {
+        visible: root.showRemove
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.rightMargin: 17
+        anchors.topMargin: 17
+        width: 26
+        height: 26
+        radius: 13
+        color: removeMouse.containsMouse ? "#E6E50914" : "#B3000000"
+        border.width: 1
+        border.color: "#40FFFFFF"
+        opacity: root.hovered ? 1.0 : 0.0
+
+        Behavior on opacity { NumberAnimation { duration: 180 } }
+        Behavior on color { ColorAnimation { duration: 120 } }
+
+        Text {
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: -1
+            text: "\u00D7"
+            color: "#FFFFFF"
+            font.pixelSize: 18
+            font.weight: Font.Bold
+        }
+
+        MouseArea {
+            id: removeMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.removeRequested(root.playUrl)
+        }
+    }
+
     FluxToolTip {
         visible: rowMouse.containsMouse && root.title.length > 30
-        delay: 600
+        delay: 700
         text: root.title + (root.parentPath.length > 0 ? ("\n" + root.parentPath) : "")
     }
 }
