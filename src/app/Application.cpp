@@ -52,13 +52,28 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
         player->setVolume(store->intValue("audio/volume", 100));
         player->setMuted(store->boolValue("audio/muted", false));
 
-        // Preferred languages: learned choices first, Hindi then English by default
+        // Preferred languages: English first by default (then Hindi). Choices the user makes
+        // in the track panel are learned and take over from these defaults.
+        // One-time reset (prefs v2): English is the new default, so drop older learned choices.
+        if (store->intValue("audio/prefsVersion", 0) < 2) {
+            store->setValue("audio/preferredAudio", QStringList());
+            store->setValue("audio/preferredSubtitle", QString());
+            store->setValue("audio/prefsVersion", 2);
+        }
+
         QStringList audioPrefs = store->value("audio/preferredAudio").toStringList();
         audioPrefs.removeAll(QString());
         if (audioPrefs.isEmpty()) {
-            audioPrefs = QStringList{QStringLiteral("Hindi"), QStringLiteral("English")};
+            audioPrefs = QStringList{QStringLiteral("English"), QStringLiteral("Hindi")};
         }
-        player->setLanguagePreferences(audioPrefs, store->value("audio/preferredSubtitle").toString());
+
+        // Subtitles: English if the file has them. Picking "Disable" in the panel is learned
+        // as "off" and sticks.
+        QString subtitlePref = store->value("audio/preferredSubtitle").toString().trimmed();
+        if (subtitlePref.isEmpty()) {
+            subtitlePref = QStringLiteral("English");
+        }
+        player->setLanguagePreferences(audioPrefs, subtitlePref);
 
         // Selected categories (falls back to the built-in default when nothing is saved)
         QStringList savedCategories = store->value("categories/selected").toStringList();

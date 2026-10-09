@@ -191,13 +191,6 @@ ApplicationWindow {
         }
     }
 
-    // Space / arrows / M / F are handled by the stage's Keys handler below (it owns keyboard
-    // focus while the player is open). Window-wide shortcuts that don't depend on focus:
-    Shortcut {
-        sequence: "Ctrl+D"
-        onActivated: devDrawer.open()
-    }
-
     Shortcut {
         sequence: "F11"
         onActivated: toggleFullscreen()
@@ -236,13 +229,6 @@ ApplicationWindow {
         }
     }
 
-    Connections {
-        target: devDrawer
-
-        function onClosed() {
-            if (currentPage === "player") stage.forceActiveFocus()
-        }
-    }
 
     // ---- Stage: pages crossfade; nav bar floats on top ----------------------------------
     Item {
@@ -350,7 +336,6 @@ ApplicationWindow {
             showNowPlaying: !!fluxPlayer && fluxPlayer.isPlaying && currentPage !== "player"
 
             onNowPlayingClicked: currentPage = "player"
-            onDevToolsClicked: devDrawer.open()
             onHomeClicked: window.returnToHome()
         }
 
@@ -398,16 +383,6 @@ ApplicationWindow {
         }
     }
 
-    // Unobtrusive Developer Slide-Out Drawer
-    DevToolsDrawer {
-        id: devDrawer
-        player: fluxPlayer
-        logger: fluxLogger
-        catalogModel: testMediaModel
-        onPlayTestRequested: function(url, title) {
-            window.playMedia(url, title)
-        }
-    }
 
     // Frameless Window Edge Resize Handles
     WindowResizeBorders {

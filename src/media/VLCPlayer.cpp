@@ -3,11 +3,270 @@
 #include "../core/Logger.h"
 #include <QVariantMap>
 #include <QRegularExpression>
+#include <QHash>
+#include <QStringList>
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
 namespace Flux {
+
+// ============================================================================
+// Track-name cleaning
+// Release groups label tracks like "<www.SomeSite.com>English". The UI should only show
+// the language ("English", "Hindi", "Spanish"...). If no language can be recognised the
+// cleaned title is shown, and if that is empty too, the original name is kept.
+// ============================================================================
+namespace {
+
+// Full language names (and unambiguous 3-letter codes) -> canonical display name
+const QHash<QString, QString> &languageAliases() {
+    static const QHash<QString, QString> aliases = []() {
+        QHash<QString, QString> m;
+        auto add = [&m](const QString &canonical, const QStringList &names) {
+            m.insert(canonical.toLower(), canonical);
+            for (const QString &n : names) m.insert(n.toLower(), canonical);
+        };
+        add("English",    {"eng"});
+        add("Hindi",      {"hin"});
+        add("Bengali",    {"bangla"});
+        add("Urdu",       {"urd"});
+        add("Tamil",      {"tam"});
+        add("Telugu",     {"tel"});
+        add("Malayalam",  {"mal"});
+        add("Kannada",    {"kan"});
+        add("Marathi",    {});
+        add("Punjabi",    {"panjabi"});
+        add("Gujarati",   {"guj"});
+        add("Nepali",     {"nep"});
+        add("Sinhala",    {"sinhalese"});
+        add("Spanish",    {"espanol", QString::fromUtf8("espa\xC3\xB1ol"), "castilian", "spa"});
+        add("French",     {"francais", QString::fromUtf8("fran\xC3\xA7" "ais"), "fre", "fra"});
+        add("German",     {"deutsch", "ger", "deu"});
+        add("Italian",    {"italiano", "ita"});
+        add("Portuguese", {"portugues", QString::fromUtf8("portugu\xC3\xAA" "s")});
+        add("Russian",    {"rus"});
+        add("Japanese",   {"jpn"});
+        add("Korean",     {"kor"});
+        add("Chinese",    {"mandarin", "cantonese", "chi", "zho"});
+        add("Arabic",     {"ara"});
+        add("Turkish",    {"tur"});
+        add("Thai",       {});
+        add("Vietnamese", {"vie"});
+        add("Indonesian", {});
+        add("Malay",      {});
+        add("Persian",    {"farsi"});
+        add("Hebrew",     {"heb"});
+        add("Greek",      {});
+        add("Dutch",      {"nld", "dut"});
+        add("Swedish",    {"swe"});
+        add("Norwegian",  {});
+        add("Danish",     {});
+        add("Finnish",    {});
+        add("Polish",     {"pol"});
+        add("Czech",      {"ces", "cze"});
+        add("Hungarian",  {"hun"});
+        add("Romanian",   {"ron", "rum"});
+        add("Ukrainian",  {"ukr"});
+        add("Filipino",   {"tagalog"});
+        return m;
+    }();
+    return aliases;
+}
+
+// 2-letter ISO codes are only trusted when they are the WHOLE name ("en"), never inside
+// a sentence ("it", "no", "in" would be false positives).
+const QHash<QString, QString> &twoLetterCodes() {
+    static const QHash<QString, QString> codes = {
+        {"en", "English"}, {"hi", "Hindi"}, {"es", "Spanish"}, {"fr", "French"},
+        {"de", "German"}, {"it", "Italian"}, {"pt", "Portuguese"}, {"ru", "Russian"},
+        {"ja", "Japanese"}, {"ko", "Korean"}, {"zh", "Chinese"}, {"ar", "Arabic"},
+        {"tr", "Turkish"}, {"bn", "Bengali"}, {"ta", "Tamil"}, {"te", "Telugu"},
+        {"ur", "Urdu"}, {"ml", "Malayalam"}, {"kn", "Kannada"}, {"mr", "Marathi"},
+        {"nl", "Dutch"}, {"sv", "Swedish"}, {"pl", "Polish"}, {"th", "Thai"},
+        {"vi", "Vietnamese"}, {"id", "Indonesian"}, {"fa", "Persian"}, {"he", "Hebrew"},
+        {"el", "Greek"}, {"uk", "Ukrainian"}, {"cs", "Czech"}, {"hu", "Hungarian"},
+        {"ro", "Romanian"}
+    };
+    return codes;
+}
+
+QString detectLanguage(const QString &text) {
+    const QString t = text.simplified();
+    if (t.isEmpty()) return QString();
+
+    if (t.size() == 2) {
+        const auto it = twoLetterCodes().constFind(t.toLower());
+        if (it != twoLetterCodes().constEnd()) return it.value();
+    }
+
+    static const QRegularExpression splitter(QStringLiteral("[^\\p{L}]+"));
+    const QStringList tokens = t.toLower().split(splitter, Qt::SkipEmptyParts);
+    const auto &aliases = languageAliases();
+    for (const QString &tok : tokens) {
+        const auto it = aliases.constFind(tok);
+        if (it != aliases.constEnd()) return it.value();
+    }
+    return QString();
+}
+
+struct CleanedTrack {
+    QString display;   // what the user sees
+    QString lang;      // canonical language, or empty if not recognised
+};
+
+CleanedTrack cleanTrackName(const QString &raw) {
+    CleanedTrack out;
+    out.display = raw;   // fallback: the original name
+
+    static const QRegularExpression bracketRe(QStringLiteral("\\[([^\\]]*)\\]"));
+    static const QRegularExpression angleRe(QStringLiteral("<[^>]*>"));
+    static const QRegularExpression urlRe(QStringLiteral("(https?://\\S+|www\\.\\S+)"),
+                                          QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression domainRe(
+        QStringLiteral("\\b[\\w-]+(\\.[\\w-]+)*\\.(com|net|org|info|co|me|tv|to|ws|cc|xyz|pk|bd|io|club|site|online|top|vip|biz|in)\\b"),
+        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression genericRe(QStringLiteral("\\b(Track|Subtitle|Audio|Stream)\\s*\\d+\\b"),
+                                              QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression camelRe(QStringLiteral("([a-z])([A-Z])"));
+    static const QRegularExpression edgeRe(
+        QStringLiteral("^[\\s\\-\\x{2013}\\x{2014}_:.|,/\\\\]+|[\\s\\-\\x{2013}\\x{2014}_:.|,/\\\\]+$"));
+
+    QString s = raw;
+
+    // The language libVLC appended itself: "... - [English]"
+    QString bracketLang;
+    QRegularExpressionMatchIterator bi = bracketRe.globalMatch(s);
+    while (bi.hasNext()) bracketLang = bi.next().captured(1).trimmed();
+    s.remove(bracketRe);
+
+    // Site / release-group junk
+    s.remove(angleRe);
+    s.remove(urlRe);
+    s.remove(domainRe);
+    s.remove(genericRe);
+    s.replace(camelRe, QStringLiteral("\\1 \\2"));   // "FooEnglish" -> "Foo English"
+    s.remove(edgeRe);
+    s = s.simplified();
+
+    // Recognise the language: the cleaned title first (uploaders label tracks by hand),
+    // then libVLC's own bracket language, then a looser pass over the raw text.
+    QString lang = detectLanguage(s);
+    if (lang.isEmpty()) lang = detectLanguage(bracketLang);
+    if (lang.isEmpty()) {
+        QString loose = raw;
+        loose.remove(bracketRe);
+        loose.replace(camelRe, QStringLiteral("\\1 \\2"));
+        lang = detectLanguage(loose);
+    }
+    if (lang.isEmpty() && !bracketLang.isEmpty()) {
+        const QString bl = bracketLang.toLower();
+        if (bl != QLatin1String("undetermined") && bl != QLatin1String("unknown") && bl != QLatin1String("und")) {
+            lang = bracketLang.left(1).toUpper() + bracketLang.mid(1);   // a language we have no alias for
+        }
+    }
+
+    // Useful qualifiers worth keeping next to the language
+    QStringList extras;
+    static const QRegularExpression chRe(QStringLiteral("(?<![\\d.])(5\\.1|7\\.1)(?![\\d.])"));
+    const QRegularExpressionMatch chm = chRe.match(s);
+    if (chm.hasMatch()) extras << chm.captured(1);
+
+    static const QRegularExpression tagRe(QStringLiteral("\\b(commentary|forced|sdh|cc)\\b"),
+                                          QRegularExpression::CaseInsensitiveOption);
+    QRegularExpressionMatchIterator ti = tagRe.globalMatch(s);
+    while (ti.hasNext()) {
+        const QString tag = ti.next().captured(1).toLower();
+        QString shown;
+        if (tag == QLatin1String("sdh") || tag == QLatin1String("cc")) shown = tag.toUpper();
+        else shown = tag.left(1).toUpper() + tag.mid(1);
+        if (!extras.contains(shown)) extras << shown;
+    }
+
+    if (!lang.isEmpty()) {
+        out.lang = lang;
+        out.display = lang;
+        if (!extras.isEmpty()) {
+            out.display += QString(" ") + QChar(0x00B7) + QString(" ") + extras.join(QLatin1Char(' '));
+        }
+    } else if (!s.isEmpty()) {
+        out.display = s;      // no language recognised: show the cleaned title
+    }                         // else: nothing usable left, keep the original name
+
+    return out;
+}
+
+QVariantMap makeTrack(int id, const QString &rawName) {
+    QVariantMap track;
+    track["id"] = id;
+    track["rawName"] = rawName;
+    if (id < 0) {                       // libVLC's own "Disable" entry: keep verbatim
+        track["name"] = rawName;
+        track["lang"] = QString();
+        return track;
+    }
+    const CleanedTrack c = cleanTrackName(rawName);
+    track["name"] = c.display;
+    track["lang"] = c.lang;
+    return track;
+}
+
+// Two tracks that clean to the same name become "English" and "English (2)"
+void disambiguateTracks(QVariantList &list) {
+    QHash<QString, int> total;
+    for (const QVariant &v : list) {
+        const QVariantMap t = v.toMap();
+        if (t.value("id").toInt() >= 0) total[t.value("name").toString()]++;
+    }
+
+    QHash<QString, int> seen;
+    for (int i = 0; i < list.size(); ++i) {
+        QVariantMap t = list.at(i).toMap();
+        if (t.value("id").toInt() < 0) continue;
+        const QString n = t.value("name").toString();
+        if (total.value(n) > 1) {
+            const int k = ++seen[n];
+            if (k > 1) {
+                t["name"] = n + QStringLiteral(" (") + QString::number(k) + QStringLiteral(")");
+                list[i] = t;
+            }
+        }
+    }
+}
+
+bool trackMatches(const QVariantMap &t, const QString &pref) {
+    return t.value("lang").toString().compare(pref, Qt::CaseInsensitive) == 0
+        || t.value("name").toString().contains(pref, Qt::CaseInsensitive)
+        || t.value("rawName").toString().contains(pref, Qt::CaseInsensitive);
+}
+
+// Commentary / forced / SDH variants are a worse default than the plain track
+int trackPenalty(const QVariantMap &t) {
+    const QString n = (t.value("name").toString() + QLatin1Char(' ') + t.value("rawName").toString()).toLower();
+    if (n.contains(QLatin1String("commentary")) || n.contains(QLatin1String("forced"))
+        || n.contains(QLatin1String("sdh")) || n.contains(QLatin1String("descript"))) {
+        return 1;
+    }
+    return 0;
+}
+
+// Best track for a preferred language (empty map if none matches)
+QVariantMap bestTrackFor(const QVariantList &tracks, const QString &pref) {
+    QVariantMap best;
+    int bestPenalty = 1000;
+    for (const QVariant &v : tracks) {
+        const QVariantMap t = v.toMap();
+        if (!trackMatches(t, pref)) continue;
+        const int p = trackPenalty(t);
+        if (p < bestPenalty) {
+            best = t;
+            bestPenalty = p;
+        }
+    }
+    return best;
+}
+
+} // namespace
 
 VLCPlayer::VLCPlayer(QObject *parent)
     : QObject(parent) {
@@ -582,15 +841,14 @@ void VLCPlayer::updateTracks() {
     libvlc_track_description_t *audioDesc = libvlc_audio_get_track_description(m_mediaPlayer);
     libvlc_track_description_t *cur = audioDesc;
     while (cur) {
-        QVariantMap track;
-        track["id"] = cur->i_id;
-        track["name"] = cur->psz_name ? QString::fromUtf8(cur->psz_name) : QString("Track %1").arg(cur->i_id);
-        audioList.append(track);
+        const QString rawName = cur->psz_name ? QString::fromUtf8(cur->psz_name) : QString("Track %1").arg(cur->i_id);
+        audioList.append(makeTrack(cur->i_id, rawName));
         cur = cur->p_next;
     }
     if (audioDesc) {
         libvlc_track_description_list_release(audioDesc);
     }
+    disambiguateTracks(audioList);
     m_audioTracks = audioList;
     emit audioTracksChanged();
 
@@ -599,15 +857,14 @@ void VLCPlayer::updateTracks() {
     libvlc_track_description_t *spuDesc = libvlc_video_get_spu_description(m_mediaPlayer);
     cur = spuDesc;
     while (cur) {
-        QVariantMap track;
-        track["id"] = cur->i_id;
-        track["name"] = cur->psz_name ? QString::fromUtf8(cur->psz_name) : QString("Subtitle %1").arg(cur->i_id);
-        subList.append(track);
+        const QString rawName = cur->psz_name ? QString::fromUtf8(cur->psz_name) : QString("Subtitle %1").arg(cur->i_id);
+        subList.append(makeTrack(cur->i_id, rawName));
         cur = cur->p_next;
     }
     if (spuDesc) {
         libvlc_track_description_list_release(spuDesc);
     }
+    disambiguateTracks(subList);
     m_subtitleTracks = subList;
     emit subtitleTracksChanged();
 
@@ -670,20 +927,17 @@ void VLCPlayer::applyLanguagePreferences() {
                 const int current = libvlc_audio_get_track(m_mediaPlayer);
                 bool done = false;
                 for (const QString &pref : m_preferredAudio) {
-                    for (const QVariant &v : real) {
-                        const QVariantMap t = v.toMap();
-                        if (t.value("name").toString().contains(pref, Qt::CaseInsensitive)) {
-                            const int id = t.value("id").toInt();
-                            if (id != current) {
-                                FLUX_LOG_INFO("VLCPlayer", QString("Auto-selecting preferred audio '%1' (track %2)").arg(pref).arg(id));
-                                libvlc_audio_set_track(m_mediaPlayer, id);
-                                emit selectedAudioTrackChanged();
-                            }
-                            done = true;
-                            break;
-                        }
+                    const QVariantMap best = bestTrackFor(real, pref);
+                    if (best.isEmpty()) continue;
+
+                    const int id = best.value("id").toInt();
+                    if (id != current) {
+                        FLUX_LOG_INFO("VLCPlayer", QString("Auto-selecting preferred audio '%1' (track %2)").arg(pref).arg(id));
+                        libvlc_audio_set_track(m_mediaPlayer, id);
+                        emit selectedAudioTrackChanged();
                     }
-                    if (done) break;
+                    done = true;
+                    break;
                 }
             }
         }
@@ -704,16 +958,13 @@ void VLCPlayer::applyLanguagePreferences() {
             const QVariantList real = realTracks(m_subtitleTracks);
             if (!real.isEmpty()) {
                 m_subPrefApplied = true;
-                for (const QVariant &v : real) {
-                    const QVariantMap t = v.toMap();
-                    if (t.value("name").toString().contains(pref, Qt::CaseInsensitive)) {
-                        const int id = t.value("id").toInt();
-                        if (id != libvlc_video_get_spu(m_mediaPlayer)) {
-                            FLUX_LOG_INFO("VLCPlayer", QString("Auto-selecting preferred subtitle '%1' (track %2)").arg(pref).arg(id));
-                            libvlc_video_set_spu(m_mediaPlayer, id);
-                            emit selectedSubtitleTrackChanged();
-                        }
-                        break;
+                const QVariantMap best = bestTrackFor(real, pref);
+                if (!best.isEmpty()) {
+                    const int id = best.value("id").toInt();
+                    if (id != libvlc_video_get_spu(m_mediaPlayer)) {
+                        FLUX_LOG_INFO("VLCPlayer", QString("Auto-selecting preferred subtitle '%1' (track %2)").arg(pref).arg(id));
+                        libvlc_video_set_spu(m_mediaPlayer, id);
+                        emit selectedSubtitleTrackChanged();
                     }
                 }
             } else if (m_autoTrackAttempts > 8) {
@@ -725,11 +976,17 @@ void VLCPlayer::applyLanguagePreferences() {
 
 void VLCPlayer::learnAudioChoice(int trackId) {
     QString name;
+    QString lang;
     for (const QVariant &v : m_audioTracks) {
         const QVariantMap t = v.toMap();
-        if (t.value("id").toInt() == trackId) { name = t.value("name").toString(); break; }
+        if (t.value("id").toInt() == trackId) {
+            name = t.value("name").toString();
+            lang = t.value("lang").toString();
+            break;
+        }
     }
-    const QString key = languageKey(name);
+    // Prefer the clean language ("English") over the full label ("English · 5.1")
+    const QString key = lang.isEmpty() ? languageKey(name) : lang;
     if (key.isEmpty() || trackId < 0) return;
 
     QStringList updated;
@@ -752,11 +1009,16 @@ void VLCPlayer::learnSubtitleChoice(int spuId) {
         key = QStringLiteral("off");
     } else {
         QString name;
+        QString lang;
         for (const QVariant &v : m_subtitleTracks) {
             const QVariantMap t = v.toMap();
-            if (t.value("id").toInt() == spuId) { name = t.value("name").toString(); break; }
+            if (t.value("id").toInt() == spuId) {
+                name = t.value("name").toString();
+                lang = t.value("lang").toString();
+                break;
+            }
         }
-        key = languageKey(name);
+        key = lang.isEmpty() ? languageKey(name) : lang;
     }
     if (key.isEmpty()) return;
 

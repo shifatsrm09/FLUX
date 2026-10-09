@@ -20,7 +20,6 @@ Item {
 
     signal homeClicked()
     signal nowPlayingClicked()
-    signal devToolsClicked()
 
     height: 48
     opacity: root.shown ? 1.0 : 0.0
@@ -211,46 +210,6 @@ Item {
             }
         }
 
-        // Developer tools
-        Item {
-            id: devButton
-
-            Layout.alignment: Qt.AlignVCenter
-            Layout.rightMargin: 8
-            implicitWidth: 34
-            implicitHeight: 34
-            opacity: root.overlayMode ? 0.0 : 1.0
-            visible: opacity > 0.0
-
-            Behavior on opacity { NumberAnimation { duration: 200 } }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: width / 2
-                color: devMouse.containsMouse ? "#26FFFFFF" : "transparent"
-            }
-
-            FluxIcon {
-                anchors.centerIn: parent
-                name: "dots"
-                size: 20
-                color: devMouse.containsMouse ? "#FFFFFF" : Theme.textDim
-            }
-
-            MouseArea {
-                id: devMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.devToolsClicked()
-            }
-
-            FluxToolTip {
-                visible: devMouse.containsMouse
-                delay: 500
-                text: "Developer Tools (Ctrl+D)"
-            }
-        }
 
         // Minimize
         Rectangle {

@@ -78,11 +78,9 @@ qt_add_qml_module(FLUX
         qml/PlayerView.qml
         qml/components/MediaCard.qml
         qml/components/PlaybackControls.qml
-        qml/components/DiagnosticPanel.qml
         qml/components/SearchResultItem.qml
         qml/components/SearchResultCard.qml
         qml/components/CategorySelector.qml
-        qml/components/DevToolsDrawer.qml
         qml/components/ClassicTitleBar.qml
         qml/components/WindowResizeBorders.qml
         qml/components/CategoryCheckpoints.qml

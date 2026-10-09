@@ -197,17 +197,6 @@ Rectangle {
         onTriggered: root.osdVisible = false
     }
 
-    // Single click toggles pause; waiting briefly lets a double click (fullscreen)
-    // cancel it instead of pausing and resuming.
-    Timer {
-        id: clickTimer
-        interval: 250
-        repeat: false
-        onTriggered: {
-            if (root.player) root.player.togglePlay()
-        }
-    }
-
     // Surface any state change (pause, buffering, error) by showing the chrome
     Connections {
         target: root.player
@@ -232,13 +221,15 @@ Rectangle {
 
         onPositionChanged: root.wakeControls()
 
+        // Pause/resume on the very first click, with no waiting to see whether a second
+        // click follows. A double click then undoes that toggle and goes fullscreen.
         onClicked: {
             root.wakeControls()
-            clickTimer.restart()
+            if (root.player) root.player.togglePlay()
         }
 
         onDoubleClicked: {
-            clickTimer.stop()
+            if (root.player) root.player.togglePlay()
             root.toggleFullscreenRequested()
         }
 
@@ -261,7 +252,7 @@ Rectangle {
         opacity: root.showCenterPlay ? 0.35 : 0.0
         visible: opacity > 0.0
 
-        Behavior on opacity { NumberAnimation { duration: 220 } }
+        Behavior on opacity { NumberAnimation { duration: 90 } }
     }
 
     // =========================================================================
@@ -376,8 +367,8 @@ Rectangle {
         visible: opacity > 0.0
         scale: root.showCenterPlay ? 1.0 : 0.8
 
-        Behavior on opacity { NumberAnimation { duration: 200 } }
-        Behavior on scale { NumberAnimation { duration: 220; easing.type: Easing.OutBack } }
+        Behavior on opacity { NumberAnimation { duration: 90 } }
+        Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
 
         Rectangle {
             anchors.fill: parent
