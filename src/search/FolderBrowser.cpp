@@ -2,6 +2,8 @@
 #include "../core/Logger.h"
 
 #include <QCollator>
+#include <QDir>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -453,6 +455,13 @@ void FolderBrowser::findNext(const QString &currentFileUrl) {
     clearNext();
     const quint64 token = m_nextToken;
 
+    // Downloaded (offline) files: look beside the file on disk, no network involved
+    const QUrl asUrl(currentFileUrl, QUrl::TolerantMode);
+    if (asUrl.isLocalFile()) {
+        findNextLocal(asUrl.toLocalFile());
+        return;
+    }
+
     QString origin, fileHref;
     if (!splitUrl(currentFileUrl, origin, fileHref)) return;
 
@@ -488,6 +497,41 @@ void FolderBrowser::findNext(const QString &currentFileUrl) {
         emit self->nextChanged();
         FLUX_LOG_INFO("Browser", QString("Next episode resolved: %1").arg(next.displayName));
     });
+}
+
+// ----------------------------------------------------------------------------
+// Next episode (files already on disk)
+// ----------------------------------------------------------------------------
+
+void FolderBrowser::findNextLocal(const QString &filePath) {
+    const QFileInfo cur(filePath);
+    if (!cur.exists()) return;
+
+    QFileInfoList files = cur.dir().entryInfoList(QDir::Files | QDir::Readable, QDir::NoSort);
+    files.erase(std::remove_if(files.begin(), files.end(),
+                               [](const QFileInfo &f) { return !isVideoExtension(f.suffix()); }),
+                files.end());
+
+    QCollator collator;
+    collator.setNumericMode(true);
+    collator.setCaseSensitivity(Qt::CaseInsensitive);
+    std::sort(files.begin(), files.end(), [&collator](const QFileInfo &a, const QFileInfo &b) {
+        return collator.compare(a.fileName(), b.fileName()) < 0;
+    });
+
+    int idx = -1;
+    for (int i = 0; i < files.size(); ++i) {
+        if (files.at(i).fileName().compare(cur.fileName(), Qt::CaseInsensitive) == 0) { idx = i; break; }
+    }
+    if (idx < 0 || idx + 1 >= files.size()) return;
+
+    const QFileInfo &next = files.at(idx + 1);
+    if (!looksLikeSameSeries(cur.fileName(), next.fileName())) return;
+
+    m_nextUrl = QString::fromLatin1(QUrl::fromLocalFile(next.absoluteFilePath()).toEncoded());
+    m_nextName = next.fileName();
+    emit nextChanged();
+    FLUX_LOG_INFO("Browser", QString("Next offline episode resolved: %1").arg(next.fileName()));
 }
 
 // ----------------------------------------------------------------------------

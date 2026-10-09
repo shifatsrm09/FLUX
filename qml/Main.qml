@@ -390,6 +390,12 @@ ApplicationWindow {
 
     DownloadsPanel {
         id: downloadsPanel
+
+        // Offline library: play a downloaded file straight from disk
+        onPlayRequested: function(url, title) {
+            downloadsPanel.close()
+            window.playMedia(url, title)
+        }
     }
 
     // Unobtrusive Developer Slide-Out Drawer

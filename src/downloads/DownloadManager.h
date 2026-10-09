@@ -36,6 +36,8 @@ class DownloadManager : public QAbstractListModel {
     Q_PROPERTY(int activeCount READ activeCount NOTIFY summaryChanged)
     Q_PROPERTY(int count READ count NOTIFY summaryChanged)
     Q_PROPERTY(bool hasFinished READ hasFinished NOTIFY summaryChanged)
+    // Bumps whenever the set of downloaded files may have changed (offline library refresh)
+    Q_PROPERTY(int offlineRevision READ offlineRevision NOTIFY offlineChanged)
 
 public:
     enum Roles {
@@ -66,6 +68,7 @@ public:
     int activeCount() const { return m_activeCount; }
     int count() const { return static_cast<int>(m_jobs.size()); }
     bool hasFinished() const { return m_hasFinished; }
+    int offlineRevision() const { return m_offlineRevision; }
 
     // ---- Location ----
     Q_INVOKABLE bool changeLocation(const QString &path);
@@ -76,6 +79,13 @@ public:
     Q_INVOKABLE QVariantList listDirs(const QString &path) const;   // empty path = drives
     Q_INVOKABLE QString parentDir(const QString &path) const;       // "" = go to drives list
     Q_INVOKABLE QString makeDir(const QString &parent, const QString &name) const;
+
+    // ---- Offline library (everything already downloaded, playable without a network) ----
+    // relPath is relative to the download location: "" lists the two top folders, "Series",
+    // "Series/Show/Season 1" and so on list their contents. Each entry is a map with
+    // name, kind ("folder"|"video"), rel, path, detail, and for videos url + sizeBytes.
+    Q_INVOKABLE QVariantList offlineList(const QString &relPath) const;
+    Q_INVOKABLE void openPath(const QString &path);   // folder, or the folder holding a file
 
     // ---- Downloads ----
     // Both return the job id (0 if nothing was started). Re-requesting something that is
@@ -92,6 +102,7 @@ public:
 signals:
     void locationChanged();
     void summaryChanged();
+    void offlineChanged();
     void locationError(const QString &message);
 
 private:
@@ -179,6 +190,7 @@ private:
     QString m_root;            // forward slashes, no trailing slash
     int m_nextId = 0;
     int m_activeCount = 0;
+    int m_offlineRevision = 0;
     bool m_hasFinished = false;
     bool m_pumping = false;
     bool m_pumpAgain = false;

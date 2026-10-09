@@ -6,10 +6,12 @@
 #include <QCollator>
 #include <QDesktopServices>
 #include <QDir>
+#include <QDirIterator>
 #include <QFileInfo>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRegularExpression>
+#include <QSet>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QTimer>
@@ -91,6 +93,31 @@ QString formatSpeed(double bytesPerSec) {
 
 QString native(const QString &path) {
     return QDir::toNativeSeparators(path);
+}
+
+bool isVideoSuffix(const QString &suffix) {
+    static const QSet<QString> kVideo = {
+        "MKV", "MP4", "AVI", "MOV", "WMV", "M4V", "TS", "M2TS", "WEBM", "FLV", "MPG", "MPEG"
+    };
+    return kVideo.contains(suffix.toUpper());
+}
+
+constexpr int kCountCap = 5000;
+
+// Video files below a folder (recursive, capped so a huge tree can't stall the UI)
+int countVideos(const QString &dirPath) {
+    int n = 0;
+    QDirIterator it(dirPath, QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext() && n < kCountCap) {
+        it.next();
+        if (isVideoSuffix(it.fileInfo().suffix())) ++n;
+    }
+    return n;
+}
+
+QString videoCountText(int n) {
+    if (n >= kCountCap) return QStringLiteral("%1+ videos").arg(kCountCap);
+    return n == 1 ? QStringLiteral("1 video") : QStringLiteral("%1 videos").arg(n);
 }
 
 } // namespace
@@ -331,6 +358,8 @@ bool DownloadManager::changeLocation(const QString &path) {
     m_root = p;
     FLUX_LOG_INFO("Downloads", QString("Download location changed to: %1").arg(native(m_root)));
     emit locationChanged();
+    ++m_offlineRevision;
+    emit offlineChanged();
     return true;
 }
 
@@ -405,6 +434,88 @@ QString DownloadManager::makeDir(const QString &parent, const QString &name) con
     if (base.isEmpty() || name.trimmed().isEmpty()) return QString();
     const QString full = QDir::cleanPath(base + QLatin1Char('/') + clean);
     return QDir().mkpath(full) ? native(full) : QString();
+}
+
+// ----------------------------------------------------------------------------
+// Offline library
+// ----------------------------------------------------------------------------
+
+QVariantList DownloadManager::offlineList(const QString &relPath) const {
+    QVariantList out;
+
+    QString rel = QDir::fromNativeSeparators(relPath.trimmed());
+    while (rel.startsWith('/')) rel.remove(0, 1);
+    while (rel.endsWith('/')) rel.chop(1);
+    if (rel.split('/', Qt::SkipEmptyParts).contains(QStringLiteral(".."))) return out;
+
+    // Top level: the two download folders
+    if (rel.isEmpty()) {
+        const QStringList tops{QStringLiteral("Series"), QStringLiteral("Individuals")};
+        for (const QString &name : tops) {
+            const QString abs = m_root + QLatin1Char('/') + name;
+            const int n = countVideos(abs);
+            QVariantMap m;
+            m["name"] = name;
+            m["kind"] = QStringLiteral("folder");
+            m["rel"] = name;
+            m["path"] = native(abs);
+            m["count"] = n;
+            m["detail"] = videoCountText(n);
+            out.append(m);
+        }
+        return out;
+    }
+
+    const QDir dir(QDir::cleanPath(m_root + QLatin1Char('/') + rel));
+    if (!dir.exists()) return out;
+    // Never list outside the download location
+    if (!dir.canonicalPath().startsWith(QDir(m_root).canonicalPath(), Qt::CaseInsensitive)) return out;
+
+    QCollator collator;
+    collator.setNumericMode(true);
+    collator.setCaseSensitivity(Qt::CaseInsensitive);
+    auto byName = [&collator](const QFileInfo &a, const QFileInfo &b) {
+        return collator.compare(a.fileName(), b.fileName()) < 0;
+    };
+
+    QFileInfoList dirs = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::NoSort);
+    std::sort(dirs.begin(), dirs.end(), byName);
+    for (const QFileInfo &fi : dirs) {
+        const int n = countVideos(fi.absoluteFilePath());
+        if (n == 0) continue;   // empty / non-video folders aren't worth showing
+        QVariantMap m;
+        m["name"] = fi.fileName();
+        m["kind"] = QStringLiteral("folder");
+        m["rel"] = rel + QLatin1Char('/') + fi.fileName();
+        m["path"] = native(fi.absoluteFilePath());
+        m["count"] = n;
+        m["detail"] = videoCountText(n);
+        out.append(m);
+    }
+
+    QFileInfoList files = dir.entryInfoList(QDir::Files, QDir::NoSort);
+    files.erase(std::remove_if(files.begin(), files.end(),
+                               [](const QFileInfo &f) { return !isVideoSuffix(f.suffix()); }),
+                files.end());
+    std::sort(files.begin(), files.end(), byName);
+    for (const QFileInfo &fi : files) {
+        QVariantMap m;
+        m["name"] = fi.fileName();
+        m["kind"] = QStringLiteral("video");
+        m["rel"] = rel + QLatin1Char('/') + fi.fileName();
+        m["path"] = native(fi.absoluteFilePath());
+        m["url"] = QString::fromLatin1(QUrl::fromLocalFile(fi.absoluteFilePath()).toEncoded());
+        m["sizeBytes"] = fi.size();
+        m["detail"] = SearchResult::formatBytes(fi.size());
+        out.append(m);
+    }
+    return out;
+}
+
+void DownloadManager::openPath(const QString &path) {
+    const QFileInfo fi(QDir::fromNativeSeparators(path));
+    if (!fi.exists()) return;
+    QDesktopServices::openUrl(QUrl::fromLocalFile(fi.isDir() ? fi.absoluteFilePath() : fi.absolutePath()));
 }
 
 // ============================================================================
@@ -843,6 +954,8 @@ bool DownloadManager::finalizeItem(Job &job) {
     job.curTotal = 0;
     job.attempts = 0;
     touch(job);
+    ++m_offlineRevision;
+    emit offlineChanged();
     return true;
 }
 

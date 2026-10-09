@@ -89,6 +89,7 @@ private:
 
     void load();
     void applyResult(bool ok, std::vector<SearchResult> items);
+    void findNextLocal(const QString &filePath);
     void requestListing(const QString &origin, const QString &href,
                         const QString &libraryName, const QString &group,
                         ListingCallback done);
