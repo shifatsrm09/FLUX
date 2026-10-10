@@ -6,7 +6,7 @@
 ; The self-updater downloads the release asset named  FLUX-<version>-Setup.exe
 ; and runs it silently:  FLUX-<version>-Setup.exe /S /D=<install dir>
 !ifndef VERSION
-  !define VERSION "0.0.5"
+  !define VERSION "1.0.0"
 !endif
 
 ; General

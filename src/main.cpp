@@ -7,6 +7,8 @@
 #include <QUrl>
 #include <QList>
 #include <QString>
+#include <QIcon>
+#include <QFile>
 #include "app/Application.h"
 #include "core/Logger.h"
 #include "core/Version.h"
@@ -20,6 +22,13 @@ int main(int argc, char *argv[]) {
     QGuiApplication::setApplicationVersion(QString::fromLatin1(FLUX_VERSION));
 
     QGuiApplication app(argc, argv);
+
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString icoPath = QDir(appDir).filePath(QStringLiteral("resources/flux.ico"));
+    if (QFile::exists(icoPath)) {
+        app.setWindowIcon(QIcon(icoPath));
+    }
+
     QQuickStyle::setStyle("Basic");
 
     // Install Qt message handler to route Qt warnings/errors to our release log file
