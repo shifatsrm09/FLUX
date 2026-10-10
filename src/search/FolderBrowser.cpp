@@ -135,11 +135,93 @@ bool hasEpisodeMarker(const QString &name) {
     return re.match(name).hasMatch();
 }
 
-// Two files "belong together" if both look like episodes, or differ only by a short
-// trailing part (e.g. "Show - 05.mkv" / "Show - 06.mkv"). This stops autoplay from
-// jumping between unrelated movies that merely share a folder.
+// Two files "belong together" if both look like episodes, or differ only by numbers ("Show - 05.mkv"
+// / "Show - 06.mkv"), or by a short trailing part. This stops autoplay from jumping between
+// unrelated movies that merely share a folder.
+QStringList digitRuns(const QString &s) {
+    QStringList runs;
+    QString cur;
+    for (const QChar c : s) {
+        if (c.isDigit()) {
+            cur.append(c);
+        } else if (!cur.isEmpty()) {
+            runs.append(cur);
+            cur.clear();
+        }
+    }
+    if (!cur.isEmpty()) runs.append(cur);
+    return runs;
+}
+
+bool isYearLike(const QString &run) {
+    return run.size() == 4 && (run.startsWith(QLatin1String("19")) || run.startsWith(QLatin1String("20")));
+}
+
+QString stripExtension(QString s) {
+    const int dot = s.lastIndexOf('.');
+    if (dot > 0 && s.size() - dot <= 5) s.truncate(dot);
+    return s;
+}
+
+// "Show - 05 [1080p].mkv" -> "show - # [#p]"
+QString digitMask(const QString &s) {
+    QString out;
+    bool inDigits = false;
+    for (const QChar c : stripExtension(s).toLower()) {
+        if (c.isDigit()) {
+            if (!inDigits) out.append('#');
+            inDigits = true;
+        } else {
+            out.append(c);
+            inDigits = false;
+        }
+    }
+    return out;
+}
+
+// The whole number touching position `pos` (empty when there is none)
+QString digitRunAround(const QString &s, int pos) {
+    int l = pos;
+    int r = pos;
+    while (l > 0 && s[l - 1].isDigit()) --l;
+    while (r < s.size() && s[r].isDigit()) ++r;
+    return s.mid(l, r - l);
+}
+
+// "S01E02" / "E5" (empty when the name has no episode number)
+QString episodeKey(const QString &name) {
+    static const QRegularExpression se(QStringLiteral("S(\\d{1,2})[\\s._\\-]*E(\\d{1,3})"),
+                                       QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression ep(
+        QStringLiteral("(?:^|[\\s._\\-\\[\\(])(?:E|EP\\.?\\s?|Episode[\\s._\\-]*)(\\d{1,3})(?:$|[\\s._\\-\\]\\)])"),
+        QRegularExpression::CaseInsensitiveOption);
+
+    QRegularExpressionMatch m = se.match(name);
+    if (m.hasMatch()) {
+        return QStringLiteral("S%1E%2").arg(m.captured(1).toInt()).arg(m.captured(2).toInt());
+    }
+    m = ep.match(name);
+    if (m.hasMatch()) return QStringLiteral("E%1").arg(m.captured(1).toInt());
+    return QString();
+}
+
 bool looksLikeSameSeries(const QString &a, const QString &b) {
     if (hasEpisodeMarker(a) && hasEpisodeMarker(b)) return true;
+
+    // Identical apart from numbers. Two different movies that differ only by release year
+    // ("Movie (2012)" / "Movie (2015)") are not a series.
+    if (digitMask(a) == digitMask(b)) {
+        const QStringList ra = digitRuns(stripExtension(a));
+        const QStringList rb = digitRuns(stripExtension(b));
+        bool anyDifference = false;
+        bool onlyYears = true;
+        for (int i = 0; i < ra.size() && i < rb.size(); ++i) {
+            if (ra.at(i) == rb.at(i)) continue;
+            anyDifference = true;
+            if (!(isYearLike(ra.at(i)) && isYearLike(rb.at(i)))) onlyYears = false;
+        }
+        return anyDifference && !onlyYears;
+    }
 
     const QString la = a.toLower();
     const QString lb = b.toLower();
@@ -147,9 +229,31 @@ bool looksLikeSameSeries(const QString &a, const QString &b) {
     int cp = 0;
     while (cp < minLen && la[cp] == lb[cp]) ++cp;
 
-    return minLen > 0
-           && cp >= std::max(6, static_cast<int>(minLen * 0.75))
-           && (la.size() - cp) <= 8 && (lb.size() - cp) <= 8;
+    if (minLen > 0
+        && cp >= std::max(6, static_cast<int>(minLen * 0.75))
+        && (la.size() - cp) <= 8 && (lb.size() - cp) <= 8) {
+        return true;
+    }
+
+    // The names first differ inside a number ("... - 05 [1080p][ABCD]" vs "... - 06 [1080p][EF01]")
+    if (cp >= 5 && cp < minLen) {
+        const QString ra = digitRunAround(la, cp);
+        const QString rb = digitRunAround(lb, cp);
+        if (!ra.isEmpty() && !rb.isEmpty() && !(isYearLike(ra) && isYearLike(rb))) return true;
+    }
+    return false;
+}
+
+// Index of the episode that follows names[idx], or -1. Skips other copies of the same
+// episode (e.g. the 720p and 1080p files of S01E01 sitting side by side).
+int pickNextIndex(const QStringList &names, int idx) {
+    const QString &cur = names.at(idx);
+    const QString curKey = episodeKey(cur);
+    for (int j = idx + 1; j < names.size(); ++j) {
+        if (!curKey.isEmpty() && episodeKey(names.at(j)) == curKey) continue;
+        return looksLikeSameSeries(cur, names.at(j)) ? j : -1;
+    }
+    return -1;
 }
 
 } // namespace
@@ -477,8 +581,12 @@ void FolderBrowser::findNext(const QString &currentFileUrl) {
         if (!self || !ok || token != self->m_nextToken) return;
 
         std::vector<const SearchResult *> files;
+        QStringList names;
         for (const SearchResult &r : items) {
-            if (!r.isFolder) files.push_back(&r);
+            if (!r.isFolder) {
+                files.push_back(&r);
+                names.append(r.displayName);
+            }
         }
 
         int idx = -1;
@@ -486,12 +594,25 @@ void FolderBrowser::findNext(const QString &currentFileUrl) {
             const QString key = QUrl::fromPercentEncoding(files[i]->rawHref.toUtf8()).toLower();
             if (key == currentKey) { idx = static_cast<int>(i); break; }
         }
-        if (idx < 0 || static_cast<size_t>(idx) + 1 >= files.size()) return;
+        if (idx < 0) {
+            FLUX_LOG_INFO("Browser", QString("Next episode: current file not found in its folder listing (%1 files)")
+                          .arg(files.size()));
+            return;
+        }
 
-        const SearchResult &cur = *files[static_cast<size_t>(idx)];
-        const SearchResult &next = *files[static_cast<size_t>(idx) + 1];
-        if (!looksLikeSameSeries(cur.displayName, next.displayName)) return;
+        const int nextIdx = pickNextIndex(names, idx);
+        if (nextIdx < 0) {
+            if (static_cast<size_t>(idx) + 1 >= files.size()) {
+                FLUX_LOG_INFO("Browser", QString("Next episode: '%1' is the last video in its folder")
+                              .arg(names.at(idx)));
+            } else {
+                FLUX_LOG_INFO("Browser", QString("Next episode: '%1' does not look like part of the same series as '%2'")
+                              .arg(names.at(idx + 1), names.at(idx)));
+            }
+            return;
+        }
 
+        const SearchResult &next = *files[static_cast<size_t>(nextIdx)];
         self->m_nextUrl = next.playUrl;
         self->m_nextName = next.displayName;
         emit self->nextChanged();
@@ -520,14 +641,20 @@ void FolderBrowser::findNextLocal(const QString &filePath) {
     });
 
     int idx = -1;
+    QStringList names;
     for (int i = 0; i < files.size(); ++i) {
-        if (files.at(i).fileName().compare(cur.fileName(), Qt::CaseInsensitive) == 0) { idx = i; break; }
+        names.append(files.at(i).fileName());
+        if (idx < 0 && files.at(i).fileName().compare(cur.fileName(), Qt::CaseInsensitive) == 0) idx = i;
     }
-    if (idx < 0 || idx + 1 >= files.size()) return;
+    if (idx < 0) return;
 
-    const QFileInfo &next = files.at(idx + 1);
-    if (!looksLikeSameSeries(cur.fileName(), next.fileName())) return;
+    const int nextIdx = pickNextIndex(names, idx);
+    if (nextIdx < 0) {
+        FLUX_LOG_INFO("Browser", QString("Next offline episode: none after '%1'").arg(cur.fileName()));
+        return;
+    }
 
+    const QFileInfo &next = files.at(nextIdx);
     m_nextUrl = QString::fromLatin1(QUrl::fromLocalFile(next.absoluteFilePath()).toEncoded());
     m_nextName = next.fileName();
     emit nextChanged();

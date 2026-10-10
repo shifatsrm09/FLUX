@@ -132,31 +132,6 @@ Item {
                 text: "Return to Home Page"
             }
         }
-
-        // Home link
-        Item {
-            implicitWidth: homeText.implicitWidth
-            implicitHeight: 32
-
-            Text {
-                id: homeText
-                anchors.centerIn: parent
-                text: "Home"
-                color: homeMouse.containsMouse ? Theme.text : Theme.textDim
-                font.pixelSize: 14
-                font.weight: Font.Medium
-
-                Behavior on color { ColorAnimation { duration: 120 } }
-            }
-
-            MouseArea {
-                id: homeMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.homeClicked()
-            }
-        }
     }
 
     // ---- Right: now playing, dev tools, window controls -----------------------------

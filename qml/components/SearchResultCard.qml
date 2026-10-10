@@ -174,15 +174,6 @@ Item {
             anchors.bottomMargin: root.progress > 0 ? 16 : 12
             spacing: 3
 
-            // Brand accent rule
-            Rectangle {
-                implicitWidth: 18
-                implicitHeight: 2
-                radius: 1
-                color: root.isPlaying ? "#FFFFFF" : Theme.accent
-                Layout.bottomMargin: 2
-            }
-
             Text {
                 Layout.fillWidth: true
                 visible: root.libraryName.length > 0
