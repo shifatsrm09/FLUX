@@ -2,7 +2,7 @@ Add-Type -AssemblyName System.Drawing
 
 function Create-FluxIcon {
     param(
-        [string]$SourceImage = "resources/v1-icon.png",
+        [string]$SourceImage = "resources/v2.png",
         [string]$OutPath = "resources/flux.ico"
     )
 
@@ -70,4 +70,4 @@ function Create-FluxIcon {
     Write-Host "Created ICO at: $OutPath with $($sizes.Count) resolutions from $SourceImage."
 }
 
-Create-FluxIcon -SourceImage "resources/v1-icon.png" -OutPath "resources/flux.ico"
+Create-FluxIcon -SourceImage "resources/v2.png" -OutPath "resources/flux.ico"
