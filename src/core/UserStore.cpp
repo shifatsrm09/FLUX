@@ -162,6 +162,39 @@ void UserStore::noteStart(const QString &url, const QString &title) {
     emit historyChanged();
 }
 
+void UserStore::notePartyMedia(const QString &url, const QString &title, qint64 positionMs, qint64 durationMs) {
+    const QString key = keyFor(url);
+    if (key.isEmpty()) return;
+
+    m_partyKey = key;
+
+    HistoryEntry &e = m_history[key];
+    e.url = url;
+    e.title = nameFromUrl(url);
+    if (e.title.isEmpty()) e.title = title;
+    e.positionMs = std::max<qint64>(1000, positionMs);
+    if (durationMs > 0) {
+        e.durationMs = durationMs;
+    } else if (e.durationMs <= 0) {
+        e.durationMs = std::max<qint64>(e.positionMs * 2, 3600000);
+    }
+    e.lastPlayed = QDateTime::currentMSecsSinceEpoch();
+    e.watched = false;
+
+    m_dirty = true;
+    scheduleSave();
+
+    ++m_revision;
+    emit historyChanged();
+}
+
+void UserStore::clearPartyMedia() {
+    if (m_partyKey.isEmpty()) return;
+    m_partyKey.clear();
+    ++m_revision;
+    emit historyChanged();
+}
+
 // ----------------------------------------------------------------------------
 // Queries
 // ----------------------------------------------------------------------------
@@ -197,13 +230,21 @@ QVariantList UserStore::continueWatching() const {
     std::vector<const HistoryEntry *> items;
     for (auto it = m_history.constBegin(); it != m_history.constEnd(); ++it) {
         const HistoryEntry &e = it.value();
-        if (e.watched || e.durationMs <= 0) continue;
-        if (e.positionMs < kMinResumeMs) continue;
-        if (e.positionMs >= static_cast<qint64>(static_cast<double>(e.durationMs) * kWatchedFraction)) continue;
+        const bool isParty = (!m_partyKey.isEmpty() && it.key() == m_partyKey);
+        if (!isParty) {
+            if (e.watched || e.durationMs <= 0) continue;
+            if (e.positionMs < kMinResumeMs) continue;
+            if (e.positionMs >= static_cast<qint64>(static_cast<double>(e.durationMs) * kWatchedFraction)) continue;
+        }
         items.push_back(&e);
     }
 
-    std::sort(items.begin(), items.end(), [](const HistoryEntry *a, const HistoryEntry *b) {
+    std::sort(items.begin(), items.end(), [this](const HistoryEntry *a, const HistoryEntry *b) {
+        if (!m_partyKey.isEmpty()) {
+            const bool aParty = (keyFor(a->url) == m_partyKey);
+            const bool bParty = (keyFor(b->url) == m_partyKey);
+            if (aParty != bParty) return aParty;
+        }
         return a->lastPlayed > b->lastPlayed;
     });
 
@@ -215,7 +256,9 @@ QVariantList UserStore::continueWatching() const {
         m["title"] = e->title;
         m["positionMs"] = e->positionMs;
         m["durationMs"] = e->durationMs;
-        m["fraction"] = static_cast<double>(e->positionMs) / static_cast<double>(e->durationMs);
+        m["fraction"] = e->durationMs > 0
+                        ? (static_cast<double>(e->positionMs) / static_cast<double>(e->durationMs))
+                        : 0.0;
         m["lastPlayed"] = e->lastPlayed;
         list.append(m);
     }

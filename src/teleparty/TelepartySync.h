@@ -30,12 +30,19 @@ class TelepartySync : public QObject {
 
     // Set by the UI: true while the player page is on screen
     Q_PROPERTY(bool watching READ watching WRITE setWatching NOTIFY watchingChanged)
+    Q_PROPERTY(QString currentUrl READ currentUrl NOTIFY currentMediaChanged)
+    Q_PROPERTY(QString currentTitle READ currentTitle NOTIFY currentMediaChanged)
+    Q_PROPERTY(bool hasPartyMedia READ hasPartyMedia NOTIFY currentMediaChanged)
 
 public:
     TelepartySync(TelepartySession *session, VLCPlayer *player, QObject *parent = nullptr);
 
     bool watching() const { return m_watching; }
     void setWatching(bool watching);
+
+    QString currentUrl() const { return m_currentUrl; }
+    QString currentTitle() const { return m_currentTitle; }
+    bool hasPartyMedia() const { return !m_currentUrl.isEmpty(); }
 
     // True for http(s) URLs: the only kind of media that can be watched together
     Q_INVOKABLE bool isStreamUrl(const QString &url) const;
@@ -47,11 +54,19 @@ public:
     // shared video (nothing is sent; newcomers learn about it through "state")
     Q_INVOKABLE void adoptCurrent(const QString &url, const QString &title);
 
+    // Open or catch up to the party's currently playing video at the party's live timestamp
+    // (without broadcasting "open" or resetting other members)
+    Q_INVOKABLE void joinPartyPlayback();
+
 signals:
     void watchingChanged();
+    void currentMediaChanged();
 
     // Another member opened (or you are catching up with) a video: open it in the UI
     void remoteOpenRequested(const QString &url, const QString &title, qint64 startMs);
+
+    // Fired when we learn what the party is currently watching (for Continue Watching / Now Playing)
+    void partyMediaAvailable(const QString &url, const QString &title, qint64 positionMs, qint64 durationMs);
 
     // Short description of what another member just did, for an on-screen notice
     void activity(const QString &text);
@@ -75,6 +90,7 @@ private:
     void noteOpen(const QString &url, const QString &title);
     void resetParty();
     bool playerRunning() const;
+    qint64 partyTimeMs() const;
     static QString formatTime(qint64 ms);
 
     TelepartySession *m_session = nullptr;
@@ -85,6 +101,12 @@ private:
     // The video the whole party is on (empty = none yet)
     QString m_currentUrl;
     QString m_currentTitle;
+
+    // Live party playback tracking (so a late joiner knows the party's current position)
+    qint64 m_partyTimeMs = 0;
+    qint64 m_partyDurationMs = 0;
+    bool m_partyPlaying = true;
+    QElapsedTimer m_partyClock;
 
     // Two members can open the same next episode at the same moment (autoplay); the second
     // "open" for the same URL within a few seconds is ignored

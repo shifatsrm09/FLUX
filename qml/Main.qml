@@ -115,9 +115,27 @@ ApplicationWindow {
         }
     }
 
+    function sameMediaUrl(a, b) {
+        if (!a || !b) return false
+        if (a === b) return true
+        try {
+            return decodeURIComponent(a) === decodeURIComponent(b)
+        } catch (e) {
+            return false
+        }
+    }
+
     function playMedia(url, title) {
         // Offline playback is disabled while in a Teleparty session
         if (window.inTeleparty && fluxSync && !fluxSync.isStreamUrl(url)) {
+            return
+        }
+
+        // Clicking the video the party is already watching (e.g. from Continue Watching
+        // after joining late) joins at the party's live timestamp instead of restarting from 0
+        if (window.inTeleparty && fluxSync && fluxSync.hasPartyMedia
+                && window.sameMediaUrl(fluxSync.currentUrl, url)) {
+            fluxSync.joinPartyPlayback()
             return
         }
 
@@ -166,7 +184,11 @@ ApplicationWindow {
         playerView.offerResume(0)
 
         if (fluxPlayer) {
-            if (startMs > 0) {
+            if (window.sameMediaUrl(fluxPlayer.url, url)
+                    && (fluxPlayer.state === "Paused" || fluxPlayer.state === "Playing")) {
+                if (startMs > 0) fluxPlayer.remoteSeekTo(startMs)
+                if (fluxPlayer.isPaused) fluxPlayer.remoteResume()
+            } else if (startMs > 0) {
                 fluxPlayer.playFrom(url, startMs)
             } else {
                 fluxPlayer.play(url)
@@ -299,6 +321,12 @@ ApplicationWindow {
     Connections {
         target: fluxTeleparty
 
+        function onStateChanged() {
+            if (!fluxTeleparty.active && fluxUser) {
+                fluxUser.clearPartyMedia()
+            }
+        }
+
         function onJoinedSession() {
             // Offline playback is unavailable during a Teleparty: leave the Library page
             // and stop any offline file that might be loaded
@@ -307,8 +335,8 @@ ApplicationWindow {
 
             if (fluxPlayer && fluxPlayer.url.length > 0) {
                 if (fluxSync && fluxSync.isStreamUrl(fluxPlayer.url)) {
-                    // Host already watching a stream: make it the party's current video
-                    if (fluxTeleparty.isHost && window.currentPage === "player") {
+                    // Host already watching (or paused on) a stream: make it the party's current video
+                    if (fluxTeleparty.isHost && fluxPlayer.state !== "Idle" && fluxPlayer.state !== "Stopped") {
                         fluxSync.adoptCurrent(fluxPlayer.url, window.currentPlayingTitle)
                     }
                 } else {
@@ -324,6 +352,12 @@ ApplicationWindow {
 
         function onRemoteOpenRequested(url, title, startMs) {
             window.openFromParty(url, title, startMs)
+        }
+
+        function onPartyMediaAvailable(url, title, positionMs, durationMs) {
+            if (fluxUser) {
+                fluxUser.notePartyMedia(url, title, positionMs, durationMs)
+            }
         }
 
         function onActivity(text) {
@@ -458,11 +492,19 @@ ApplicationWindow {
             offlineLocked: window.inTeleparty
             showNowPlaying: !!fluxPlayer
                             && (fluxPlayer.isPlaying
-                                || (window.inTeleparty && fluxPlayer.url.length > 0
-                                    && fluxPlayer.state !== "Idle" && fluxPlayer.state !== "Stopped"))
+                                || (window.inTeleparty
+                                    && ((fluxPlayer.url.length > 0
+                                         && fluxPlayer.state !== "Idle" && fluxPlayer.state !== "Stopped")
+                                        || (fluxSync && fluxSync.hasPartyMedia))))
                             && currentPage !== "player"
 
             onNowPlayingClicked: {
+                if (window.inTeleparty && fluxSync && fluxSync.hasPartyMedia
+                        && (!fluxPlayer || !window.sameMediaUrl(fluxPlayer.url, fluxSync.currentUrl)
+                            || fluxPlayer.state === "Idle" || fluxPlayer.state === "Stopped")) {
+                    fluxSync.joinPartyPlayback()
+                    return
+                }
                 currentPage = "player"
                 if (fluxPlayer && fluxPlayer.isPaused) fluxPlayer.resume()
             }

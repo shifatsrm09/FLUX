@@ -54,8 +54,11 @@ TelepartySync::TelepartySync(TelepartySession *session, VLCPlayer *player, QObje
     });
     connect(m_session, &TelepartySession::joinedSession, this, [this]() {
         resetParty();
-        // A newcomer learns what the party is watching from the members' answers to its hello
-        if (!m_session->isHost()) armNeedState();
+        // A newcomer learns what the party is watching from the members' answers
+        if (!m_session->isHost()) {
+            armNeedState();
+            m_session->sendEvent(QStringLiteral("syncme"));
+        }
     });
 
     // Player -> session
@@ -107,6 +110,28 @@ void TelepartySync::adoptCurrent(const QString &url, const QString &title) {
     if (!m_session->active() || !isStreamUrl(url)) return;
     m_currentUrl = url;
     m_currentTitle = title.left(kMaxTitleLength);
+    m_partyTimeMs = m_player->timeMs();
+    m_partyDurationMs = m_player->durationMs();
+    m_partyPlaying = playerRunning();
+    m_partyClock.start();
+    emit currentMediaChanged();
+}
+
+void TelepartySync::joinPartyPlayback() {
+    if (!m_session->active() || m_currentUrl.isEmpty()) return;
+
+    const qint64 startMs = partyTimeMs();
+    m_pendingSync = true;
+    m_pendingTimeMs = startMs;
+    m_pendingPlaying = m_partyPlaying;
+    m_pendingClock.start();
+
+    armNeedState();
+    m_session->sendEvent(QStringLiteral("syncme"));
+
+    FLUX_LOG_INFO("Teleparty", QString("Joining party playback: %1 at %2")
+                                   .arg(m_currentTitle.isEmpty() ? m_currentUrl : m_currentTitle, formatTime(startMs)));
+    emit remoteOpenRequested(m_currentUrl, m_currentTitle, startMs);
 }
 
 // ============================================================================
@@ -114,18 +139,35 @@ void TelepartySync::adoptCurrent(const QString &url, const QString &title) {
 // ============================================================================
 
 void TelepartySync::onUserToggledPlay(bool playing, qint64 timeMs) {
-    if (!m_session->active() || m_currentUrl.isEmpty()) return;
+    if (!m_session->active()) return;
+    if (m_currentUrl.isEmpty() && isStreamUrl(m_player->url())) {
+        m_currentUrl = m_player->url();
+        emit currentMediaChanged();
+    }
+    if (m_currentUrl.isEmpty()) return;
+
+    m_partyTimeMs = qMax<qint64>(0, timeMs);
+    m_partyPlaying = playing;
+    m_partyClock.start();
 
     flushSeek();   // keep the order the user performed things in
     QVariantMap d;
-    d.insert(QStringLiteral("t"), qMax<qint64>(0, timeMs));
+    d.insert(QStringLiteral("t"), m_partyTimeMs);
     m_session->sendEvent(playing ? QStringLiteral("play") : QStringLiteral("pause"), d);
 }
 
 void TelepartySync::onUserSeeked(qint64 timeMs) {
-    if (!m_session->active() || m_currentUrl.isEmpty()) return;
+    if (!m_session->active()) return;
+    if (m_currentUrl.isEmpty() && isStreamUrl(m_player->url())) {
+        m_currentUrl = m_player->url();
+        emit currentMediaChanged();
+    }
+    if (m_currentUrl.isEmpty()) return;
 
-    m_pendingSeekMs = qMax<qint64>(0, timeMs);
+    m_partyTimeMs = qMax<qint64>(0, timeMs);
+    m_partyClock.start();
+
+    m_pendingSeekMs = m_partyTimeMs;
     m_hasPendingSeek = true;
     m_seekTimer.start();
 }
@@ -142,14 +184,22 @@ void TelepartySync::flushSeek() {
 }
 
 void TelepartySync::sendState() {
-    if (!m_session->active() || !m_watching || m_currentUrl.isEmpty()) return;
+    if (!m_session->active()) return;
+    if (m_currentUrl.isEmpty() && isStreamUrl(m_player->url())
+        && m_player->state() != QLatin1String("Idle") && m_player->state() != QLatin1String("Stopped")) {
+        m_currentUrl = m_player->url();
+        emit currentMediaChanged();
+    }
+    if (m_currentUrl.isEmpty()) return;
     if (m_needState || m_player->url() != m_currentUrl) return;   // not in a position to answer
-    if (m_player->state() == QLatin1String("Opening")) return;    // still opening stream
+    const QString st = m_player->state();
+    if (st == QLatin1String("Opening") || st == QLatin1String("Idle") || st == QLatin1String("Stopped")) return;
 
     QVariantMap d;
     d.insert(QStringLiteral("url"), m_currentUrl);
     d.insert(QStringLiteral("title"), m_currentTitle);
     d.insert(QStringLiteral("t"), m_player->timeMs());
+    d.insert(QStringLiteral("d"), m_player->durationMs());
     d.insert(QStringLiteral("playing"), playerRunning());
     m_session->sendEvent(QStringLiteral("state"), d);
 }
@@ -166,11 +216,20 @@ void TelepartySync::onEvent(const QString &type, const QVariantMap &data, const 
     } else if (type == QLatin1String("syncme")) {
         sendState();
     } else if (type == QLatin1String("play") || type == QLatin1String("pause") || type == QLatin1String("seek")) {
-        // Not on the player page (or nothing shared yet): nothing to keep in step. Coming
-        // back to the player triggers a catch-up instead.
-        if (!m_watching || m_currentUrl.isEmpty()) return;
-
         const qint64 t = cleanTime(data.value(QStringLiteral("t")));
+        m_partyTimeMs = t;
+        if (type == QLatin1String("play")) m_partyPlaying = true;
+        else if (type == QLatin1String("pause")) m_partyPlaying = false;
+        m_partyClock.start();
+
+        if (!m_currentUrl.isEmpty()) {
+            emit partyMediaAvailable(m_currentUrl, m_currentTitle, t, m_partyDurationMs);
+        }
+
+        // Not on the player page (or not loaded on the party video yet): keep tracking the
+        // party's timestamp so clicking Continue Watching / Now Playing starts right there.
+        if (!m_watching || m_currentUrl.isEmpty() || m_player->url() != m_currentUrl) return;
+
         if (type == QLatin1String("play")) {
             align(t, true, QStringLiteral("Resumed by a member"));
         } else if (type == QLatin1String("pause")) {
@@ -199,7 +258,7 @@ void TelepartySync::handleOpen(const QVariantMap &data) {
 }
 
 void TelepartySync::handleState(const QVariantMap &data) {
-    if (!m_needState) return;   // we did not ask (or already have an answer)
+    if (!m_needState && !m_currentUrl.isEmpty()) return;   // we did not ask (or already have an answer)
 
     const QString url = data.value(QStringLiteral("url")).toString();
     if (!isStreamUrl(url)) return;
@@ -209,27 +268,37 @@ void TelepartySync::handleState(const QVariantMap &data) {
 
     const QString title = data.value(QStringLiteral("title")).toString().left(kMaxTitleLength);
     const qint64 t = cleanTime(data.value(QStringLiteral("t")));
+    const qint64 dur = cleanTime(data.value(QStringLiteral("d")));
     const bool playing = data.value(QStringLiteral("playing"), true).toBool();
 
-    // Already on that video (came back to the player): just line up with the others
+    const bool changed = (m_currentUrl != url || m_currentTitle != title);
+    m_currentUrl = url;
+    m_currentTitle = title;
+    m_partyTimeMs = t;
+    if (dur > 0) m_partyDurationMs = dur;
+    m_partyPlaying = playing;
+    m_partyClock.start();
+
+    if (changed) emit currentMediaChanged();
+    emit partyMediaAvailable(url, title, t, m_partyDurationMs);
+
+    // Already on that video on the player page: line up with the others
     if (m_watching && url == m_player->url()) {
-        m_currentUrl = url;
-        m_currentTitle = title;
-        align(t, playing, QString());
+        if (m_player->state() == QLatin1String("Opening") || m_pendingSync) {
+            m_pendingSync = true;
+            m_pendingTimeMs = t;
+            m_pendingPlaying = playing;
+            m_pendingClock.start();
+        } else {
+            align(t, playing, QString());
+        }
         return;
     }
 
-    // Otherwise open it at the party's position. libVLC needs a moment to start, so the
-    // exact position is corrected once playback actually begins (see onPlayerStateChanged).
-    noteOpen(url, title);
-    m_pendingSync = true;
-    m_pendingTimeMs = t;
-    m_pendingPlaying = playing;
-    m_pendingClock.start();
-
-    FLUX_LOG_INFO("Teleparty", QString("Catching up with the party: %1 at %2")
+    // Late joiner on the Home / Search page: do NOT force-open or reset the party;
+    // the video is now placed first in Continue Watching and the Now Playing pill is active.
+    FLUX_LOG_INFO("Teleparty", QString("Party is watching: %1 at %2")
                                    .arg(title.isEmpty() ? url : title, formatTime(t)));
-    emit remoteOpenRequested(url, title, t);
 }
 
 void TelepartySync::align(qint64 timeMs, bool playing, const QString &note) {
@@ -295,6 +364,7 @@ void TelepartySync::onSessionStateChanged() {
         // We may have missed things while offline; our re-announcement makes the other
         // members send their state, which we are now ready to accept
         armNeedState();
+        m_session->sendEvent(QStringLiteral("syncme"));
     }
     m_prevSessionState = s;
 }
@@ -305,18 +375,29 @@ void TelepartySync::armNeedState() {
 }
 
 void TelepartySync::noteOpen(const QString &url, const QString &title) {
+    const bool changed = (m_currentUrl != url || m_currentTitle != title);
     m_currentUrl = url;
     m_currentTitle = title;
+    m_partyTimeMs = 0;
+    m_partyDurationMs = 0;
+    m_partyPlaying = true;
+    m_partyClock.start();
     m_lastOpenUrl = url;
     m_lastOpenAt = nowMs();
     m_pendingSync = false;
     m_syncOnPlay = false;
     m_announceOnPlay = false;
+    if (changed) emit currentMediaChanged();
 }
 
 void TelepartySync::resetParty() {
+    const bool hadMedia = !m_currentUrl.isEmpty();
     m_currentUrl.clear();
     m_currentTitle.clear();
+    m_partyTimeMs = 0;
+    m_partyDurationMs = 0;
+    m_partyPlaying = true;
+    m_partyClock.invalidate();
     m_lastOpenUrl.clear();
     m_lastOpenAt = 0;
     m_needState = false;
@@ -326,11 +407,19 @@ void TelepartySync::resetParty() {
     m_hasPendingSeek = false;
     m_stateTimer.stop();
     m_seekTimer.stop();
+    if (hadMedia) emit currentMediaChanged();
 }
 
 bool TelepartySync::playerRunning() const {
     const QString st = m_player->state();
     return st == QLatin1String("Playing") || st == QLatin1String("Opening") || st.startsWith(QLatin1String("Buffering"));
+}
+
+qint64 TelepartySync::partyTimeMs() const {
+    if (m_partyPlaying && m_partyClock.isValid()) {
+        return m_partyTimeMs + m_partyClock.elapsed();
+    }
+    return m_partyTimeMs;
 }
 
 QString TelepartySync::formatTime(qint64 ms) {

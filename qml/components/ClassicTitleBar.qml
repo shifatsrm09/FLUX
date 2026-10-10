@@ -235,10 +235,10 @@ Item {
 
             visible: root.showNowPlaying
             Layout.alignment: Qt.AlignVCenter
-            Layout.rightMargin: 12
-            implicitHeight: 30
-            implicitWidth: nowPlayingRow.implicitWidth + 28
-            radius: 15
+            Layout.rightMargin: 8
+            implicitHeight: 24
+            implicitWidth: nowPlayingRow.implicitWidth + 18
+            radius: 12
             color: nowPlayingMouse.containsMouse ? "#40E50914" : Theme.accentSoft
             border.width: 1
             border.color: Theme.accentRing
@@ -248,7 +248,7 @@ Item {
             RowLayout {
                 id: nowPlayingRow
                 anchors.centerIn: parent
-                spacing: 8
+                spacing: 6
 
                 Equalizer {
                     running: root.showNowPlaying && root.visible
@@ -258,8 +258,9 @@ Item {
                 Text {
                     text: "Now Playing"
                     color: Theme.text
-                    font.pixelSize: 12
+                    font.pixelSize: 11
                     font.weight: Font.DemiBold
+                    Layout.alignment: Qt.AlignVCenter
                 }
             }
 
