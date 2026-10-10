@@ -9,7 +9,7 @@
 
 ## Other Platforms
 
--#### Android app is planned
--### Linux is planned
--### IOS is challenging; Not sure
--### WEB app is planned
+### Android app is planned
+### Linux is planned
+### IOS is challenging; Not sure
+### WEB app is planned
