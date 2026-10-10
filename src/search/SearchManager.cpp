@@ -516,13 +516,13 @@ void SearchManager::onReplyFinished(QNetworkReply *reply, quint64 searchId, cons
 void SearchManager::finishSearch(quint64 searchId) {
     setSearching(false);
 
-    // Best matches first; then folders before files; then alphabetical
+    // Folders first (a show's folder before its loose episodes), then best matches, then alphabetical
     std::sort(m_accumulatedResults.begin(), m_accumulatedResults.end(), [](const SearchResult &a, const SearchResult &b) {
-        if (a.matchScore != b.matchScore) {
-            return a.matchScore > b.matchScore;
-        }
         if (a.isFolder != b.isFolder) {
             return a.isFolder > b.isFolder;
+        }
+        if (a.matchScore != b.matchScore) {
+            return a.matchScore > b.matchScore;
         }
         return a.displayName.compare(b.displayName, Qt::CaseInsensitive) < 0;
     });
