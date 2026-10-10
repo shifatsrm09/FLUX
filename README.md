@@ -5,11 +5,11 @@
 
 ## Currently Supports:
 
-### Windows 10 and 11
+-### Windows 10 and 11
 
 ## Other Platforms
 
-### Android app is planned
-### Linux is planned
-### IOS is challenging; Not sure
-### WEB app is planned
+-#### Android app is planned
+-### Linux is planned
+-### IOS is challenging; Not sure
+-### WEB app is planned
