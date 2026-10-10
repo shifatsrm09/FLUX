@@ -2,23 +2,25 @@
 #include "../core/Logger.h"
 
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRandomGenerator>
 #include <QRegularExpression>
+#include <QStandardPaths>
 #include <QUuid>
 
 namespace Flux {
 
 namespace {
 
-// Free public EMQX broker (TLS). Nothing of ours runs anywhere.
-const QString kBroker = QStringLiteral("broker.emqx.io");
-constexpr quint16 kBrokerPort = 8883;
-
+constexpr quint16 kDefaultBrokerPort = 8883;
 constexpr int kProtocolVersion = 1;
 constexpr int kMaxMessageBytes = 16 * 1024;
 constexpr int kHeartbeatMs = 10000;          // "presence" every 10 s
@@ -26,6 +28,180 @@ constexpr qint64 kMemberTimeoutMs = 32000;   // a member silent this long is dro
 constexpr int kHostDiscoverMs = 1800;        // hosting: wait this long for a clash with an existing room
 constexpr int kJoinDiscoverMs = 2500;        // joining: wait this long for someone to answer
 constexpr int kMaxHostAttempts = 5;
+
+struct BrokerConfig {
+    QString host;
+    quint16 port = kDefaultBrokerPort;
+    QString protocol = QStringLiteral("mqtts");
+    QString username;
+    QString password;
+    bool tlsEnabled = true;
+    bool tlsVerify = true;
+    QString sourcePath;
+    QString error;
+    bool isValid() const { return error.isEmpty(); }
+};
+
+QHash<QString, QString> parseDotEnvFile(const QString &filePath) {
+    QHash<QString, QString> map;
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return map;
+    }
+
+    while (!file.atEnd()) {
+        QString line = QString::fromUtf8(file.readLine()).trimmed();
+        if (line.isEmpty() || line.startsWith('#')) {
+            continue;
+        }
+        if (line.startsWith(QLatin1String("export "))) {
+            line = line.mid(7).trimmed();
+        }
+        const int eqPos = line.indexOf('=');
+        if (eqPos <= 0) {
+            continue;
+        }
+        const QString key = line.left(eqPos).trimmed();
+        QString val = line.mid(eqPos + 1).trimmed();
+        if (val.size() >= 2 &&
+            ((val.startsWith('"') && val.endsWith('"')) ||
+             (val.startsWith('\'') && val.endsWith('\'')))) {
+            val = val.mid(1, val.size() - 2);
+        }
+        if (!key.isEmpty()) {
+            map.insert(key, val);
+        }
+    }
+    return map;
+}
+
+bool parseBoolFlag(const QString &raw, bool defaultVal, bool *okOut = nullptr) {
+    const QString s = raw.trimmed().toLower();
+    if (s.isEmpty()) {
+        if (okOut) *okOut = true;
+        return defaultVal;
+    }
+    if (s == QLatin1String("true") || s == QLatin1String("1") || s == QLatin1String("yes")) {
+        if (okOut) *okOut = true;
+        return true;
+    }
+    if (s == QLatin1String("false") || s == QLatin1String("0") || s == QLatin1String("no")) {
+        if (okOut) *okOut = true;
+        return false;
+    }
+    if (okOut) *okOut = false;
+    return defaultVal;
+}
+
+BrokerConfig loadBrokerConfig() {
+    BrokerConfig cfg;
+
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QStringList candidates = {
+        QDir::current().filePath(QStringLiteral(".env")),
+        QDir(appDir).filePath(QStringLiteral(".env")),
+        QDir(appDir).filePath(QStringLiteral("../.env")),
+        QDir(appDir).filePath(QStringLiteral("../../.env")),
+        QDir(appDir).filePath(QStringLiteral("../../../.env")),
+        QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)).filePath(QStringLiteral(".env")),
+        QDir(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)).filePath(QStringLiteral(".env"))
+    };
+
+    QHash<QString, QString> fileVars;
+    for (const QString &candidate : candidates) {
+        const QFileInfo fi(candidate);
+        if (fi.exists() && fi.isFile()) {
+            cfg.sourcePath = fi.canonicalFilePath();
+            fileVars = parseDotEnvFile(cfg.sourcePath);
+            break;
+        }
+    }
+
+    auto getBuildDefault = [](const char *name) -> QString {
+#ifdef FLUX_ENV_MQTT_BROKER_HOST
+        if (qstrcmp(name, "MQTT_BROKER_HOST") == 0) return QStringLiteral(FLUX_ENV_MQTT_BROKER_HOST);
+#endif
+#ifdef FLUX_ENV_MQTT_BROKER_PORT
+        if (qstrcmp(name, "MQTT_BROKER_PORT") == 0) return QStringLiteral(FLUX_ENV_MQTT_BROKER_PORT);
+#endif
+#ifdef FLUX_ENV_MQTT_PROTOCOL
+        if (qstrcmp(name, "MQTT_PROTOCOL") == 0) return QStringLiteral(FLUX_ENV_MQTT_PROTOCOL);
+#endif
+#ifdef FLUX_ENV_MQTT_USERNAME
+        if (qstrcmp(name, "MQTT_USERNAME") == 0) return QStringLiteral(FLUX_ENV_MQTT_USERNAME);
+#endif
+#ifdef FLUX_ENV_MQTT_PASSWORD
+        if (qstrcmp(name, "MQTT_PASSWORD") == 0) return QStringLiteral(FLUX_ENV_MQTT_PASSWORD);
+#endif
+#ifdef FLUX_ENV_MQTT_TLS_ENABLED
+        if (qstrcmp(name, "MQTT_TLS_ENABLED") == 0) return QStringLiteral(FLUX_ENV_MQTT_TLS_ENABLED);
+#endif
+#ifdef FLUX_ENV_MQTT_TLS_VERIFY
+        if (qstrcmp(name, "MQTT_TLS_VERIFY") == 0) return QStringLiteral(FLUX_ENV_MQTT_TLS_VERIFY);
+#endif
+        Q_UNUSED(name);
+        return QString();
+    };
+
+    auto getVar = [&fileVars, &getBuildDefault](const char *name) -> QString {
+        const QString envVal = qEnvironmentVariable(name).trimmed();
+        if (!envVal.isEmpty()) {
+            return envVal;
+        }
+        const QString fileVal = fileVars.value(QString::fromLatin1(name)).trimmed();
+        if (!fileVal.isEmpty()) {
+            return fileVal;
+        }
+        return getBuildDefault(name).trimmed();
+    };
+
+    cfg.host = getVar("MQTT_BROKER_HOST");
+    const QString portStr = getVar("MQTT_BROKER_PORT");
+    if (!portStr.isEmpty()) {
+        bool portOk = false;
+        const uint p = portStr.toUInt(&portOk);
+        if (!portOk || p == 0 || p > 65535) {
+            cfg.error = QStringLiteral("Invalid MQTT_BROKER_PORT in Teleparty configuration.");
+            return cfg;
+        }
+        cfg.port = static_cast<quint16>(p);
+    }
+
+    const QString protoStr = getVar("MQTT_PROTOCOL").toLower();
+    if (!protoStr.isEmpty()) {
+        cfg.protocol = protoStr;
+    }
+    if (cfg.protocol != QLatin1String("mqtts") &&
+        cfg.protocol != QLatin1String("tls") &&
+        cfg.protocol != QLatin1String("ssl")) {
+        cfg.error = QStringLiteral("Unsupported MQTT_PROTOCOL '%1' (expected 'mqtts').").arg(cfg.protocol);
+        return cfg;
+    }
+
+    bool tlsEnabledOk = true;
+    cfg.tlsEnabled = parseBoolFlag(getVar("MQTT_TLS_ENABLED"), true, &tlsEnabledOk);
+    if (!tlsEnabledOk || !cfg.tlsEnabled) {
+        cfg.error = QStringLiteral("Teleparty requires MQTT_TLS_ENABLED=true.");
+        return cfg;
+    }
+
+    bool tlsVerifyOk = true;
+    cfg.tlsVerify = parseBoolFlag(getVar("MQTT_TLS_VERIFY"), true, &tlsVerifyOk);
+    if (!tlsVerifyOk || !cfg.tlsVerify) {
+        cfg.error = QStringLiteral("Teleparty requires MQTT_TLS_VERIFY=true.");
+        return cfg;
+    }
+
+    cfg.username = getVar("MQTT_USERNAME");
+    cfg.password = getVar("MQTT_PASSWORD");
+
+    if (cfg.host.isEmpty() || cfg.username.isEmpty() || cfg.password.isEmpty()) {
+        cfg.error = QStringLiteral("Teleparty is not configured. Missing MQTT broker credentials in .env.");
+        return cfg;
+    }
+
+    return cfg;
+}
 
 qint64 nowMs() {
     return QDateTime::currentMSecsSinceEpoch();
@@ -46,11 +222,30 @@ TelepartySession::TelepartySession(QObject *parent)
     connect(m_mqtt, &MqttClient::disconnected, this, &TelepartySession::onMqttDisconnected);
     connect(m_mqtt, &MqttClient::subscribed, this, &TelepartySession::onSubscribed);
     connect(m_mqtt, &MqttClient::messageReceived, this, &TelepartySession::onMessage);
-    connect(m_mqtt, &MqttClient::connectionFailed, this, [this](const QString &) {
-        if (m_state == State::Connecting) {
-            fail(QStringLiteral("Couldn't reach the Teleparty service. Check your internet connection."));
+    connect(m_mqtt, &MqttClient::connectionFailed, this, [this](const QString &reason) {
+        if (m_state == State::Connecting || m_state == State::Reconnecting) {
+            if (reason.contains(QLatin1String("Authentication failed"), Qt::CaseInsensitive) ||
+                reason.contains(QLatin1String("not authorized"), Qt::CaseInsensitive)) {
+                fail(QStringLiteral("Teleparty authentication failed. Check your MQTT credentials."));
+            } else if (reason.contains(QLatin1String("timed out"), Qt::CaseInsensitive)) {
+                fail(QStringLiteral("Connection to Teleparty broker timed out."));
+            } else {
+                fail(QStringLiteral("Couldn't reach the Teleparty service. Check your internet connection."));
+            }
         }
     });
+
+    const BrokerConfig cfg = loadBrokerConfig();
+    if (cfg.isValid()) {
+        FLUX_LOG_INFO("Teleparty",
+                      QString("Configured MQTT broker %1:%2 (protocol=%3, tls=true, verify=true, user=%4, source=%5)")
+                          .arg(cfg.host)
+                          .arg(cfg.port)
+                          .arg(cfg.protocol, cfg.username,
+                               cfg.sourcePath.isEmpty() ? QStringLiteral("environment") : cfg.sourcePath));
+    } else {
+        FLUX_LOG_WARN("Teleparty", cfg.error);
+    }
 }
 
 TelepartySession::~TelepartySession() {
@@ -152,6 +347,12 @@ void TelepartySession::leave() {
 }
 
 void TelepartySession::startSession() {
+    const BrokerConfig cfg = loadBrokerConfig();
+    if (!cfg.isValid()) {
+        fail(cfg.error);
+        return;
+    }
+
     m_memberId = QUuid::createUuid().toString(QUuid::WithoutBraces).remove('-').left(10);
     m_topic = roomTopic(m_code);
     m_members.clear();
@@ -163,12 +364,18 @@ void TelepartySession::startSession() {
     emit codeChanged();
     emit membersChanged();
 
-    FLUX_LOG_INFO("Teleparty", QString("%1 session %2").arg(m_isHost ? "Hosting" : "Joining", m_code));
+    FLUX_LOG_INFO("Teleparty",
+                  QString("%1 session %2 via %3:%4 (%5)")
+                      .arg(m_isHost ? "Hosting" : "Joining", m_code, cfg.host)
+                      .arg(cfg.port)
+                      .arg(cfg.protocol));
 
+    m_mqtt->disconnectFromBroker();
+    m_mqtt->setCredentials(cfg.username, cfg.password);
     // If our connection dies, the broker tells everyone else we are gone
     m_mqtt->setWill(m_topic, makeMessage(QStringLiteral("bye")));
     m_mqtt->subscribe(m_topic);
-    m_mqtt->connectToBroker(kBroker, kBrokerPort);
+    m_mqtt->connectToBroker(cfg.host, cfg.port);
 }
 
 void TelepartySession::becomeJoined() {
@@ -361,7 +568,7 @@ QString TelepartySession::generateCode() {
     return QString::number(QRandomGenerator::global()->bounded(10000, 100000));
 }
 
-// The room name on the public broker is a hash of the code, not the code itself
+// The room name on the broker is a hash of the code, not the code itself
 QString TelepartySession::roomTopic(const QString &code) {
     const QByteArray hash = QCryptographicHash::hash(
         QByteArrayLiteral("flux-teleparty-v1:") + code.toUtf8(), QCryptographicHash::Sha256).toHex();

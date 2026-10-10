@@ -85,6 +85,29 @@ target_compile_definitions(FLUX PRIVATE
     FLUX_VERSION="${PROJECT_VERSION}"
 )
 
+# Read local .env at build time (if present) so packaged release binaries work
+# out-of-the-box without committing secrets to Git or shipping a plaintext .env.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.env")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/.env")
+    file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/.env" DOTENV_LINES ENCODING UTF-8)
+    foreach(LINE IN LISTS DOTENV_LINES)
+        string(STRIP "${LINE}" LINE)
+        if(NOT LINE STREQUAL "" AND NOT LINE MATCHES "^#")
+            string(FIND "${LINE}" "=" EQ_IDX)
+            if(EQ_IDX GREATER 0)
+                string(SUBSTRING "${LINE}" 0 ${EQ_IDX} ENV_KEY)
+                math(EXPR VAL_START "${EQ_IDX} + 1")
+                string(SUBSTRING "${LINE}" ${VAL_START} -1 ENV_VAL)
+                string(STRIP "${ENV_KEY}" ENV_KEY)
+                string(STRIP "${ENV_VAL}" ENV_VAL)
+                if(ENV_KEY MATCHES "^MQTT_(BROKER_HOST|BROKER_PORT|PROTOCOL|USERNAME|PASSWORD|TLS_ENABLED|TLS_VERIFY)$")
+                    target_compile_definitions(FLUX PRIVATE FLUX_ENV_${ENV_KEY}="${ENV_VAL}")
+                endif()
+            endif()
+        endif()
+    endforeach()
+endif()
+
 # Qt Quick / QML Module
 qt_add_qml_module(FLUX
     URI FLUX
@@ -223,3 +246,20 @@ target_link_libraries(flux_test_playback PRIVATE
     Qt6::Network
     ${VLC_LIBRARIES}
 )
+
+# Standalone CLI test for Teleparty EMQX Cloud MQTT integration
+add_executable(flux_test_teleparty
+    tests/test_teleparty.cpp
+    src/teleparty/MqttClient.h
+    src/teleparty/MqttClient.cpp
+    src/teleparty/TelepartySession.h
+    src/teleparty/TelepartySession.cpp
+    src/core/Logger.h
+    src/core/Logger.cpp
+)
+target_link_libraries(flux_test_teleparty PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Network
+)
+

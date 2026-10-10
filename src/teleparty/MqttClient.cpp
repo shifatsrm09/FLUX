@@ -11,6 +11,7 @@ namespace Flux {
 namespace {
 
 constexpr int kKeepAliveSec = 30;
+constexpr int kConnectTimeoutMs = 10000;
 constexpr int kMaxPacketBytes = 1024 * 1024;
 
 // MQTT "remaining length": 7 bits per byte, high bit = more bytes follow
@@ -50,6 +51,12 @@ MqttClient::MqttClient(QObject *parent)
         if (m_wantConnected) openSocket();
     });
 
+    m_connectTimer.setSingleShot(true);
+    m_connectTimer.setInterval(kConnectTimeoutMs);
+    connect(&m_connectTimer, &QTimer::timeout, this, [this]() {
+        handleLinkDown(QStringLiteral("Connection timed out"));
+    });
+
     connect(m_socket, &QSslSocket::encrypted, this, &MqttClient::sendConnect);
     connect(m_socket, &QSslSocket::readyRead, this, &MqttClient::onReadyRead);
     connect(m_socket, &QSslSocket::disconnected, this, [this]() {
@@ -67,12 +74,18 @@ MqttClient::MqttClient(QObject *parent)
 
 MqttClient::~MqttClient() {
     m_wantConnected = false;
+    m_connectTimer.stop();
     m_socket->abort();
 }
 
 void MqttClient::setWill(const QString &topic, const QByteArray &payload) {
     m_willTopic = topic;
     m_willPayload = payload;
+}
+
+void MqttClient::setCredentials(const QString &username, const QString &password) {
+    m_username = username;
+    m_password = password;
 }
 
 void MqttClient::connectToBroker(const QString &host, quint16 port) {
@@ -98,11 +111,14 @@ void MqttClient::openSocket() {
         const QSignalBlocker blocker(m_socket);
         m_socket->abort();
     }
+    m_socket->setPeerVerifyMode(QSslSocket::VerifyPeer);
+    m_connectTimer.start();
     m_socket->connectToHostEncrypted(m_host, m_port);
 }
 
 void MqttClient::disconnectFromBroker() {
     m_wantConnected = false;
+    m_connectTimer.stop();
     m_reconnectTimer.stop();
     m_pingTimer.stop();
 
@@ -120,8 +136,9 @@ void MqttClient::disconnectFromBroker() {
 }
 
 void MqttClient::subscribe(const QString &topic) {
+    const bool alreadySubscribed = m_topics.contains(topic);
     m_topics.insert(topic);
-    if (m_connected) sendSubscribe(topic);
+    if (m_connected && !alreadySubscribed) sendSubscribe(topic);
 }
 
 void MqttClient::unsubscribe(const QString &topic) {
@@ -147,6 +164,12 @@ void MqttClient::sendConnect() {
 
     quint8 flags = 0x02;                 // clean session
     if (!m_willTopic.isEmpty()) flags |= 0x04;   // will flag (QoS 0, not retained)
+    if (!m_username.isEmpty()) {
+        flags |= 0x80;                   // username flag
+        if (!m_password.isEmpty()) {
+            flags |= 0x40;               // password flag
+        }
+    }
     body.append(static_cast<char>(flags));
 
     body += u16(kKeepAliveSec);
@@ -154,6 +177,12 @@ void MqttClient::sendConnect() {
     if (!m_willTopic.isEmpty()) {
         body += encodeString(m_willTopic.toUtf8());
         body += encodeString(m_willPayload);
+    }
+    if (!m_username.isEmpty()) {
+        body += encodeString(m_username.toUtf8());
+        if (!m_password.isEmpty()) {
+            body += encodeString(m_password.toUtf8());
+        }
     }
     sendPacket(0x10, body);
 }
@@ -232,9 +261,23 @@ void MqttClient::handlePacket(quint8 header, const QByteArray &body) {
 
     switch (type) {
     case 2: {   // CONNACK
+        m_connectTimer.stop();
         const int code = body.size() >= 2 ? static_cast<quint8>(body.at(1)) : 255;
         if (code != 0) {
-            handleLinkDown(QStringLiteral("Broker refused the connection (code %1)").arg(code));
+            QString reason;
+            switch (code) {
+            case 1: reason = QStringLiteral("Broker refused connection: unacceptable protocol version"); break;
+            case 2: reason = QStringLiteral("Broker refused connection: client identifier rejected"); break;
+            case 3: reason = QStringLiteral("Broker refused connection: server unavailable"); break;
+            case 4: reason = QStringLiteral("Authentication failed: bad username or password"); break;
+            case 5: reason = QStringLiteral("Authentication failed: not authorized"); break;
+            default: reason = QStringLiteral("Broker refused the connection (code %1)").arg(code); break;
+            }
+            if (code == 4 || code == 5) {
+                // Fatal authentication error: do not auto-reconnect in a loop
+                m_everConnected = false;
+            }
+            handleLinkDown(reason);
             return;
         }
         m_connected = true;
@@ -249,7 +292,15 @@ void MqttClient::handlePacket(quint8 header, const QByteArray &body) {
     case 9: {   // SUBACK
         if (body.size() < 2) return;
         const quint16 id = static_cast<quint16>((static_cast<quint8>(body.at(0)) << 8) | static_cast<quint8>(body.at(1)));
-        if (m_pendingSubs.contains(id)) emit subscribed(m_pendingSubs.take(id));
+        const QString topic = m_pendingSubs.take(id);
+        if (topic.isEmpty()) break;
+        const quint8 rc = body.size() >= 3 ? static_cast<quint8>(body.at(2)) : 0x00;
+        if (rc == 0x80) {
+            m_everConnected = false;
+            handleLinkDown(QStringLiteral("Subscription refused by broker (not authorized for topic)"));
+            return;
+        }
+        emit subscribed(topic);
         break;
     }
 
@@ -277,12 +328,13 @@ void MqttClient::handlePacket(quint8 header, const QByteArray &body) {
 void MqttClient::handleLinkDown(const QString &reason) {
     if (!m_wantConnected) return;
 
+    m_connectTimer.stop();
     const bool wasConnected = m_connected;
     m_connected = false;
     m_pingTimer.stop();
 
     if (!m_everConnected) {
-        // Never got in: report it and stop, so the caller can show an error
+        // Never got in (or fatal auth error): report it and stop, so the caller can show an error
         m_wantConnected = false;
         m_socket->abort();
         FLUX_LOG_WARN("Teleparty", QString("Could not connect: %1").arg(reason));

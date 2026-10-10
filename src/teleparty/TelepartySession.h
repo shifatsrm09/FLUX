@@ -10,8 +10,8 @@
 
 namespace Flux {
 
-// Teleparty: a "room" identified by a 5-digit code, shared through a public MQTT broker.
-// There is no server of ours: every member publishes to, and listens on, the same room topic.
+// Teleparty: a "room" identified by a 5-digit code, shared through the configured EMQX Cloud MQTT broker.
+// Every member publishes to, and listens on, the same room topic over TLS.
 //
 // Wire format (JSON on the room topic):
 //   {"v":1, "t":"hello|presence|bye|event", "from":"<memberId>", "e":"<eventType>", "d":{...}}

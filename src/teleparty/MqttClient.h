@@ -24,6 +24,10 @@ public:
     // Must be set before connectToBroker().
     void setWill(const QString &topic, const QByteArray &payload);
 
+    // Optional MQTT 3.1.1 username / password credentials.
+    // Must be set before connectToBroker().
+    void setCredentials(const QString &username, const QString &password);
+
     // Connects over TLS. Topics added with subscribe() are (re)subscribed on every connect.
     void connectToBroker(const QString &host, quint16 port);
     void disconnectFromBroker();
@@ -38,7 +42,7 @@ signals:
     void connected();
     // An established connection dropped; the client keeps retrying on its own
     void disconnected();
-    // The very first connection attempt failed; the client does not retry in this case
+    // The very first connection attempt (or authentication) failed; the client does not retry
     void connectionFailed(const QString &reason);
     // Broker confirmed a subscription (fires again after a reconnect)
     void subscribed(const QString &topic);
@@ -58,9 +62,12 @@ private:
     QSslSocket *m_socket = nullptr;
     QTimer m_pingTimer;
     QTimer m_reconnectTimer;
+    QTimer m_connectTimer;
 
     QString m_host;
     quint16 m_port = 0;
+    QString m_username;
+    QString m_password;
     QString m_clientId;
     QString m_willTopic;
     QByteArray m_willPayload;
