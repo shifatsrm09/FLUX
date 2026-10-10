@@ -120,6 +120,31 @@ QString videoCountText(int n) {
     return n == 1 ? QStringLiteral("1 video") : QStringLiteral("%1 videos").arg(n);
 }
 
+// One video file as a Library entry (rel is relative to the download location root)
+QVariantMap videoEntry(const QFileInfo &fi, const QString &root) {
+    QVariantMap m;
+    m["name"] = fi.fileName();
+    m["kind"] = QStringLiteral("video");
+    m["rel"] = QDir(root).relativeFilePath(fi.absoluteFilePath());
+    m["path"] = native(fi.absoluteFilePath());
+    m["url"] = QString::fromLatin1(QUrl::fromLocalFile(fi.absoluteFilePath()).toEncoded());
+    m["sizeBytes"] = fi.size();
+    m["detail"] = SearchResult::formatBytes(fi.size());
+    return m;
+}
+
+// One folder (a pack) as a Library entry
+QVariantMap folderEntry(const QFileInfo &fi, const QString &root, int videos) {
+    QVariantMap m;
+    m["name"] = fi.fileName();
+    m["kind"] = QStringLiteral("folder");
+    m["rel"] = QDir(root).relativeFilePath(fi.absoluteFilePath());
+    m["path"] = native(fi.absoluteFilePath());
+    m["count"] = videos;
+    m["detail"] = videoCountText(videos);
+    return m;
+}
+
 } // namespace
 
 // ============================================================================
@@ -448,19 +473,37 @@ QVariantList DownloadManager::offlineList(const QString &relPath) const {
     while (rel.endsWith('/')) rel.chop(1);
     if (rel.split('/', Qt::SkipEmptyParts).contains(QStringLiteral(".."))) return out;
 
-    // Top level: the two download folders
+    // Top level: the actual series/pack folders first, then the individual movies.
+    // (The "Series" and "Individuals" container folders themselves are not shown, and the
+    // episodes inside the pack folders are not listed here.)
     if (rel.isEmpty()) {
-        const QStringList tops{QStringLiteral("Series"), QStringLiteral("Individuals")};
-        for (const QString &name : tops) {
-            const QString abs = m_root + QLatin1Char('/') + name;
-            const int n = countVideos(abs);
-            QVariantMap m;
-            m["name"] = name;
-            m["kind"] = QStringLiteral("folder");
-            m["rel"] = name;
-            m["path"] = native(abs);
-            m["count"] = n;
-            m["detail"] = videoCountText(n);
+        QCollator topCollator;
+        topCollator.setNumericMode(true);
+        topCollator.setCaseSensitivity(Qt::CaseInsensitive);
+        auto topByName = [&topCollator](const QFileInfo &a, const QFileInfo &b) {
+            return topCollator.compare(a.fileName(), b.fileName()) < 0;
+        };
+
+        QFileInfoList packs = QDir(m_root + QStringLiteral("/Series"))
+                                  .entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::NoSort);
+        std::sort(packs.begin(), packs.end(), topByName);
+        for (const QFileInfo &fi : packs) {
+            const int n = countVideos(fi.absoluteFilePath());
+            if (n == 0) continue;
+            QVariantMap m = folderEntry(fi, m_root, n);
+            m["section"] = QStringLiteral("TV Series & Packs");
+            out.append(m);
+        }
+
+        QFileInfoList movies = QDir(m_root + QStringLiteral("/Individuals"))
+                                   .entryInfoList(QDir::Files, QDir::NoSort);
+        movies.erase(std::remove_if(movies.begin(), movies.end(),
+                                    [](const QFileInfo &f) { return !isVideoSuffix(f.suffix()); }),
+                     movies.end());
+        std::sort(movies.begin(), movies.end(), topByName);
+        for (const QFileInfo &fi : movies) {
+            QVariantMap m = videoEntry(fi, m_root);
+            m["section"] = QStringLiteral("Movies");
             out.append(m);
         }
         return out;
@@ -507,6 +550,70 @@ QVariantList DownloadManager::offlineList(const QString &relPath) const {
         m["url"] = QString::fromLatin1(QUrl::fromLocalFile(fi.absoluteFilePath()).toEncoded());
         m["sizeBytes"] = fi.size();
         m["detail"] = SearchResult::formatBytes(fi.size());
+        out.append(m);
+    }
+    return out;
+}
+
+QVariantList DownloadManager::offlineSearch(const QString &query) const {
+    QVariantList out;
+
+    static const QRegularExpression sep(QStringLiteral("[\\s._\\-\\[\\]()/\\\\]+"));
+    const QStringList terms = query.toLower().split(sep, Qt::SkipEmptyParts);
+    if (terms.isEmpty()) return out;
+
+    // True when every search word appears in the (normalised) text
+    auto matches = [&terms](const QString &text) {
+        QString hay = text.toLower();
+        hay.replace(sep, QStringLiteral(" "));
+        for (const QString &t : terms) {
+            if (!hay.contains(t)) return false;
+        }
+        return true;
+    };
+
+    constexpr int kMaxSearchResults = 300;
+
+    QCollator collator;
+    collator.setNumericMode(true);
+    collator.setCaseSensitivity(Qt::CaseInsensitive);
+
+    // Pack folders whose name matches
+    QFileInfoList packs = QDir(m_root + QStringLiteral("/Series"))
+                              .entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::NoSort);
+    std::sort(packs.begin(), packs.end(), [&collator](const QFileInfo &a, const QFileInfo &b) {
+        return collator.compare(a.fileName(), b.fileName()) < 0;
+    });
+    for (const QFileInfo &fi : packs) {
+        if (!matches(fi.fileName())) continue;
+        const int n = countVideos(fi.absoluteFilePath());
+        if (n == 0) continue;
+        QVariantMap m = folderEntry(fi, m_root, n);
+        m["section"] = QStringLiteral("Results");
+        out.append(m);
+    }
+
+    // Videos anywhere in the library (including episodes inside packs)
+    QFileInfoList hits;
+    QDirIterator it(m_root, QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext() && hits.size() < kMaxSearchResults) {
+        it.next();
+        const QFileInfo fi = it.fileInfo();
+        if (!isVideoSuffix(fi.suffix())) continue;
+        if (matches(QDir(m_root).relativeFilePath(fi.absoluteFilePath()))) hits.append(fi);
+    }
+    std::sort(hits.begin(), hits.end(), [&collator](const QFileInfo &a, const QFileInfo &b) {
+        return collator.compare(a.fileName(), b.fileName()) < 0;
+    });
+
+    for (const QFileInfo &fi : hits) {
+        QVariantMap m = videoEntry(fi, m_root);
+        m["section"] = QStringLiteral("Results");
+        // Folder the file lives in, without the Series / Individuals container
+        QString folder = QDir(m_root).relativeFilePath(fi.absolutePath());
+        const int slash = folder.indexOf('/');
+        folder = slash < 0 ? QString() : folder.mid(slash + 1);
+        m["folder"] = folder;
         out.append(m);
     }
     return out;

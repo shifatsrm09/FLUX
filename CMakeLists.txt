@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(FLUX VERSION 0.0.3 LANGUAGES CXX)
+project(FLUX VERSION 0.0.5 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -86,6 +86,7 @@ qt_add_qml_module(FLUX
     QML_FILES
         qml/Main.qml
         qml/SearchPage.qml
+        qml/LibraryPage.qml
         qml/PlayerView.qml
         qml/components/MediaCard.qml
         qml/components/PlaybackControls.qml

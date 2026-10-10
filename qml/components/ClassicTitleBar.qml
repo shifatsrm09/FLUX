@@ -18,9 +18,54 @@ Item {
     property bool overlayMode: false    // player mode: transparent, window controls only
     property bool shown: true           // fade whole bar in / out
     readonly property bool menuOpen: updateMenu.opened
+    property string section: "home"    // which nav link is highlighted: "home" | "library" | ""
 
     signal homeClicked()
+    signal libraryClicked()
     signal nowPlayingClicked()
+
+    // Text link in the nav (Home / Library) with an underline on the current one
+    component NavLink: Item {
+        id: navLink
+
+        property string label: ""
+        property bool current: false
+        signal clicked()
+
+        implicitWidth: navText.implicitWidth
+        implicitHeight: 32
+
+        Text {
+            id: navText
+            anchors.centerIn: parent
+            text: navLink.label
+            color: (navLink.current || navMouse.containsMouse) ? Theme.text : Theme.textDim
+            font.pixelSize: 14
+            font.weight: navLink.current ? Font.Bold : Font.DemiBold
+
+            Behavior on color { ColorAnimation { duration: 120 } }
+        }
+
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            width: navText.implicitWidth
+            height: 2
+            radius: 1
+            color: Theme.accent
+            opacity: navLink.current ? 1.0 : 0.0
+
+            Behavior on opacity { NumberAnimation { duration: 160 } }
+        }
+
+        MouseArea {
+            id: navMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: navLink.clicked()
+        }
+    }
 
     height: 48
     opacity: root.shown ? 1.0 : 0.0
@@ -135,6 +180,24 @@ Item {
                 visible: logoMouse.containsMouse
                 delay: 500
                 text: "Return to Home Page"
+            }
+        }
+
+        // Primary navigation
+        RowLayout {
+            Layout.alignment: Qt.AlignVCenter
+            spacing: 24
+
+            NavLink {
+                label: "Home"
+                current: root.section === "home"
+                onClicked: root.homeClicked()
+            }
+
+            NavLink {
+                label: "Library"
+                current: root.section === "library"
+                onClicked: root.libraryClicked()
             }
         }
     }

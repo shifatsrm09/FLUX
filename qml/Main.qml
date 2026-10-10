@@ -21,7 +21,8 @@ ApplicationWindow {
     flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowMinMaxButtonsHint
 
     property bool isFullscreen: false
-    property string currentPage: "search" // "search" | "player"
+    property string currentPage: "search" // "search" | "library" | "player"
+    property string pageBeforePlayer: "search" // where Back from the player returns to
     property string currentPlayingTitle: ""
 
     // Round floating button for the bottom-right dock (optional badge = active downloads)
@@ -115,6 +116,7 @@ ApplicationWindow {
 
     function playMedia(url, title) {
         currentPlayingTitle = title
+        if (currentPage !== "player") pageBeforePlayer = currentPage
         currentPage = "player"
 
         // Read the saved position BEFORE noteStart() touches the history entry
@@ -151,6 +153,7 @@ ApplicationWindow {
         }
     }
 
+    // Back from the player: to the page it was started from (browse or Library)
     function returnToSearch() {
         if (fluxPlayer) {
             fluxPlayer.pause()
@@ -158,7 +161,17 @@ ApplicationWindow {
         if (isFullscreen) {
             toggleFullscreen()
         }
-        currentPage = "search"
+        currentPage = (pageBeforePlayer === "library") ? "library" : "search"
+    }
+
+    function showLibrary() {
+        if (fluxPlayer) {
+            fluxPlayer.pause()
+        }
+        if (isFullscreen) {
+            toggleFullscreen()
+        }
+        currentPage = "library"
     }
 
     // ---- Shortcuts ---------------------------------------------------------------
@@ -188,6 +201,9 @@ ApplicationWindow {
                 } else {
                     window.returnToSearch()
                 }
+            } else if (currentPage === "library") {
+                // Inside a Library folder: step out one level
+                libraryPage.goUp()
             } else if (currentPage === "search" && fluxBrowser && fluxBrowser.active) {
                 // Inside a folder: step out one level (closes the browser at the top)
                 fluxBrowser.goUp()
@@ -302,6 +318,23 @@ ApplicationWindow {
             }
         }
 
+        // Library: downloaded media, playable offline
+        LibraryPage {
+            id: libraryPage
+
+            anchors.fill: parent
+            topInset: customTitleBar.height
+            active: currentPage === "library"
+            opacity: currentPage === "library" ? 1.0 : 0.0
+            visible: opacity > 0.0
+
+            Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+
+            onPlayRequested: function(url, title) {
+                window.playMedia(url, title)
+            }
+        }
+
         // Cinematic full-viewport player
         PlayerView {
             id: playerView
@@ -334,13 +367,15 @@ ApplicationWindow {
             anchors.right: parent.right
             z: 100
             window: window
-            solid: searchPage.navSolid
+            solid: searchPage.navSolid || currentPage === "library"
+            section: currentPage === "library" ? "library" : (currentPage === "search" ? "home" : "")
             overlayMode: currentPage === "player"
             shown: !window.isFullscreen && (currentPage !== "player" || playerView.showControls || menuOpen)
             showNowPlaying: !!fluxPlayer && fluxPlayer.isPlaying && currentPage !== "player"
 
             onNowPlayingClicked: currentPage = "player"
             onHomeClicked: window.returnToHome()
+            onLibraryClicked: window.showLibrary()
         }
 
         // Bottom-right dock: downloads + settings (browsing pages only)
@@ -353,7 +388,7 @@ ApplicationWindow {
             anchors.bottomMargin: 22
             spacing: 10
             z: 90
-            visible: currentPage === "search" && !window.isFullscreen
+            visible: (currentPage === "search" || currentPage === "library") && !window.isFullscreen
 
             DockButton {
                 iconName: "download"
@@ -380,10 +415,9 @@ ApplicationWindow {
     DownloadsPanel {
         id: downloadsPanel
 
-        // Offline library: play a downloaded file straight from disk
-        onPlayRequested: function(url, title) {
+        onLibraryRequested: {
             downloadsPanel.close()
-            window.playMedia(url, title)
+            window.showLibrary()
         }
     }
 

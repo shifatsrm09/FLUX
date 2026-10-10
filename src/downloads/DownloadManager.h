@@ -85,6 +85,9 @@ public:
     // "Series/Show/Season 1" and so on list their contents. Each entry is a map with
     // name, kind ("folder"|"video"), rel, path, detail, and for videos url + sizeBytes.
     Q_INVOKABLE QVariantList offlineList(const QString &relPath) const;
+    // Search the whole library: matching pack folders first, then matching videos anywhere.
+    // Every word of the query must appear in the file's path (case-insensitive).
+    Q_INVOKABLE QVariantList offlineSearch(const QString &query) const;
     Q_INVOKABLE void openPath(const QString &path);   // folder, or the folder holding a file
 
     // ---- Downloads ----
