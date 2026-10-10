@@ -24,6 +24,7 @@ ApplicationWindow {
     property string currentPage: "search" // "search" | "library" | "player"
     property string pageBeforePlayer: "search" // where Back from the player returns to
     property string currentPlayingTitle: ""
+    readonly property bool inTeleparty: !!fluxTeleparty && fluxTeleparty.active
 
     // Round floating button for the bottom-right dock (optional badge = active downloads)
     component DockButton: Rectangle {
@@ -115,12 +116,18 @@ ApplicationWindow {
     }
 
     function playMedia(url, title) {
+        // Offline playback is disabled while in a Teleparty session
+        if (window.inTeleparty && fluxSync && !fluxSync.isStreamUrl(url)) {
+            return
+        }
+
         currentPlayingTitle = title
         if (currentPage !== "player") pageBeforePlayer = currentPage
         currentPage = "player"
 
-        // Read the saved position BEFORE noteStart() touches the history entry
-        var resumeMs = fluxUser ? fluxUser.resumePositionFor(url) : 0
+        // Read the saved position BEFORE noteStart() touches the history entry.
+        // In a Teleparty everyone starts together from the beginning.
+        var resumeMs = (!window.inTeleparty && fluxUser) ? fluxUser.resumePositionFor(url) : 0
         if (fluxUser) fluxUser.noteStart(url, title)
 
         // Look up the next episode in the background (for the "Up next" card)
@@ -128,9 +135,39 @@ ApplicationWindow {
 
         playerView.offerResume(resumeMs)
 
+        if (window.inTeleparty && fluxSync) {
+            fluxSync.broadcastOpen(url, title)
+        }
+
         if (fluxPlayer) {
             if (resumeMs > 0) {
                 fluxPlayer.playFrom(url, resumeMs)
+            } else {
+                fluxPlayer.play(url)
+            }
+        }
+    }
+
+    // Open a stream requested by another Teleparty member (never broadcast back)
+    function openFromParty(url, title, startMs) {
+        customTitleBar.closeMenu()
+        if (settingsPanel.opened) settingsPanel.dismiss()
+        if (downloadsPanel.opened) downloadsPanel.close()
+
+        currentPlayingTitle = title
+        if (currentPage !== "player") {
+            pageBeforePlayer = (currentPage === "library") ? "search" : currentPage
+        }
+        currentPage = "player"
+
+        if (fluxUser) fluxUser.noteStart(url, title)
+        if (fluxBrowser) fluxBrowser.findNext(url)
+
+        playerView.offerResume(0)
+
+        if (fluxPlayer) {
+            if (startMs > 0) {
+                fluxPlayer.playFrom(url, startMs)
             } else {
                 fluxPlayer.play(url)
             }
@@ -161,10 +198,11 @@ ApplicationWindow {
         if (isFullscreen) {
             toggleFullscreen()
         }
-        currentPage = (pageBeforePlayer === "library") ? "library" : "search"
+        currentPage = (!window.inTeleparty && pageBeforePlayer === "library") ? "library" : "search"
     }
 
     function showLibrary() {
+        if (window.inTeleparty) return
         if (fluxPlayer) {
             fluxPlayer.pause()
         }
@@ -233,6 +271,7 @@ ApplicationWindow {
         }
     }
     onCurrentPageChanged: {
+        if (fluxSync) fluxSync.watching = (currentPage === "player")
         if (currentPage === "player") stage.forceActiveFocus()
     }
 
@@ -246,6 +285,51 @@ ApplicationWindow {
         function onMenuOpenChanged() {
             // Popup closed: hand keyboard focus back so keys keep working
             if (!playerView.menuOpen) stage.forceActiveFocus()
+        }
+    }
+
+    Connections {
+        target: customTitleBar
+
+        function onMenuOpenChanged() {
+            if (!customTitleBar.menuOpen && currentPage === "player") stage.forceActiveFocus()
+        }
+    }
+
+    Connections {
+        target: fluxTeleparty
+
+        function onJoinedSession() {
+            // Offline playback is unavailable during a Teleparty: leave the Library page
+            // and stop any offline file that might be loaded
+            if (window.pageBeforePlayer === "library") window.pageBeforePlayer = "search"
+            if (window.currentPage === "library") window.currentPage = "search"
+
+            if (fluxPlayer && fluxPlayer.url.length > 0) {
+                if (fluxSync && fluxSync.isStreamUrl(fluxPlayer.url)) {
+                    // Host already watching a stream: make it the party's current video
+                    if (fluxTeleparty.isHost && window.currentPage === "player") {
+                        fluxSync.adoptCurrent(fluxPlayer.url, window.currentPlayingTitle)
+                    }
+                } else {
+                    fluxPlayer.stop()
+                    if (window.currentPage === "player") window.currentPage = "search"
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: fluxSync
+
+        function onRemoteOpenRequested(url, title, startMs) {
+            window.openFromParty(url, title, startMs)
+        }
+
+        function onActivity(text) {
+            if (window.currentPage === "player") {
+                playerView.showOsd(text, -1)
+            }
         }
     }
 
@@ -371,9 +455,17 @@ ApplicationWindow {
             section: currentPage === "library" ? "library" : (currentPage === "search" ? "home" : "")
             overlayMode: currentPage === "player"
             shown: !window.isFullscreen && (currentPage !== "player" || playerView.showControls || menuOpen)
-            showNowPlaying: !!fluxPlayer && fluxPlayer.isPlaying && currentPage !== "player"
+            offlineLocked: window.inTeleparty
+            showNowPlaying: !!fluxPlayer
+                            && (fluxPlayer.isPlaying
+                                || (window.inTeleparty && fluxPlayer.url.length > 0
+                                    && fluxPlayer.state !== "Idle" && fluxPlayer.state !== "Stopped"))
+                            && currentPage !== "player"
 
-            onNowPlayingClicked: currentPage = "player"
+            onNowPlayingClicked: {
+                currentPage = "player"
+                if (fluxPlayer && fluxPlayer.isPaused) fluxPlayer.resume()
+            }
             onHomeClicked: window.returnToHome()
             onLibraryClicked: window.showLibrary()
         }

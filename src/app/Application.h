@@ -11,6 +11,8 @@
 #include "../core/UserStore.h"
 #include "../core/Updater.h"
 #include "../downloads/DownloadManager.h"
+#include "../teleparty/TelepartySession.h"
+#include "../teleparty/TelepartySync.h"
 
 namespace Flux {
 
@@ -36,6 +38,8 @@ private:
     std::unique_ptr<SearchManager> m_searchManager;
     std::unique_ptr<FolderBrowser> m_folderBrowser;
     std::unique_ptr<DownloadManager> m_downloads;
+    std::unique_ptr<TelepartySession> m_teleparty;
+    std::unique_ptr<TelepartySync> m_sync;
     std::unique_ptr<UserStore> m_userStore;
     std::unique_ptr<Updater> m_updater;
 };

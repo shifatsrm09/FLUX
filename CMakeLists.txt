@@ -59,6 +59,12 @@ qt_add_executable(FLUX WIN32
     src/search/FolderBrowser.cpp
     src/downloads/DownloadManager.h
     src/downloads/DownloadManager.cpp
+    src/teleparty/MqttClient.h
+    src/teleparty/MqttClient.cpp
+    src/teleparty/TelepartySession.h
+    src/teleparty/TelepartySession.cpp
+    src/teleparty/TelepartySync.h
+    src/teleparty/TelepartySync.cpp
     src/core/Logger.h
     src/core/Logger.cpp
     src/core/UserStore.h
@@ -116,6 +122,7 @@ qt_add_qml_module(FLUX
         qml/components/DownloadsPanel.qml
         qml/components/FolderPicker.qml
         qml/components/UpdateMenu.qml
+        qml/components/TelepartyMenu.qml
 )
 
 target_link_libraries(FLUX PRIVATE

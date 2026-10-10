@@ -17,8 +17,10 @@ Item {
     property bool solid: false          // opaque background (scrolled / results page)
     property bool overlayMode: false    // player mode: transparent, window controls only
     property bool shown: true           // fade whole bar in / out
-    readonly property bool menuOpen: updateMenu.opened
+    readonly property bool menuOpen: updateMenu.opened || telepartyMenu.opened
     property string section: "home"    // which nav link is highlighted: "home" | "library" | ""
+    // In a Teleparty session offline playback is unavailable: the Library link is grayed out
+    property bool offlineLocked: false
 
     signal homeClicked()
     signal libraryClicked()
@@ -30,16 +32,21 @@ Item {
 
         property string label: ""
         property bool current: false
+        property bool locked: false          // grayed out and not usable right now
+        property string lockedTip: ""
         signal clicked()
 
         implicitWidth: navText.implicitWidth
         implicitHeight: 32
+        opacity: navLink.locked ? 0.4 : 1.0
+
+        Behavior on opacity { NumberAnimation { duration: 160 } }
 
         Text {
             id: navText
             anchors.centerIn: parent
             text: navLink.label
-            color: (navLink.current || navMouse.containsMouse) ? Theme.text : Theme.textDim
+            color: (!navLink.locked && (navLink.current || navMouse.containsMouse)) ? Theme.text : Theme.textDim
             font.pixelSize: 14
             font.weight: navLink.current ? Font.Bold : Font.DemiBold
 
@@ -62,8 +69,17 @@ Item {
             id: navMouse
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: navLink.clicked()
+            cursorShape: navLink.locked ? Qt.ForbiddenCursor : Qt.PointingHandCursor
+            onClicked: {
+                // A locked link still reports the click so the app can explain why
+                navLink.clicked()
+            }
+        }
+
+        FluxToolTip {
+            visible: navMouse.containsMouse && navLink.locked && navLink.lockedTip.length > 0
+            delay: 300
+            text: navLink.lockedTip
         }
     }
 
@@ -75,6 +91,7 @@ Item {
 
     function closeMenu() {
         updateMenu.close()
+        telepartyMenu.close()
     }
 
     function toggleMaximize() {
@@ -197,6 +214,8 @@ Item {
             NavLink {
                 label: "Library"
                 current: root.section === "library"
+                locked: root.offlineLocked
+                lockedTip: "Offline playback is unavailable during a Teleparty"
                 onClicked: root.libraryClicked()
             }
         }
@@ -253,6 +272,83 @@ Item {
             }
         }
 
+
+        // Teleparty: host / join a watch party. Reads "Teleparty: Joined" while in one.
+        Rectangle {
+            id: telepartyButton
+
+            property double lastClosed: 0   // guards against the press that closes the menu re-opening it
+            readonly property string st: fluxTeleparty ? fluxTeleparty.state : "idle"
+
+            Layout.alignment: Qt.AlignVCenter
+            Layout.rightMargin: 12
+            implicitHeight: 30
+            implicitWidth: telepartyRow.implicitWidth + 28
+            radius: 15
+            color: {
+                if (telepartyButton.st === "joined") return telepartyMouse.containsMouse ? "#4046D369" : "#2646D369"
+                if (telepartyButton.st !== "idle") return telepartyMouse.containsMouse ? "#40F5B83D" : "#26F5B83D"
+                return (telepartyMouse.containsMouse || telepartyMenu.opened) ? "#33FFFFFF" : "#1FFFFFFF"
+            }
+            border.width: 1
+            border.color: {
+                if (telepartyButton.st === "joined") return "#6646D369"
+                if (telepartyButton.st !== "idle") return "#66F5B83D"
+                return Theme.border
+            }
+
+            Behavior on color { ColorAnimation { duration: 120 } }
+
+            RowLayout {
+                id: telepartyRow
+                anchors.centerIn: parent
+                spacing: 8
+
+                Rectangle {
+                    visible: telepartyButton.st !== "idle"
+                    implicitWidth: 7
+                    implicitHeight: 7
+                    radius: 3.5
+                    color: telepartyButton.st === "joined" ? Theme.success : Theme.warning
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                Text {
+                    text: fluxTeleparty ? fluxTeleparty.statusText : "Teleparty"
+                    color: Theme.text
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                    Layout.alignment: Qt.AlignVCenter
+                }
+            }
+
+            MouseArea {
+                id: telepartyMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    if (Date.now() - telepartyButton.lastClosed < 250) return
+                    if (telepartyMenu.opened) telepartyMenu.close()
+                    else telepartyMenu.open()
+                }
+            }
+
+            FluxToolTip {
+                visible: telepartyMouse.containsMouse && !telepartyMenu.opened
+                delay: 500
+                text: telepartyButton.st === "joined" ? "Teleparty session options" : "Watch together"
+            }
+
+            TelepartyMenu {
+                id: telepartyMenu
+
+                x: telepartyButton.width - width
+                y: telepartyButton.height + 10
+
+                onClosed: telepartyButton.lastClosed = Date.now()
+            }
+        }
 
         // More (⋯): version + check for updates
         Rectangle {

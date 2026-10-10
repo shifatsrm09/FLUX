@@ -232,7 +232,13 @@ Item {
                     orientation: ListView.Horizontal
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
-                    model: fluxUser ? fluxUser.continueWatching : []
+                    model: {
+                        var items = fluxUser ? fluxUser.continueWatching : []
+                        if (fluxTeleparty && fluxTeleparty.active && fluxSync) {
+                            return items.filter(function(item) { return fluxSync.isStreamUrl(item.url) })
+                        }
+                        return items
+                    }
 
                     function scrollBy(dx) {
                         scrollAnim.stop()

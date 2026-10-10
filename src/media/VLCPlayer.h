@@ -99,6 +99,13 @@ public slots:
     Q_INVOKABLE void playFrom(const QString &url, qint64 startMs);
     Q_INVOKABLE void setLanguagePreferences(const QStringList &audio, const QString &subtitle);
 
+    // Teleparty: apply another member's action. These never emit userToggledPlay /
+    // userSeeked, so an applied action is not broadcast back to the session.
+    Q_INVOKABLE void remotePause();
+    Q_INVOKABLE void remoteResume();
+    Q_INVOKABLE void remoteSeekTo(qint64 timeMs);
+    Q_INVOKABLE void remoteRestart(qint64 startMs);
+
     QStringList preferredAudio() const { return m_preferredAudio; }
     QString preferredSubtitle() const { return m_preferredSubtitle; }
 
@@ -119,6 +126,10 @@ signals:
     void errorOccurred(const QString &message);
     void mediaPlayerRecreated();
     void languagePreferencesChanged();
+
+    // Fired only for actions the local user performed (not for remote / Teleparty ones)
+    void userToggledPlay(bool playing, qint64 timeMs);
+    void userSeeked(qint64 timeMs);
 
 private:
     void setupVlcEvents();
@@ -179,6 +190,10 @@ private:
 
     // Resume support: one-shot start offset consumed by the next play()
     qint64 m_startTimeMs = 0;
+
+    // Teleparty: >0 while a remote member's action is being applied (nothing is broadcast)
+    int m_quiet = 0;
+    bool m_pendingNotify = false;   // the queued seek came from the local user
 
     // Language auto-selection
     QStringList m_preferredAudio;

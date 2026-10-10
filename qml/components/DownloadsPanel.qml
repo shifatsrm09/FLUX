@@ -312,6 +312,7 @@ Popup {
                     text: "Open Library"
                     variant: "secondary"
                     implicitHeight: 36
+                    enabled: !(fluxTeleparty && fluxTeleparty.active)
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: 6
                     onClicked: panel.libraryRequested()

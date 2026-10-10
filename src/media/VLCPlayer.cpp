@@ -652,10 +652,13 @@ void VLCPlayer::togglePlay() {
     libvlc_state_t st = libvlc_media_player_get_state(m_mediaPlayer);
     if (st == libvlc_Playing || st == libvlc_Buffering || st == libvlc_Opening) {
         pause();
+        if (m_quiet == 0) emit userToggledPlay(false, m_timeMs);
     } else if (st == libvlc_Paused) {
         resume();
+        if (m_quiet == 0) emit userToggledPlay(true, m_timeMs);
     } else if (!m_url.isEmpty()) {
         play();
+        if (m_quiet == 0) emit userToggledPlay(true, 0);   // restarts from the beginning
     }
 }
 
@@ -686,6 +689,7 @@ void VLCPlayer::seek(qreal pos) {
     m_pendingIsTime = false;
     m_pendingPos = pos;
     m_hasPendingSeek = true;
+    m_pendingNotify = (m_quiet == 0);   // the latest request decides whether it is broadcast
 
     // Optimistic UI update: the slider and clock move instantly while the actual
     // (network) seek is coalesced and issued a moment later.
@@ -718,6 +722,7 @@ void VLCPlayer::seekRelative(qint64 deltaMs) {
     m_pendingIsTime = true;
     m_pendingTimeMs = newTime;
     m_hasPendingSeek = true;
+    m_pendingNotify = (m_quiet == 0);
 
     m_timeMs = newTime;
     if (m_durationMs > 0) {
@@ -740,6 +745,17 @@ void VLCPlayer::applyPendingSeek() {
         return;
     }
     m_hasPendingSeek = false;
+
+    // Tell Teleparty about seeks the local user made (after coalescing, so a slider drag
+    // produces a handful of updates rather than one per mouse move)
+    const bool notify = m_pendingNotify;
+    m_pendingNotify = false;
+    if (notify) {
+        const qint64 target = m_pendingIsTime
+            ? m_pendingTimeMs
+            : static_cast<qint64>(m_pendingPos * static_cast<qreal>(m_durationMs));
+        if (m_pendingIsTime || m_durationMs > 0) emit userSeeked(target);
+    }
 
     if (m_pendingIsTime) {
         FLUX_LOG_INFO("VLCPlayer", QString("Seeking to %1 ms").arg(m_pendingTimeMs));
@@ -881,6 +897,34 @@ void VLCPlayer::updateTracks() {
 void VLCPlayer::playFrom(const QString &url, qint64 startMs) {
     m_startTimeMs = std::max<qint64>(0, startMs);
     play(url);
+}
+
+// ---- Teleparty: actions applied on behalf of another member (never broadcast back) ----
+
+void VLCPlayer::remotePause() {
+    ++m_quiet;
+    pause();
+    --m_quiet;
+}
+
+void VLCPlayer::remoteResume() {
+    ++m_quiet;
+    resume();
+    --m_quiet;
+}
+
+void VLCPlayer::remoteSeekTo(qint64 timeMs) {
+    if (!m_mediaPlayer) return;
+    ++m_quiet;
+    seekRelative(timeMs - m_timeMs);   // m_timeMs already includes any seek still pending
+    --m_quiet;
+}
+
+void VLCPlayer::remoteRestart(qint64 startMs) {
+    if (m_url.isEmpty()) return;
+    ++m_quiet;
+    playFrom(m_url, startMs);
+    --m_quiet;
 }
 
 void VLCPlayer::setLanguagePreferences(const QStringList &audio, const QString &subtitle) {

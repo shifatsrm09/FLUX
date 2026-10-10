@@ -17,6 +17,9 @@ Application::Application(QObject *parent)
 
 Application::~Application() {
     FLUX_LOG_INFO("Application", "Shutting down FLUX Application...");
+    // Leave any Teleparty session (tells the other members) before the player goes away
+    m_sync.reset();
+    m_teleparty.reset();
     m_updater.reset();
     // The user store records final watch progress from the player, so it goes first
     m_userStore.reset();
@@ -45,6 +48,10 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     m_downloads = std::make_unique<DownloadManager>(m_folderBrowser.get(), this);
     m_userStore = std::make_unique<UserStore>(this);
     m_updater = std::make_unique<Updater>(this);
+
+    // Teleparty: watch together through a public MQTT broker (no server of ours)
+    m_teleparty = std::make_unique<TelepartySession>(this);
+    m_sync = std::make_unique<TelepartySync>(m_teleparty.get(), m_player.get(), this);
 
     // 2b. Restore saved user settings
     {
@@ -135,6 +142,8 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     rootContext->setContextProperty("fluxDownloads", m_downloads.get());
     rootContext->setContextProperty("fluxUser", m_userStore.get());
     rootContext->setContextProperty("fluxUpdater", m_updater.get());
+    rootContext->setContextProperty("fluxTeleparty", m_teleparty.get());
+    rootContext->setContextProperty("fluxSync", m_sync.get());
     rootContext->setContextProperty("fluxLibrary", m_searchManager->libraryModel());
     rootContext->setContextProperty("fluxLogger", &Logger::instance());
 
