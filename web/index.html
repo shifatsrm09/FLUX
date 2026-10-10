@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#090a09" />
+    <meta name="description" content="FLUX is a free, open-source native Windows streaming app powered by BDIX. No account. No subscription." />
+    <title>FLUX</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23f2f3ee'/%3E%3Cpath d='M20 15h28v8H29v8h16v8H29v10h-9z' fill='%23090909'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="topbar">
+        <a class="wordmark" href="#top" aria-label="FLUX home"><span class="mark" aria-hidden="true">F</span> FLUX</a>
+        <a class="github-link" href="https://github.com/shifatsrm09/FLUX" target="_blank" rel="noreferrer">
+          <span>View on GitHub</span>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 15 15 5M6 5h9v9" /></svg>
+        </a>
+      </header>
+
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="eyebrow"><span class="status-dot"></span><span id="release-status">THE LATEST RELEASE</span></div>
+        <h1 id="hero-title">FLUX<br /><span>Netflix but Powered by BDIX</span></h1>
+        <p class="intro">A free, open-source streaming app for Windows.<br class="desktop-break" /> Powered by BDIX. Ready when you are.</p>
+
+        <div class="download-list" aria-label="Download options">
+          <a class="download-card primary" id="setup-download" href="https://github.com/shifatsrm09/FLUX/releases/latest" aria-label="Download setup installer">
+            <span class="download-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3" /></svg></span>
+            <span class="download-copy"><strong>Download setup</strong><small>Recommended · Windows installer</small></span>
+            <span class="arrow" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 10h12m-5-5 5 5-5 5" /></svg></span>
+          </a>
+          <a class="download-card" id="portable-download" href="https://github.com/shifatsrm09/FLUX/releases/latest" aria-label="Download portable version">
+            <span class="download-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 12h6m-3-3v6" /></svg></span>
+            <span class="download-copy"><strong>Download portable</strong><small>No installation needed · ZIP</small></span>
+            <span class="arrow" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 10h12m-5-5 5 5-5 5" /></svg></span>
+          </a>
+        </div>
+        <p class="release-note" id="release-note" aria-live="polite">Finding the latest release…</p>
+      </section>
+
+      <footer class="footer"><span>No account. No subscription.</span><span class="footer-right">OPEN SOURCE <span class="footer-dot">·</span> NATIVE WINDOWS</span></footer>
+      <div class="orb orb-one" aria-hidden="true"></div><div class="orb orb-two" aria-hidden="true"></div>
+    </main>
+    <script src="./script.js" defer></script>
+  </body>
+</html>
