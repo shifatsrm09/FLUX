@@ -138,6 +138,9 @@ bool MqttClient::publish(const QString &topic, const QByteArray &payload) {
 }
 
 void MqttClient::sendConnect() {
+    m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
+    m_socket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
+
     QByteArray body;
     body += encodeString(QByteArrayLiteral("MQTT"));
     body.append(static_cast<char>(4));   // protocol level 3.1.1
@@ -170,7 +173,9 @@ bool MqttClient::sendPacket(quint8 header, const QByteArray &body) {
     packet.append(static_cast<char>(header));
     packet += encodeLength(static_cast<int>(body.size()));
     packet += body;
-    return m_socket->write(packet) == packet.size();
+    const bool ok = m_socket->write(packet) == packet.size();
+    m_socket->flush();
+    return ok;
 }
 
 quint16 MqttClient::nextPacketId() {

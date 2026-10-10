@@ -282,8 +282,8 @@ Rectangle {
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.leftMargin: 24
-            anchors.rightMargin: 180
-            anchors.topMargin: 22
+            anchors.rightMargin: 32
+            anchors.topMargin: 28
             spacing: 16
 
             IconButton {
@@ -316,37 +316,49 @@ Rectangle {
                     font.letterSpacing: 2
                 }
 
-                Text {
+                Item {
                     Layout.fillWidth: true
-                    text: root.mediaTitle
-                    color: "#FFFFFF"
-                    font.pixelSize: 24
-                    font.weight: Font.Bold
-                    elide: Text.ElideRight
-                }
-            }
+                    Layout.preferredHeight: titleText.implicitHeight
+                    implicitHeight: titleText.implicitHeight
 
-            // Stream quality chip
-            Rectangle {
-                readonly property string label: root.player ? Theme.qualityLabel(root.player.videoWidth, root.player.videoHeight) : ""
+                    Text {
+                        id: titleText
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.min(implicitWidth, parent.width * 0.80)
+                        text: root.mediaTitle
+                        color: "#FFFFFF"
+                        font.pixelSize: 24
+                        font.weight: Font.Bold
+                        elide: Text.ElideRight
+                    }
 
-                visible: label.length > 0
-                Layout.alignment: Qt.AlignVCenter
-                implicitHeight: 26
-                implicitWidth: qualityText.implicitWidth + 20
-                radius: 6
-                color: "#33000000"
-                border.width: 1
-                border.color: "#59FFFFFF"
+                    // Stream quality chip (optically aligned with title glyphs, stuck to right wall)
+                    Rectangle {
+                        id: qualityChip
+                        readonly property string label: root.player ? Theme.qualityLabel(root.player.videoWidth, root.player.videoHeight) : ""
 
-                Text {
-                    id: qualityText
-                    anchors.centerIn: parent
-                    text: parent.label
-                    color: parent.label === "4K" ? Theme.warning : "#FFFFFF"
-                    font.pixelSize: 12
-                    font.weight: Font.Bold
-                    font.letterSpacing: 0.6
+                        visible: label.length > 0
+                        anchors.right: parent.right
+                        anchors.verticalCenter: titleText.verticalCenter
+                        anchors.verticalCenterOffset: 4
+                        implicitHeight: 24
+                        implicitWidth: qualityText.implicitWidth + 18
+                        radius: 6
+                        color: "#33000000"
+                        border.width: 1
+                        border.color: "#59FFFFFF"
+
+                        Text {
+                            id: qualityText
+                            anchors.centerIn: parent
+                            text: parent.label
+                            color: parent.label === "4K" ? Theme.warning : "#FFFFFF"
+                            font.pixelSize: 12
+                            font.weight: Font.Bold
+                            font.letterSpacing: 0.6
+                        }
+                    }
                 }
             }
         }

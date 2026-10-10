@@ -93,7 +93,7 @@ Popup {
 
                 Text {
                     text: "TELEPARTY"
-                    color: Theme.accent
+                    color: Theme.text
                     font.pixelSize: 13
                     font.weight: Font.Black
                     font.letterSpacing: 3

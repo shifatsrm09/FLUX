@@ -639,7 +639,10 @@ void VLCPlayer::pause() {
 
 void VLCPlayer::resume() {
     if (m_mediaPlayer && isPaused()) {
-        libvlc_media_player_play(m_mediaPlayer);
+        endSeekMute();
+        libvlc_media_player_set_pause(m_mediaPlayer, 0);
+        m_state = "Playing";
+        emit stateChanged();
     }
 }
 
@@ -803,7 +806,7 @@ bool VLCPlayer::isPlaying() const {
 bool VLCPlayer::isPaused() const {
     if (!m_mediaPlayer) return false;
     libvlc_state_t st = libvlc_media_player_get_state(m_mediaPlayer);
-    return (st == libvlc_Paused);
+    return (st == libvlc_Paused || m_state == "Paused");
 }
 
 qreal VLCPlayer::position() const {
@@ -915,9 +918,27 @@ void VLCPlayer::remoteResume() {
 
 void VLCPlayer::remoteSeekTo(qint64 timeMs) {
     if (!m_mediaPlayer) return;
-    ++m_quiet;
-    seekRelative(timeMs - m_timeMs);   // m_timeMs already includes any seek still pending
-    --m_quiet;
+
+    qint64 newTime = std::max<qint64>(0, timeMs);
+    if (m_durationMs > 1000) {
+        newTime = std::min(newTime, m_durationMs - 1000);
+    }
+
+    if (m_seekTimer) m_seekTimer->stop();
+    m_hasPendingSeek = false;
+    m_pendingNotify = false;
+
+    m_timeMs = newTime;
+    if (m_durationMs > 0) {
+        m_position = static_cast<qreal>(newTime) / static_cast<qreal>(m_durationMs);
+    }
+    m_seekGuardUntil = m_uptime.elapsed() + 700;
+    emit timeChanged();
+    emit positionChanged();
+
+    beginSeekMute(newTime);
+    FLUX_LOG_INFO("VLCPlayer", QString("Remote seeking immediately to %1 ms").arg(newTime));
+    libvlc_media_player_set_time(m_mediaPlayer, newTime);
 }
 
 void VLCPlayer::remoteRestart(qint64 startMs) {

@@ -14,11 +14,11 @@ namespace {
 constexpr int kMaxUrlLength = 2048;
 constexpr int kMaxTitleLength = 300;
 constexpr qint64 kOpenDedupeMs = 8000;     // same video opened twice within this = one open
-constexpr int kSeekMergeMs = 200;          // local seeks are merged over this window
+constexpr int kSeekMergeMs = 40;           // VLCPlayer already coalesces local seeks; keep this minimal
 constexpr int kStateWaitMs = 5000;         // how long we accept a "state" answer after asking
-constexpr qint64 kPlayDriftMs = 1500;      // playing: ignore drift smaller than this
-constexpr qint64 kPauseDriftMs = 500;      // paused: everybody should show the same frame
-constexpr qint64 kCatchUpDriftMs = 1500;
+constexpr qint64 kPlayDriftMs = 800;       // playing: ignore drift smaller than this
+constexpr qint64 kPauseDriftMs = 400;      // paused: everybody should show the same frame
+constexpr qint64 kCatchUpDriftMs = 800;
 
 qint64 nowMs() {
     return QDateTime::currentMSecsSinceEpoch();
@@ -93,6 +93,7 @@ void TelepartySync::broadcastOpen(const QString &url, const QString &title) {
 
     flushSeek();
     noteOpen(url, title.left(kMaxTitleLength));
+    m_announceOnPlay = true;
     m_needState = false;
     m_stateTimer.stop();
 
@@ -143,6 +144,7 @@ void TelepartySync::flushSeek() {
 void TelepartySync::sendState() {
     if (!m_session->active() || !m_watching || m_currentUrl.isEmpty()) return;
     if (m_needState || m_player->url() != m_currentUrl) return;   // not in a position to answer
+    if (m_player->state() == QLatin1String("Opening")) return;    // still opening stream
 
     QVariantMap d;
     d.insert(QStringLiteral("url"), m_currentUrl);
@@ -188,6 +190,7 @@ void TelepartySync::handleOpen(const QVariantMap &data) {
 
     const QString title = data.value(QStringLiteral("title")).toString().left(kMaxTitleLength);
     noteOpen(url, title);
+    m_syncOnPlay = true;
     m_needState = false;
     m_stateTimer.stop();
 
@@ -251,14 +254,26 @@ void TelepartySync::applySeek(qint64 timeMs) {
 }
 
 void TelepartySync::onPlayerStateChanged() {
-    if (!m_pendingSync) return;
-
     const QString st = m_player->state();
     if (st == QLatin1String("Error")) {
         m_pendingSync = false;
+        m_syncOnPlay = false;
+        m_announceOnPlay = false;
         return;
     }
     if (st != QLatin1String("Playing")) return;
+
+    if (m_announceOnPlay) {
+        m_announceOnPlay = false;
+        sendState();
+    }
+    if (m_syncOnPlay) {
+        m_syncOnPlay = false;
+        armNeedState();
+        m_session->sendEvent(QStringLiteral("syncme"));
+    }
+
+    if (!m_pendingSync) return;
 
     m_pendingSync = false;
     // The party kept playing while we were loading
@@ -295,6 +310,8 @@ void TelepartySync::noteOpen(const QString &url, const QString &title) {
     m_lastOpenUrl = url;
     m_lastOpenAt = nowMs();
     m_pendingSync = false;
+    m_syncOnPlay = false;
+    m_announceOnPlay = false;
 }
 
 void TelepartySync::resetParty() {
@@ -304,6 +321,8 @@ void TelepartySync::resetParty() {
     m_lastOpenAt = 0;
     m_needState = false;
     m_pendingSync = false;
+    m_syncOnPlay = false;
+    m_announceOnPlay = false;
     m_hasPendingSeek = false;
     m_stateTimer.stop();
     m_seekTimer.stop();

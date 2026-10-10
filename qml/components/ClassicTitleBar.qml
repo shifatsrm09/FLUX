@@ -281,10 +281,10 @@ Item {
             readonly property string st: fluxTeleparty ? fluxTeleparty.state : "idle"
 
             Layout.alignment: Qt.AlignVCenter
-            Layout.rightMargin: 12
-            implicitHeight: 30
-            implicitWidth: telepartyRow.implicitWidth + 28
-            radius: 15
+            Layout.rightMargin: 8
+            implicitHeight: 24
+            implicitWidth: telepartyRow.implicitWidth + 18
+            radius: 12
             color: {
                 if (telepartyButton.st === "joined") return telepartyMouse.containsMouse ? "#4046D369" : "#2646D369"
                 if (telepartyButton.st !== "idle") return telepartyMouse.containsMouse ? "#40F5B83D" : "#26F5B83D"
@@ -302,13 +302,13 @@ Item {
             RowLayout {
                 id: telepartyRow
                 anchors.centerIn: parent
-                spacing: 8
+                spacing: 6
 
                 Rectangle {
                     visible: telepartyButton.st !== "idle"
-                    implicitWidth: 7
-                    implicitHeight: 7
-                    radius: 3.5
+                    implicitWidth: 6
+                    implicitHeight: 6
+                    radius: 3
                     color: telepartyButton.st === "joined" ? Theme.success : Theme.warning
                     Layout.alignment: Qt.AlignVCenter
                 }
@@ -316,7 +316,7 @@ Item {
                 Text {
                     text: fluxTeleparty ? fluxTeleparty.statusText : "Teleparty"
                     color: Theme.text
-                    font.pixelSize: 12
+                    font.pixelSize: 11
                     font.weight: Font.DemiBold
                     Layout.alignment: Qt.AlignVCenter
                 }

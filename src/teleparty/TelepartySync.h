@@ -101,6 +101,10 @@ private:
     bool m_pendingPlaying = true;
     QElapsedTimer m_pendingClock;
 
+    // Post-buffer alignment after a shared "open" so initial buffering differences cancel out
+    bool m_syncOnPlay = false;
+    bool m_announceOnPlay = false;
+
     // Local seeks are merged so a slider drag sends a few updates, not hundreds
     QTimer m_seekTimer;
     bool m_hasPendingSeek = false;
