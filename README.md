@@ -5,7 +5,7 @@
 
 ## Currently Supports:
 
--### Windows 10 and 11
+### Windows 10 and 11
 
 ## Other Platforms
 
