@@ -6,6 +6,7 @@
 #include <QNetworkAccessManager>
 #include <QPointer>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 #include <memory>
 #include <vector>
@@ -38,6 +39,9 @@ class DownloadManager : public QAbstractListModel {
     Q_PROPERTY(bool hasFinished READ hasFinished NOTIFY summaryChanged)
     // Bumps whenever the set of downloaded files may have changed (offline library refresh)
     Q_PROPERTY(int offlineRevision READ offlineRevision NOTIFY offlineChanged)
+    // Extra folders (anywhere on the PC) scanned for playable media. Completely separate from
+    // the download location: nothing is ever downloaded into them or moved out of them.
+    Q_PROPERTY(QStringList targets READ targets NOTIFY targetsChanged)
 
 public:
     enum Roles {
@@ -69,6 +73,14 @@ public:
     int count() const { return static_cast<int>(m_jobs.size()); }
     bool hasFinished() const { return m_hasFinished; }
     int offlineRevision() const { return m_offlineRevision; }
+    QStringList targets() const;   // native paths
+    void setTargets(const QStringList &paths);   // restore saved targets (no validation errors)
+
+    // ---- Library targets ----
+    Q_INVOKABLE bool addTarget(const QString &path);
+    Q_INVOKABLE void removeTarget(const QString &path);
+    // Folder to go to when stepping out of `rel` in the Library ("" = top level)
+    Q_INVOKABLE QString offlineParent(const QString &rel) const;
 
     // ---- Location ----
     Q_INVOKABLE bool changeLocation(const QString &path);
@@ -106,6 +118,8 @@ signals:
     void locationChanged();
     void summaryChanged();
     void offlineChanged();
+    void targetsChanged();
+    void targetError(const QString &message);
     void locationError(const QString &message);
 
 private:
@@ -186,11 +200,14 @@ private:
     void onProgress(int id, QNetworkReply *reply, qint64 received, qint64 total);
     void onFinished(int id, QNetworkReply *reply);
 
+    QVariantList targetList(const QString &absPath) const;
+
     QPointer<FolderBrowser> m_browser;
     QNetworkAccessManager m_network;
     std::vector<std::unique_ptr<Job>> m_jobs;   // newest first
 
     QString m_root;            // forward slashes, no trailing slash
+    QStringList m_targets;     // extra library folders, cleaned, forward slashes
     int m_nextId = 0;
     int m_activeCount = 0;
     int m_offlineRevision = 0;

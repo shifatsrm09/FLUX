@@ -109,6 +109,13 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
             store->setValue("downloads/location", downloads->downloadLocation());
         });
 
+        // Extra library targets: folders scanned for playable media. Stored separately from
+        // the download location and never written to by downloads.
+        downloads->setTargets(store->value("targets/paths").toStringList());
+        connect(downloads, &DownloadManager::targetsChanged, store, [store, downloads]() {
+            store->setValue("targets/paths", downloads->targets());
+        });
+
         // Watch progress (resume / continue watching / watched)
         store->attachPlayer(player);
         connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, store, &UserStore::shutdown);

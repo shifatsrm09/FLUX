@@ -40,17 +40,18 @@ Item {
         return fluxDownloads.offlineList(root.rel)
     }
 
-    // Parent folder; the Series / Individuals containers are never shown, so going up from a
-    // pack returns to the top level
+    // Parent folder (the manager knows about the Series / Individuals containers and added targets)
     function parentRel(path) {
-        var i = path.lastIndexOf("/")
-        if (i < 0) return ""
-        var parent = path.substring(0, i)
-        return (parent === "Series" || parent === "Individuals") ? "" : parent
+        return fluxDownloads ? fluxDownloads.offlineParent(path) : ""
     }
 
     function crumbText(path) {
         if (path.length === 0) return "Library"
+        // Inside an added target: show the last few folders of its path
+        if (path.charAt(0) === "@") {
+            var segs = path.substring(1).split("/").filter(function(s) { return s.length > 0 })
+            return "Library  ›  " + (segs.length > 3 ? "…  ›  " : "") + segs.slice(-3).join("  ›  ")
+        }
         var parts = path.split("/")
         if (parts[0] === "Series" || parts[0] === "Individuals") parts.shift()
         return "Library  ›  " + parts.join("  ›  ")
@@ -234,9 +235,12 @@ Item {
                 tipAbove: false
                 onClicked: {
                     if (!fluxDownloads) return
-                    // Top level (or search) = the download location itself; deeper = that folder
+                    // Top level (or search) = the download location itself; an added target
+                    // ("@<path>") opens that folder; otherwise a sub folder of the downloads
                     if (root.rel.length === 0 || root.searching) {
                         fluxDownloads.openRoot()
+                    } else if (root.rel.charAt(0) === "@") {
+                        fluxDownloads.openPath(root.rel.substring(1))
                     } else {
                         fluxDownloads.openPath(fluxDownloads.downloadLocation + "\\"
                                                + root.rel.split("/").join("\\"))

@@ -12,6 +12,7 @@ Popup {
     property string currentPath: ""
     property var entries: []
     property bool creating: false
+    property string title: "Choose download folder"
 
     signal chosen(string path)
 
@@ -75,7 +76,7 @@ Popup {
             spacing: 8
 
             Text {
-                text: "Choose download folder"
+                text: picker.title
                 color: Theme.text
                 font.pixelSize: 18
                 font.weight: Font.Bold
