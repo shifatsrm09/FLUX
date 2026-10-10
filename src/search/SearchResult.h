@@ -17,6 +17,7 @@ struct SearchResult {
     QString libraryId;
     QString libraryName;
     QString group;
+    int matchScore = 3;     // search relevance: 3 exact, 2 all words, 1 close match (see SearchQuery)
 
     static SearchResult fromJson(const QString &href,
                                  qint64 size,

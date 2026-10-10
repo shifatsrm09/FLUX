@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 #include "SearchResult.h"
+#include "SearchQuery.h"
 #include "MediaLibrary.h"
 
 namespace Flux {
@@ -111,13 +112,16 @@ signals:
     void errorMessageChanged();
     void statusMessageChanged();
 
-private slots:
-    void onSingleReplyFinished(QNetworkReply *reply, quint64 searchId, MediaRoot activeRoot);
-
 private:
     void setSearching(bool searching);
     void setErrorMessage(const QString &msg);
     void setStatusMessage(const QString &msg);
+
+    // Two-stage search (see SearchQuery): stage 1 sends the literal queries; if that finds few
+    // results, stage 2 sends short "anchor" chunks and keeps only candidates that score well.
+    void startStage(quint64 searchId, const QStringList &queries);
+    void onReplyFinished(QNetworkReply *reply, quint64 searchId, const MediaRoot &root, int stage);
+    void finishSearch(quint64 searchId);
 
     std::unique_ptr<MediaLibraryModel> m_libraryModel;
     int m_selectedLibraryIndex = 0;
@@ -130,6 +134,10 @@ private:
     quint64 m_activeSearchId = 0;
     int m_pendingReplies = 0;
     std::vector<SearchResult> m_accumulatedResults;
+
+    SearchQuery::Plan m_plan;
+    std::vector<MediaRoot> m_targetRoots;
+    int m_stage = 1;
 
     QString m_query;
     bool m_isSearching = false;

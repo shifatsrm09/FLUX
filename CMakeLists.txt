@@ -49,6 +49,8 @@ qt_add_executable(FLUX WIN32
     src/models/TestMedia.cpp
     src/search/SearchResult.h
     src/search/SearchResult.cpp
+    src/search/SearchQuery.h
+    src/search/SearchQuery.cpp
     src/search/MediaLibrary.h
     src/search/MediaLibrary.cpp
     src/search/SearchManager.h
@@ -142,6 +144,8 @@ add_executable(flux_test_search
     tests/test_search.cpp
     src/search/SearchResult.h
     src/search/SearchResult.cpp
+    src/search/SearchQuery.h
+    src/search/SearchQuery.cpp
     src/search/MediaLibrary.h
     src/search/MediaLibrary.cpp
     src/search/SearchManager.h
@@ -159,6 +163,8 @@ add_executable(flux_test_category_switch
     tests/test_category_switch.cpp
     src/search/SearchResult.h
     src/search/SearchResult.cpp
+    src/search/SearchQuery.h
+    src/search/SearchQuery.cpp
     src/search/MediaLibrary.h
     src/search/MediaLibrary.cpp
     src/search/SearchManager.h
@@ -169,6 +175,16 @@ add_executable(flux_test_category_switch
 target_link_libraries(flux_test_category_switch PRIVATE
     Qt6::Core
     Qt6::Network
+)
+
+# Standalone checks for the forgiving search logic (query variants, scoring, typos)
+add_executable(flux_test_searchquery
+    tests/test_searchquery.cpp
+    src/search/SearchQuery.h
+    src/search/SearchQuery.cpp
+)
+target_link_libraries(flux_test_searchquery PRIVATE
+    Qt6::Core
 )
 
 # Standalone CLI test for libVLC playback pipeline

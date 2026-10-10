@@ -309,53 +309,77 @@ void SearchManager::search(const QString &query) {
     const quint64 searchId = ++m_activeSearchId;
     setSearching(true);
     setErrorMessage("");
-    m_pendingReplies = static_cast<int>(targetRoots.size());
     m_accumulatedResults.clear();
 
+    m_targetRoots = std::move(targetRoots);
+    // Fewer query variants when many categories are searched at once, to go easy on the server
+    m_plan = SearchQuery::plan(trimmed, m_targetRoots.size() > 8 ? 3 : 6);
+    m_stage = 1;
+
     if (m_isAllSelected || m_selectedIndices.empty()) {
-        setStatusMessage(QString("Searching all %1 categories for \"%2\"...").arg(targetRoots.size()).arg(trimmed));
-    } else if (targetRoots.size() == 1) {
-        setStatusMessage(QString("Searching %1 for \"%2\"...").arg(targetRoots[0].name).arg(trimmed));
+        setStatusMessage(QString("Searching all %1 categories for \"%2\"...").arg(m_targetRoots.size()).arg(trimmed));
+    } else if (m_targetRoots.size() == 1) {
+        setStatusMessage(QString("Searching %1 for \"%2\"...").arg(m_targetRoots[0].name).arg(trimmed));
     } else {
-        setStatusMessage(QString("Searching %1 categories for \"%2\"...").arg(targetRoots.size()).arg(trimmed));
+        setStatusMessage(QString("Searching %1 categories for \"%2\"...").arg(m_targetRoots.size()).arg(trimmed));
     }
 
-    FLUX_LOG_INFO("Search", QString("[#%1] Search for \"%2\" across %3 roots")
-                  .arg(searchId).arg(trimmed).arg(targetRoots.size()));
+    FLUX_LOG_INFO("Search", QString("[#%1] Search for \"%2\" across %3 roots; literal queries: [%4], anchors: [%5]")
+                  .arg(searchId).arg(trimmed).arg(m_targetRoots.size())
+                  .arg(m_plan.literalQueries.join(" | "), m_plan.anchorQueries.join(" | ")));
 
-    for (const auto &root : targetRoots) {
-        QNetworkRequest request{QUrl(root.url)};
-        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json;charset=utf-8");
+    startStage(searchId, m_plan.literalQueries);
+}
 
-        QJsonObject searchObj;
-        searchObj["href"] = root.href;
-        searchObj["pattern"] = trimmed;
-        searchObj["ignorecase"] = true;
+void SearchManager::startStage(quint64 searchId, const QStringList &queries) {
+    m_stage = (&queries == &m_plan.anchorQueries) ? 2 : 1;
+    m_pendingReplies = static_cast<int>(m_targetRoots.size()) * static_cast<int>(queries.size());
+    if (m_pendingReplies <= 0) {
+        m_pendingReplies = 0;
+        finishSearch(searchId);
+        return;
+    }
 
-        QJsonObject rootObj;
-        rootObj["action"] = "get";
-        rootObj["search"] = searchObj;
+    const int stage = m_stage;
+    for (const auto &root : m_targetRoots) {
+        for (const QString &pattern : queries) {
+            QNetworkRequest request{QUrl(root.url)};
+            request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json;charset=utf-8");
 
-        QByteArray payload = QJsonDocument(rootObj).toJson(QJsonDocument::Compact);
-        QNetworkReply *reply = m_networkManager.post(request, payload);
-        m_activeReplies.push_back(reply);
+            QJsonObject searchObj;
+            searchObj["href"] = root.href;
+            searchObj["pattern"] = pattern;
+            searchObj["ignorecase"] = true;
 
-        MediaRoot rootCopy = root;
-        connect(reply, &QNetworkReply::finished, this, [this, reply, searchId, rootCopy]() {
-            onSingleReplyFinished(reply, searchId, rootCopy);
-        });
+            QJsonObject rootObj;
+            rootObj["action"] = "get";
+            rootObj["search"] = searchObj;
+
+            QByteArray payload = QJsonDocument(rootObj).toJson(QJsonDocument::Compact);
+            QNetworkReply *reply = m_networkManager.post(request, payload);
+            m_activeReplies.push_back(reply);
+
+            const MediaRoot rootCopy = root;
+            connect(reply, &QNetworkReply::finished, this, [this, reply, searchId, rootCopy, stage]() {
+                onReplyFinished(reply, searchId, rootCopy, stage);
+            });
+        }
     }
 }
 
 void SearchManager::cancel() {
-    for (auto *reply : m_activeReplies) {
+    // Take the list first: aborting a reply can emit finished() right away
+    std::vector<QNetworkReply*> replies;
+    replies.swap(m_activeReplies);
+    m_pendingReplies = 0;
+
+    for (auto *reply : replies) {
         if (reply) {
+            reply->disconnect(this);   // no more callbacks from this reply
             reply->abort();
             reply->deleteLater();
         }
     }
-    m_activeReplies.clear();
-    m_pendingReplies = 0;
 }
 
 void SearchManager::clear() {
@@ -390,7 +414,25 @@ QVariantMap SearchManager::getResult(int index) const {
     return map;
 }
 
-void SearchManager::onSingleReplyFinished(QNetworkReply *reply, quint64 searchId, MediaRoot activeRoot) {
+namespace {
+
+// Text a result is scored on: the file/folder name plus the two folders above it, so a file
+// inside "Spider-Man (2002)/" still counts as a hit for "spiderman"
+QString scoringText(const SearchResult &r) {
+    const QStringList parts = r.parentPath.split('/', Qt::SkipEmptyParts);
+    QString text;
+    for (qsizetype i = std::max<qsizetype>(0, parts.size() - 2); i < parts.size(); ++i) {
+        text += parts.at(i) + QLatin1Char(' ');
+    }
+    return text + r.displayName;
+}
+
+// If the literal queries found fewer unique results than this, also try the looser "anchor" pass
+constexpr int kBroadenBelow = 12;
+
+} // namespace
+
+void SearchManager::onReplyFinished(QNetworkReply *reply, quint64 searchId, const MediaRoot &activeRoot, int stage) {
     if (!reply) return;
     reply->deleteLater();
 
@@ -429,10 +471,19 @@ void SearchManager::onSingleReplyFinished(QNetworkReply *reply, quint64 searchId
                     bool isSizeNull = sizeVal.isNull() || sizeVal.isUndefined();
                     qint64 size = isSizeNull ? -1 : sizeVal.toVariant().toLongLong();
 
-                    m_accumulatedResults.push_back(
-                        SearchResult::fromJson(href, size, isSizeNull, activeRoot.serverOrigin,
-                                               activeRoot.id, activeRoot.name, activeRoot.group)
-                    );
+                    SearchResult item = SearchResult::fromJson(href, size, isSizeNull, activeRoot.serverOrigin,
+                                                               activeRoot.id, activeRoot.name, activeRoot.group);
+
+                    const int score = SearchQuery::score(scoringText(item), m_plan);
+                    if (stage == 1) {
+                        // The server matched this literally; keep it even if our scorer disagrees
+                        item.matchScore = score > 0 ? score : 2;
+                    } else {
+                        // Loose candidates from the anchor pass: keep only the ones that really match
+                        if (score == 0) continue;
+                        item.matchScore = score;
+                    }
+                    m_accumulatedResults.push_back(std::move(item));
                 }
             }
         }
@@ -442,46 +493,75 @@ void SearchManager::onSingleReplyFinished(QNetworkReply *reply, quint64 searchId
     }
 
     --m_pendingReplies;
-    if (m_pendingReplies <= 0) {
-        m_pendingReplies = 0;
-        setSearching(false);
+    if (m_pendingReplies > 0) return;
+    m_pendingReplies = 0;
 
-        // Sort results: folders first, then by title alphabetically
-        std::sort(m_accumulatedResults.begin(), m_accumulatedResults.end(), [](const SearchResult &a, const SearchResult &b) {
-            if (a.isFolder != b.isFolder) {
-                return a.isFolder > b.isFolder;
-            }
-            return a.displayName.compare(b.displayName, Qt::CaseInsensitive) < 0;
-        });
+    // Literal queries found little: look for close matches ("spiderman" -> "Spider-Man", typos)
+    if (stage == 1 && !m_plan.anchorQueries.isEmpty()) {
+        QSet<QString> unique;
+        for (const auto &r : m_accumulatedResults) unique.insert(r.playUrl);
 
-        // Deduplicate results by playUrl
-        QSet<QString> seenUrls;
-        std::vector<SearchResult> uniqueResults;
-        uniqueResults.reserve(m_accumulatedResults.size());
-        for (auto &item : m_accumulatedResults) {
-            if (item.playUrl.isEmpty() || !seenUrls.contains(item.playUrl)) {
-                if (!item.playUrl.isEmpty()) {
-                    seenUrls.insert(item.playUrl);
-                }
-                uniqueResults.push_back(std::move(item));
-            }
+        if (unique.size() < kBroadenBelow) {
+            setStatusMessage(QString("Looking for close matches to \"%1\"...").arg(m_query));
+            FLUX_LOG_INFO("Search", QString("[#%1] Only %2 literal hits; trying anchors [%3]")
+                          .arg(searchId).arg(unique.size()).arg(m_plan.anchorQueries.join(" | ")));
+            startStage(searchId, m_plan.anchorQueries);
+            return;
         }
-        m_accumulatedResults = std::move(uniqueResults);
-
-        beginResetModel();
-        m_results = std::move(m_accumulatedResults);
-        endResetModel();
-
-        if (m_results.empty()) {
-            setStatusMessage(QString("No results found for \"%1\"").arg(m_query));
-        } else {
-            setStatusMessage(QString("%1 results found").arg(m_results.size()));
-        }
-
-        emit resultCountChanged();
-        FLUX_LOG_INFO("Search", QString("[#%1] Multi-search finished with %2 results")
-                      .arg(searchId).arg(m_results.size()));
     }
+
+    finishSearch(searchId);
+}
+
+void SearchManager::finishSearch(quint64 searchId) {
+    setSearching(false);
+
+    // Best matches first; then folders before files; then alphabetical
+    std::sort(m_accumulatedResults.begin(), m_accumulatedResults.end(), [](const SearchResult &a, const SearchResult &b) {
+        if (a.matchScore != b.matchScore) {
+            return a.matchScore > b.matchScore;
+        }
+        if (a.isFolder != b.isFolder) {
+            return a.isFolder > b.isFolder;
+        }
+        return a.displayName.compare(b.displayName, Qt::CaseInsensitive) < 0;
+    });
+
+    // Deduplicate results by playUrl (the best-scoring copy comes first after the sort)
+    QSet<QString> seenUrls;
+    std::vector<SearchResult> uniqueResults;
+    uniqueResults.reserve(m_accumulatedResults.size());
+    for (auto &item : m_accumulatedResults) {
+        if (item.playUrl.isEmpty() || !seenUrls.contains(item.playUrl)) {
+            if (!item.playUrl.isEmpty()) {
+                seenUrls.insert(item.playUrl);
+            }
+            uniqueResults.push_back(std::move(item));
+        }
+    }
+    m_accumulatedResults = std::move(uniqueResults);
+
+    bool hasCloseMatches = false;
+    for (const auto &r : m_accumulatedResults) {
+        if (r.matchScore < 3) { hasCloseMatches = true; break; }
+    }
+
+    beginResetModel();
+    m_results = std::move(m_accumulatedResults);
+    endResetModel();
+    m_accumulatedResults.clear();
+
+    if (m_results.empty()) {
+        setStatusMessage(QString("No results found for \"%1\"").arg(m_query));
+    } else if (hasCloseMatches) {
+        setStatusMessage(QString("%1 results found (some are close matches)").arg(m_results.size()));
+    } else {
+        setStatusMessage(QString("%1 results found").arg(m_results.size()));
+    }
+
+    emit resultCountChanged();
+    FLUX_LOG_INFO("Search", QString("[#%1] Multi-search finished with %2 results")
+                  .arg(searchId).arg(m_results.size()));
 }
 
 void SearchManager::setSearching(bool searching) {
