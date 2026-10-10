@@ -167,6 +167,10 @@ ApplicationWindow {
         sequence: "Escape"
         onActivated: {
             // Dialogs first: Escape closes the topmost one
+            if (customTitleBar.menuOpen) {
+                customTitleBar.closeMenu()
+                return
+            }
             if (settingsPanel.opened) {
                 settingsPanel.dismiss()
                 return
@@ -332,7 +336,7 @@ ApplicationWindow {
             window: window
             solid: searchPage.navSolid
             overlayMode: currentPage === "player"
-            shown: !window.isFullscreen && (currentPage !== "player" || playerView.showControls)
+            shown: !window.isFullscreen && (currentPage !== "player" || playerView.showControls || menuOpen)
             showNowPlaying: !!fluxPlayer && fluxPlayer.isPlaying && currentPage !== "player"
 
             onNowPlayingClicked: currentPage = "player"

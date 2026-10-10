@@ -63,11 +63,20 @@ qt_add_executable(FLUX WIN32
     src/core/Logger.cpp
     src/core/UserStore.h
     src/core/UserStore.cpp
+    src/core/Updater.h
+    src/core/Updater.cpp
+    src/core/Version.h
     resources/flux.rc
 )
 
 set_target_properties(FLUX PROPERTIES
     WIN32_EXECUTABLE TRUE
+)
+
+# The app version lives in project(FLUX VERSION ...) above. The updater compares
+# it against the latest GitHub release tag (see src/core/Version.h).
+target_compile_definitions(FLUX PRIVATE
+    FLUX_VERSION="${PROJECT_VERSION}"
 )
 
 # Qt Quick / QML Module
@@ -105,6 +114,7 @@ qt_add_qml_module(FLUX
         qml/components/SettingsPanel.qml
         qml/components/DownloadsPanel.qml
         qml/components/FolderPicker.qml
+        qml/components/UpdateMenu.qml
 )
 
 target_link_libraries(FLUX PRIVATE

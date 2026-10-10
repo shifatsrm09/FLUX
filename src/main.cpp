@@ -9,6 +9,7 @@
 #include <QString>
 #include "app/Application.h"
 #include "core/Logger.h"
+#include "core/Version.h"
 
 int main(int argc, char *argv[]) {
     // High-DPI and modern desktop rendering defaults
@@ -16,6 +17,7 @@ int main(int argc, char *argv[]) {
     QGuiApplication::setOrganizationDomain("flux.local");
     QGuiApplication::setApplicationName("FLUX");
     QGuiApplication::setApplicationDisplayName("FLUX");
+    QGuiApplication::setApplicationVersion(QString::fromLatin1(FLUX_VERSION));
 
     QGuiApplication app(argc, argv);
     QQuickStyle::setStyle("Basic");
@@ -34,8 +36,8 @@ int main(int argc, char *argv[]) {
         Flux::Logger::instance().log(level, "Qt", msg);
     });
 
-    FLUX_LOG_INFO("Main", QString("Initializing FLUX v0.0.3 Native Desktop Player... Log path: %1")
-                              .arg(Flux::Logger::instance().logFilePath()));
+    FLUX_LOG_INFO("Main", QString("Initializing FLUX v%1 Native Desktop Player... Log path: %2")
+                              .arg(QString::fromLatin1(FLUX_VERSION), Flux::Logger::instance().logFilePath()));
 
     QQmlApplicationEngine engine;
     Flux::Application fluxApp;

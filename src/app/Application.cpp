@@ -4,8 +4,10 @@
 #include "../media/VLCVideoItem.h"
 #include "../models/TestMedia.h"
 #include "../core/Logger.h"
+#include "../core/Version.h"
 #include <QCoreApplication>
 #include <QQmlContext>
+#include <QTimer>
 
 namespace Flux {
 
@@ -15,6 +17,7 @@ Application::Application(QObject *parent)
 
 Application::~Application() {
     FLUX_LOG_INFO("Application", "Shutting down FLUX Application...");
+    m_updater.reset();
     // The user store records final watch progress from the player, so it goes first
     m_userStore.reset();
     m_downloads.reset();   // aborts transfers (leaving resumable .part files) before the browser goes
@@ -26,7 +29,7 @@ Application::~Application() {
 }
 
 bool Application::initialize(QQmlApplicationEngine &engine) {
-    FLUX_LOG_INFO("Application", "Starting FLUX Media Player v0.0.3...");
+    FLUX_LOG_INFO("Application", QString("Starting FLUX Media Player v%1...").arg(QString::fromLatin1(FLUX_VERSION)));
 
     // 1. Initialize libVLC instance once
     if (!VLCInstance::instance().initialize()) {
@@ -41,6 +44,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     m_folderBrowser = std::make_unique<FolderBrowser>(this);
     m_downloads = std::make_unique<DownloadManager>(m_folderBrowser.get(), this);
     m_userStore = std::make_unique<UserStore>(this);
+    m_updater = std::make_unique<Updater>(this);
 
     // 2b. Restore saved user settings
     {
@@ -123,8 +127,15 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     rootContext->setContextProperty("fluxBrowser", m_folderBrowser.get());
     rootContext->setContextProperty("fluxDownloads", m_downloads.get());
     rootContext->setContextProperty("fluxUser", m_userStore.get());
+    rootContext->setContextProperty("fluxUpdater", m_updater.get());
     rootContext->setContextProperty("fluxLibrary", m_searchManager->libraryModel());
     rootContext->setContextProperty("fluxLogger", &Logger::instance());
+
+    // 5. Quiet update check shortly after launch (lights a dot on the ⋯ menu if a newer
+    //    release exists; never shows an error or interrupts playback)
+    QTimer::singleShot(4000, m_updater.get(), [updater = m_updater.get()]() {
+        updater->checkForUpdates(true);
+    });
 
     FLUX_LOG_INFO("Application", "Core services registered with QML engine");
     return true;

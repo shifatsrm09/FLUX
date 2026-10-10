@@ -17,6 +17,7 @@ Item {
     property bool solid: false          // opaque background (scrolled / results page)
     property bool overlayMode: false    // player mode: transparent, window controls only
     property bool shown: true           // fade whole bar in / out
+    readonly property bool menuOpen: updateMenu.opened
 
     signal homeClicked()
     signal nowPlayingClicked()
@@ -26,6 +27,10 @@ Item {
     visible: opacity > 0.0
 
     Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+
+    function closeMenu() {
+        updateMenu.close()
+    }
 
     function toggleMaximize() {
         if (!root.window) return
@@ -185,6 +190,75 @@ Item {
             }
         }
 
+
+        // More (⋯): version + check for updates
+        Rectangle {
+            id: moreButton
+
+            property double lastClosed: 0   // guards against the press that closes the menu re-opening it
+
+            Layout.preferredWidth: 46
+            Layout.fillHeight: true
+            color: (moreMouse.containsPress || updateMenu.opened) ? "#33FFFFFF"
+                                                                   : (moreMouse.containsMouse ? "#1FFFFFFF" : "transparent")
+
+            Row {
+                anchors.centerIn: parent
+                spacing: 3
+
+                Repeater {
+                    model: 3
+
+                    Rectangle {
+                        width: 3
+                        height: 3
+                        radius: 1.5
+                        color: (moreMouse.containsMouse || updateMenu.opened) ? "#FFFFFF" : "#B4B4BF"
+                    }
+                }
+            }
+
+            // "Update available" dot
+            Rectangle {
+                visible: !!fluxUpdater && fluxUpdater.updateAvailable
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.rightMargin: 10
+                anchors.topMargin: 12
+                width: 9
+                height: 9
+                radius: 4.5
+                color: Theme.accent
+                border.width: 1
+                border.color: "#0A0A0D"
+            }
+
+            MouseArea {
+                id: moreMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: {
+                    if (Date.now() - moreButton.lastClosed < 250) return
+                    if (updateMenu.opened) updateMenu.close()
+                    else updateMenu.open()
+                }
+            }
+
+            FluxToolTip {
+                visible: moreMouse.containsMouse && !updateMenu.opened
+                delay: 500
+                text: (!!fluxUpdater && fluxUpdater.updateAvailable) ? "Update available" : "More"
+            }
+
+            UpdateMenu {
+                id: updateMenu
+
+                x: moreButton.width - width
+                y: moreButton.height + 4
+
+                onClosed: moreButton.lastClosed = Date.now()
+            }
+        }
 
         // Minimize
         Rectangle {

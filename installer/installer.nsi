@@ -1,9 +1,17 @@
 !include "MUI2.nsh"
 !include "x64.nsh"
 
+; Version: pass it on the command line so it matches CMakeLists.txt, e.g.
+;   makensis /DVERSION=0.0.4 installer\installer.nsi
+; The self-updater downloads the release asset named  FLUX-<version>-Setup.exe
+; and runs it silently:  FLUX-<version>-Setup.exe /S /D=<install dir>
+!ifndef VERSION
+  !define VERSION "0.0.3"
+!endif
+
 ; General
 Name "FLUX"
-OutFile "..\dist\Release-v0.0.3\FLUX-0.0.3-Setup.exe"
+OutFile "..\dist\Release-v${VERSION}\FLUX-${VERSION}-Setup.exe"
 Unicode True
 InstallDir "$PROGRAMFILES64\FLUX"
 InstallDirRegKey HKLM "Software\FLUX" "Install_Dir"
@@ -30,21 +38,32 @@ RequestExecutionLevel admin
 !insertmacro MUI_LANGUAGE "English"
 
 ; Version Info
-VIProductVersion "0.0.3.0"
+VIProductVersion "${VERSION}.0"
 VIAddVersionKey "ProductName" "FLUX"
 VIAddVersionKey "Comments" "Internal Media Streaming Client"
 VIAddVersionKey "CompanyName" "FLUX"
 VIAddVersionKey "LegalCopyright" "FLUX"
 VIAddVersionKey "FileDescription" "FLUX \x2014 Internal Media Streaming Client Installer"
-VIAddVersionKey "FileVersion" "0.0.3.0"
-VIAddVersionKey "ProductVersion" "0.0.3.0"
+VIAddVersionKey "FileVersion" "${VERSION}.0"
+VIAddVersionKey "ProductVersion" "${VERSION}.0"
+
+; The installer is 32-bit but the install location is written to the 64-bit registry
+; view, so read it from there. A silent update passes /D=<dir> explicitly; keep that.
+Function .onInit
+    IfSilent done
+    SetRegView 64
+    ReadRegStr $0 HKLM "Software\FLUX" "Install_Dir"
+    StrCmp $0 "" done
+    StrCpy $INSTDIR $0
+    done:
+FunctionEnd
 
 Section "FLUX (required)" SecMain
     SectionIn RO
     SetRegView 64
 
     SetOutPath "$INSTDIR"
-    File /r "..\dist\FLUX-0.0.3\*.*"
+    File /r "..\dist\FLUX-${VERSION}\*.*"
 
     ; Write uninstaller
     WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -54,7 +73,7 @@ Section "FLUX (required)" SecMain
 
     ; Windows Add/Remove Programs
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "DisplayName" "FLUX"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "DisplayVersion" "0.0.3"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "DisplayVersion" "${VERSION}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "Publisher" "FLUX"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "DisplayIcon" "$INSTDIR\resources\flux.ico"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "UninstallString" '"$INSTDIR\Uninstall.exe"'
