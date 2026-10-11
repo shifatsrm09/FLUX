@@ -23,12 +23,17 @@ Item {
     readonly property bool searching: (!!fluxSearch && fluxSearch.isSearching)
     readonly property bool browsing: (!!fluxBrowser && fluxBrowser.active)
 
-    // Exactly one of the three views is shown at a time
-    readonly property bool showHome: !root.hasSearched && !root.browsing
-    readonly property bool showResults: root.hasSearched && !root.browsing
+    // Set by the nav bar's "Bookmarks" link; the bookmarks view stays underneath any folder
+    // opened from it, so Back / the first breadcrumb returns to the bookmarks.
+    property bool bookmarksOpen: false
+
+    // Exactly one of the four views is shown at a time
+    readonly property bool showBookmarks: root.bookmarksOpen && !root.browsing
+    readonly property bool showHome: !root.hasSearched && !root.browsing && !root.bookmarksOpen
+    readonly property bool showResults: root.hasSearched && !root.browsing && !root.bookmarksOpen
     readonly property bool showBrowser: root.browsing
 
-    readonly property bool navSolid: root.hasSearched || root.browsing || homeFlick.contentY > 24
+    readonly property bool navSolid: root.hasSearched || root.browsing || root.bookmarksOpen || homeFlick.contentY > 24
     readonly property real pageMargin: Math.max(32, Math.round((root.width - 1240) / 2))
 
     // Shimmering placeholder tiles shown while a listing loads
@@ -275,6 +280,10 @@ Item {
 
                         onRemoveRequested: function(url) {
                             if (fluxUser) fluxUser.removeFromHistory(url)
+                        }
+
+                        onDownloadRequested: function(url, itemTitle, isPack) {
+                            root.startDownload(url, itemTitle, isPack)
                         }
                     }
                 }
@@ -615,6 +624,150 @@ Item {
     }
 
     // =========================================================================
+    // VIEW D: Bookmarks: the same card grid as search results
+    // =========================================================================
+    ColumnLayout {
+        id: bookmarksView
+
+        anchors.fill: parent
+        anchors.topMargin: root.topInset + 10
+        anchors.leftMargin: root.pageMargin
+        anchors.rightMargin: root.pageMargin
+        spacing: 16
+        opacity: root.showBookmarks ? 1.0 : 0.0
+        visible: opacity > 0.0
+
+        transform: Translate {
+            y: root.showBookmarks ? 0 : 14
+
+            Behavior on y { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+        }
+
+        Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+
+        // Heading
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 6
+            spacing: 2
+
+            Text {
+                Layout.fillWidth: true
+                text: "Bookmarks"
+                color: Theme.text
+                font.pixelSize: 26
+                font.weight: Font.Bold
+                font.letterSpacing: -0.4
+            }
+
+            Text {
+                visible: !!fluxBookmarks && fluxBookmarks.count > 0
+                text: fluxBookmarks ? (fluxBookmarks.count + (fluxBookmarks.count === 1 ? " item" : " items")
+                                       + "  \u00B7  Right-click a card for more options") : ""
+                color: Theme.textDim
+                font.pixelSize: 13
+            }
+        }
+
+        // Empty state
+        ColumnLayout {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.topMargin: 70
+            spacing: 10
+            visible: !fluxBookmarks || fluxBookmarks.count === 0
+
+            Rectangle {
+                Layout.alignment: Qt.AlignHCenter
+                implicitWidth: 72
+                implicitHeight: 72
+                radius: 36
+                color: Theme.surface
+                border.width: 1
+                border.color: Theme.border
+
+                Text {
+                    anchors.centerIn: parent
+                    anchors.verticalCenterOffset: -2
+                    text: "\u2606"
+                    color: Theme.textMute
+                    font.pixelSize: 32
+                }
+            }
+
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 8
+                text: "No bookmarks yet"
+                color: Theme.text
+                font.pixelSize: 20
+                font.weight: Font.DemiBold
+            }
+
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: "Right-click any movie or folder and choose Bookmark to save it here."
+                color: Theme.textDim
+                font.pixelSize: 14
+            }
+        }
+
+        GridView {
+            id: bookmarksGrid
+
+            readonly property int columns: Math.max(1, Math.floor(width / 250))
+
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: !!fluxBookmarks && fluxBookmarks.count > 0
+            clip: true
+            model: fluxBookmarks
+            cellWidth: Math.floor(width / columns)
+            cellHeight: Math.round(cellWidth * 0.62) + 14
+            boundsBehavior: Flickable.StopAtBounds
+            cacheBuffer: 800
+
+            ScrollBar.vertical: FluxScrollBar { }
+
+            footer: Item {
+                width: bookmarksGrid.width
+                height: 32
+            }
+
+            delegate: SearchResultCard {
+                readonly property var prog: {
+                    var rev = fluxUser ? fluxUser.revision : 0
+                    return fluxUser ? fluxUser.progressFor(model.playUrl) : ({})
+                }
+
+                width: bookmarksGrid.cellWidth
+                height: bookmarksGrid.cellHeight
+                showDownload: true
+                title: model.title
+                parentPath: model.parentPath
+                isFolder: model.isFolder
+                formattedSize: model.formattedSize
+                extension: model.extension
+                playUrl: model.playUrl
+                libraryName: model.libraryName
+                isPlaying: (!!fluxPlayer && fluxPlayer.url === model.playUrl && fluxPlayer.isPlaying)
+                progress: (prog.fraction !== undefined) ? prog.fraction : 0
+                watched: (prog.watched === true)
+                introDelay: (index % 4) * 40
+
+                onDownloadRequested: function(url, itemTitle, isPack) { root.startDownload(url, itemTitle, isPack) }
+
+                onPlayRequested: function(url, itemTitle) {
+                    root.playMediaRequested(url, itemTitle)
+                }
+
+                onFolderRequested: function(url, libName) {
+                    if (fluxBrowser) fluxBrowser.open(url, libName, "")
+                }
+            }
+        }
+    }
+
+    // =========================================================================
     // VIEW C: Folder browser (breadcrumbs + contents)
     // =========================================================================
     ColumnLayout {
@@ -639,7 +792,7 @@ Item {
         Breadcrumbs {
             Layout.fillWidth: true
             crumbs: fluxBrowser ? fluxBrowser.breadcrumbs : []
-            rootLabel: root.hasSearched ? "Results" : "Home"
+            rootLabel: root.bookmarksOpen ? "Bookmarks" : (root.hasSearched ? "Results" : "Home")
 
             onBackClicked: {
                 if (fluxBrowser) fluxBrowser.goUp()

@@ -18,11 +18,12 @@ Item {
     property bool overlayMode: false    // player mode: transparent, window controls only
     property bool shown: true           // fade whole bar in / out
     readonly property bool menuOpen: updateMenu.opened || telepartyMenu.opened
-    property string section: "home"    // which nav link is highlighted: "home" | "library" | ""
+    property string section: "home"    // which nav link is highlighted: "home" | "bookmarks" | "library" | ""
     // In a Teleparty session offline playback is unavailable: the Library link is grayed out
     property bool offlineLocked: false
 
     signal homeClicked()
+    signal bookmarksClicked()
     signal libraryClicked()
     signal nowPlayingClicked()
 
@@ -209,6 +210,12 @@ Item {
                 label: "Home"
                 current: root.section === "home"
                 onClicked: root.homeClicked()
+            }
+
+            NavLink {
+                label: "Bookmarks"
+                current: root.section === "bookmarks"
+                onClicked: root.bookmarksClicked()
             }
 
             NavLink {

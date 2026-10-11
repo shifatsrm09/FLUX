@@ -23,6 +23,7 @@ Application::~Application() {
     m_updater.reset();
     // The user store records final watch progress from the player, so it goes first
     m_userStore.reset();
+    m_bookmarks.reset();
     m_downloads.reset();   // aborts transfers (leaving resumable .part files) before the browser goes
     m_folderBrowser.reset();
     m_player.reset();
@@ -47,6 +48,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     m_folderBrowser = std::make_unique<FolderBrowser>(this);
     m_downloads = std::make_unique<DownloadManager>(m_folderBrowser.get(), this);
     m_userStore = std::make_unique<UserStore>(this);
+    m_bookmarks = std::make_unique<BookmarkManager>(this);
     m_updater = std::make_unique<Updater>(this);
 
     // Teleparty: watch together through a public MQTT broker (no server of ours)
@@ -141,6 +143,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     rootContext->setContextProperty("fluxBrowser", m_folderBrowser.get());
     rootContext->setContextProperty("fluxDownloads", m_downloads.get());
     rootContext->setContextProperty("fluxUser", m_userStore.get());
+    rootContext->setContextProperty("fluxBookmarks", m_bookmarks.get());
     rootContext->setContextProperty("fluxUpdater", m_updater.get());
     rootContext->setContextProperty("fluxTeleparty", m_teleparty.get());
     rootContext->setContextProperty("fluxSync", m_sync.get());

@@ -37,6 +37,12 @@ Item {
     signal removeRequested(string url)
     signal downloadRequested(string url, string title, bool isPack)
 
+    // Bookmark state (reading `revision` makes this re-evaluate whenever bookmarks change)
+    readonly property bool bookmarked: {
+        var rev = fluxBookmarks ? fluxBookmarks.revision : 0
+        return fluxBookmarks ? fluxBookmarks.isBookmarked(root.playUrl) : false
+    }
+
     // Parsed presentation values
     readonly property var parsed: Formatter.formatMedia(root.title, root.isFolder, root.formattedSize)
     readonly property var meta: Formatter.describe(root.title, root.isFolder, root.formattedSize)
@@ -206,11 +212,32 @@ Item {
             }
         }
 
-        // Quality / watched badges (top-left)
+        // Bookmarked marker (top-left)
+        Rectangle {
+            visible: root.bookmarked
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.margins: 10
+            width: 22
+            height: 22
+            radius: 11
+            color: Theme.accent
+
+            Text {
+                anchors.centerIn: parent
+                anchors.verticalCenterOffset: -1
+                text: "\u2605"
+                color: "#FFFFFF"
+                font.pixelSize: 12
+            }
+        }
+
+        // Quality / watched badges (top-left, shifted right of the bookmark marker)
         RowLayout {
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.margins: 10
+            anchors.leftMargin: root.bookmarked ? 38 : 10
             spacing: 6
             visible: !root.isFolder
 
@@ -408,13 +435,58 @@ Item {
         anchors.margins: 7
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
 
-        onClicked: {
-            if (root.isFolder) {
-                if (root.playUrl.length > 0) root.folderRequested(root.playUrl, root.libraryName)
-            } else if (root.playUrl.length > 0) {
-                root.playRequested(root.playUrl, root.parsed.title)
+        onClicked: function(mouse) {
+            if (mouse.button === Qt.RightButton) {
+                root.openContextMenu(mouse.x, mouse.y)
+            } else {
+                root.activate()
             }
+        }
+    }
+
+    // ---- Actions shared by a left click and the right-click menu -------------------------
+    function activate() {
+        if (root.isFolder) {
+            if (root.playUrl.length > 0) root.folderRequested(root.playUrl, root.libraryName)
+        } else if (root.playUrl.length > 0) {
+            root.playRequested(root.playUrl, root.parsed.title)
+        }
+    }
+
+    function toggleBookmark() {
+        if (!fluxBookmarks || root.playUrl.length === 0) return
+        fluxBookmarks.toggle(root.playUrl, root.title, root.isFolder, root.formattedSize,
+                             root.extension, root.libraryName, root.parentPath)
+    }
+
+    function requestDownload() {
+        if (root.playUrl.length === 0) return
+        root.downloadRequested(root.playUrl, root.title, root.isFolder)
+        root.dlFlash = true
+        dlFlashTimer.restart()
+    }
+
+    function openContextMenu(x, y) {
+        if (root.playUrl.length === 0) return
+        ctxLoader.active = true
+        if (ctxLoader.item) ctxLoader.item.popup(rowMouse, x, y)
+    }
+
+    // Created on first right-click, so cards that are never right-clicked carry no extra cost
+    Loader {
+        id: ctxLoader
+        active: false
+
+        sourceComponent: CardMenu {
+            isFolder: root.isFolder
+            bookmarked: root.bookmarked
+            canDownload: root.playUrl.length > 0
+
+            onOpenRequested: root.activate()
+            onBookmarkToggled: root.toggleBookmark()
+            onDownloadRequested: root.requestDownload()
         }
     }
 

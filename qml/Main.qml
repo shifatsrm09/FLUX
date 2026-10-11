@@ -210,6 +210,19 @@ ApplicationWindow {
         if (fluxSearch) {
             fluxSearch.clear()
         }
+        searchPage.bookmarksOpen = false
+    }
+
+    // Bookmarks: the saved files / folders, shown with the same cards as search results
+    function showBookmarks() {
+        if (isFullscreen) {
+            toggleFullscreen()
+        }
+        currentPage = "search"
+        if (fluxBrowser) {
+            fluxBrowser.close()     // show the bookmarks list itself, not a folder opened earlier
+        }
+        searchPage.bookmarksOpen = true
     }
 
     // Back from the player: to the page it was started from (browse or Library)
@@ -267,6 +280,9 @@ ApplicationWindow {
             } else if (currentPage === "search" && fluxBrowser && fluxBrowser.active) {
                 // Inside a folder: step out one level (closes the browser at the top)
                 fluxBrowser.goUp()
+            } else if (currentPage === "search" && searchPage.bookmarksOpen) {
+                // On the Bookmarks page: back to where we were
+                searchPage.bookmarksOpen = false
             }
         }
     }
@@ -486,7 +502,8 @@ ApplicationWindow {
             z: 100
             window: window
             solid: searchPage.navSolid || currentPage === "library"
-            section: currentPage === "library" ? "library" : (currentPage === "search" ? "home" : "")
+            section: currentPage === "library" ? "library"
+                                                : (currentPage === "search" ? (searchPage.bookmarksOpen ? "bookmarks" : "home") : "")
             overlayMode: currentPage === "player"
             shown: !window.isFullscreen && (currentPage !== "player" || playerView.showControls || menuOpen)
             offlineLocked: window.inTeleparty
@@ -509,6 +526,7 @@ ApplicationWindow {
                 if (fluxPlayer && fluxPlayer.isPaused) fluxPlayer.resume()
             }
             onHomeClicked: window.returnToHome()
+            onBookmarksClicked: window.showBookmarks()
             onLibraryClicked: window.showLibrary()
         }
 

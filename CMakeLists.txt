@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(FLUX VERSION 1.1.0 LANGUAGES CXX)
+project(FLUX VERSION 1.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -69,6 +69,8 @@ qt_add_executable(FLUX WIN32
     src/core/Logger.cpp
     src/core/UserStore.h
     src/core/UserStore.cpp
+    src/core/BookmarkManager.h
+    src/core/BookmarkManager.cpp
     src/core/Updater.h
     src/core/Updater.cpp
     src/core/Version.h
@@ -146,6 +148,7 @@ qt_add_qml_module(FLUX
         qml/components/FolderPicker.qml
         qml/components/UpdateMenu.qml
         qml/components/TelepartyMenu.qml
+        qml/components/CardMenu.qml
 )
 
 target_link_libraries(FLUX PRIVATE

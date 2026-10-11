@@ -9,6 +9,7 @@
 #include "../search/SearchManager.h"
 #include "../search/FolderBrowser.h"
 #include "../core/UserStore.h"
+#include "../core/BookmarkManager.h"
 #include "../core/Updater.h"
 #include "../downloads/DownloadManager.h"
 #include "../teleparty/TelepartySession.h"
@@ -41,6 +42,7 @@ private:
     std::unique_ptr<TelepartySession> m_teleparty;
     std::unique_ptr<TelepartySync> m_sync;
     std::unique_ptr<UserStore> m_userStore;
+    std::unique_ptr<BookmarkManager> m_bookmarks;
     std::unique_ptr<Updater> m_updater;
 };
 
