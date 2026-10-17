@@ -241,10 +241,12 @@ int main(int argc, char *argv[]) {
 
     QString joinerOpenedUrl;
     QString joinerOpenedTitle;
+    qint64 joinerOpenedStartMs = -1;
     QObject::connect(&joinerSync, &TelepartySync::remoteOpenRequested,
-                     [&](const QString &url, const QString &title, qint64) {
+                     [&](const QString &url, const QString &title, qint64 startMs) {
                          joinerOpenedUrl = url;
                          joinerOpenedTitle = title;
+                         joinerOpenedStartMs = startMs;
                      });
 
     joinerSession.join(roomCode);
@@ -297,14 +299,15 @@ int main(int argc, char *argv[]) {
             "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282023%29%201080p/"
             "Ant-Man%20and%20the%20Wasp-Quantumania%20%282023%29%201080p%20DSNP/"
             "Ant-Man%20and%20the%20Wasp%20Quantumania%20%282023%29%201080p%20DSNP-WEB%20x265%20HEVC%2010bit%20AAC%205.1%20MSubs-PSA.mkv");
-        hostSync.broadcastOpen(antManUrl, QStringLiteral("Ant-Man and the Wasp: Quantumania"));
+        hostSync.broadcastOpen(antManUrl, QStringLiteral("Ant-Man and the Wasp: Quantumania"), 58000);
 
-        if (!waitForCondition(6000, [&]() { return joinerOpenedUrl == antManUrl; })) {
-            std::cerr << "FAIL: Joiner TelepartySync did not open compact catalog movie." << std::endl;
+        if (!waitForCondition(6000, [&]() { return joinerOpenedUrl == antManUrl && joinerOpenedStartMs == 58000; })) {
+            std::cerr << "FAIL: Joiner TelepartySync did not open compact catalog movie at startMs=58000 (got "
+                      << joinerOpenedStartMs << ")." << std::endl;
             return 1;
         }
-        std::cout << "PASS: Compact catalog movie 'open' received & resolved by Joiner (title=\""
-                  << joinerOpenedTitle.toStdString() << "\")" << std::endl;
+        std::cout << "PASS: Compact catalog movie 'open' with startMs=58000 received & resolved by Joiner (title=\""
+                  << joinerOpenedTitle.toStdString() << "\", startMs=" << joinerOpenedStartMs << ")" << std::endl;
     }
 
     // 5b: Host selects a movie with a long BDIX catalog URL (> 150 chars raw) -> automatically chunked & reassembled

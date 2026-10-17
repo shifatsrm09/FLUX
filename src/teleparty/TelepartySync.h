@@ -94,7 +94,7 @@ public:
     bool resolveCatalogMovie(const QVariantMap &data, QString &outUrl, QString &outTitle) const;
 
     // Broadcast a catalog stream selected by the local user. Offline files are not shared.
-    Q_INVOKABLE void broadcastOpen(const QString &url, const QString &title);
+    Q_INVOKABLE void broadcastOpen(const QString &url, const QString &title, qint64 startMs = 0);
 
     // Host declares or replaces the shared local video for a Local Teleparty session
     Q_INVOKABLE bool broadcastLocalOpen(const QString &fileUrlOrPath,
@@ -263,7 +263,7 @@ private:
     void flushSeek();
     void armNeedState();
     void noteOpen(const QString &url, const QString &title, qint64 rev, qint64 hostTimestampMs,
-                  const QString &authorId);
+                  const QString &authorId, qint64 startMs = 0);
     void resetParty();
     bool playerRunning() const;
     qint64 partyTimeMs() const;

@@ -636,7 +636,7 @@ bool TelepartySync::isStreamUrl(const QString &url) const {
     return !encodeCatalogMovieId(url).isEmpty();
 }
 
-void TelepartySync::broadcastOpen(const QString &url, const QString &title) {
+void TelepartySync::broadcastOpen(const QString &url, const QString &title, qint64 startMs) {
     if (!m_session || !m_session->active() || !isStreamUrl(url)) return;
 
     const QString movieId = encodeCatalogMovieId(url);
@@ -649,7 +649,8 @@ void TelepartySync::broadcastOpen(const QString &url, const QString &title) {
     flushSeek();
     const qint64 rev = m_timeline.nextRevision();
     const qint64 hostNow = estimatedHostNowMs();
-    noteOpen(url, title.left(kMaxTitleLength), rev, hostNow, m_session->memberId());
+    const qint64 cleanStartMs = AuthoritativeTimeline::sanitizePositionMs(startMs);
+    noteOpen(url, title.left(kMaxTitleLength), rev, hostNow, m_session->memberId(), cleanStartMs);
     m_announceOnPlay = true;
     m_needState = false;
     m_stateTimer.stop();
@@ -658,6 +659,9 @@ void TelepartySync::broadcastOpen(const QString &url, const QString &title) {
     d.insert(QStringLiteral("id"), movieId);
     d.insert(QStringLiteral("rev"), rev);
     d.insert(QStringLiteral("ht"), hostNow);
+    if (cleanStartMs > 0) {
+        d.insert(QStringLiteral("t"), cleanStartMs);
+    }
     if (!isBuiltinCatalogId(movieId) && !m_currentTitle.isEmpty()) {
         d.insert(QStringLiteral("n"), m_currentTitle);
     }
@@ -1148,13 +1152,17 @@ void TelepartySync::handleOpen(const QVariantMap &data, const QString &from) {
                           ? data.value(QStringLiteral("ht")).toLongLong()
                           : estimatedHostNowMs();
 
-    noteOpen(url, title, rev, ht, from);
+    const qint64 startMs = cleanTime(data.value(QStringLiteral("t")));
+
+    noteOpen(url, title, rev, ht, from, startMs);
     m_syncOnPlay = true;
     m_needState = false;
     m_stateTimer.stop();
 
-    FLUX_LOG_INFO("Teleparty", QString("A member opened: %1 (rev=%2)").arg(title.isEmpty() ? url : title).arg(rev));
-    emit remoteOpenRequested(url, title, 0);
+    FLUX_LOG_INFO("Teleparty", QString("A member opened: %1 at %2 (rev=%3)")
+                                   .arg(title.isEmpty() ? url : title, formatTime(startMs))
+                                   .arg(rev));
+    emit remoteOpenRequested(url, title, startMs);
 }
 
 void TelepartySync::handleState(const QVariantMap &data, const QString &from) {
@@ -2771,11 +2779,11 @@ void TelepartySync::armNeedState() {
 }
 
 void TelepartySync::noteOpen(const QString &url, const QString &title, qint64 rev,
-                             qint64 hostTimestampMs, const QString &authorId) {
+                             qint64 hostTimestampMs, const QString &authorId, qint64 startMs) {
     const bool changed = (m_currentUrl != url || m_currentTitle != title);
     m_currentUrl = url;
     m_currentTitle = title;
-    m_partyTimeMs = 0;
+    m_partyTimeMs = std::max<qint64>(0, startMs);
     m_partyDurationMs = 0;
     m_partyPlaying = true;
     m_partyUpdatedLocalMs = localNowMs();
@@ -2803,7 +2811,7 @@ void TelepartySync::noteOpen(const QString &url, const QString &title, qint64 re
     snap.mediaUrl = url;
     snap.mediaTitle = title;
     snap.durationMs = 0;
-    snap.basePositionMs = 0;
+    snap.basePositionMs = m_partyTimeMs;
     snap.hostTimestampMs = hostTimestampMs;
     snap.playing = true;
     snap.playbackRate = 1.0;

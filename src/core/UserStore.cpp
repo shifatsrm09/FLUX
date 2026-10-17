@@ -437,30 +437,31 @@ void UserStore::notePartyMedia(const QString &url, const QString &title, qint64 
     if (key.isEmpty()) return;
 
     m_partyKey = key;
+    m_hasPartyMedia = true;
 
-    HistoryEntry &e = m_history[key];
-    e.url = url;
-    e.title = nameFromUrl(url);
-    if (e.title.isEmpty()) e.title = title;
-    e.positionMs = std::max<qint64>(1000, positionMs);
-    if (durationMs > 0) {
-        e.durationMs = durationMs;
-    } else if (e.durationMs <= 0) {
-        e.durationMs = std::max<qint64>(e.positionMs * 2, 3600000);
+    m_partyEntry.url = url;
+    m_partyEntry.title = nameFromUrl(url);
+    if (m_partyEntry.title.isEmpty() || ((url.contains(QLatin1String("player.php")) || m_partyEntry.title.contains('?')) && !title.isEmpty())) {
+        m_partyEntry.title = title;
     }
-    e.lastPlayed = QDateTime::currentMSecsSinceEpoch();
-    e.watched = false;
+    if (m_partyEntry.title.isEmpty()) m_partyEntry.title = title;
+    m_partyEntry.positionMs = std::max<qint64>(0, positionMs);
+    m_partyEntry.durationMs = durationMs > 0 ? durationMs : 3600000;
+    m_partyEntry.lastPlayed = QDateTime::currentMSecsSinceEpoch();
+    m_partyEntry.watched = false;
 
-    m_dirty = true;
-    scheduleSave();
+    // Do NOT overwrite m_history or reset the user's personal positionMs.
+    // Joining a Teleparty must never reset or corrupt the user's existing watch history.
 
     ++m_revision;
     emit historyChanged();
 }
 
 void UserStore::clearPartyMedia() {
-    if (m_partyKey.isEmpty()) return;
+    if (m_partyKey.isEmpty() && !m_hasPartyMedia) return;
     m_partyKey.clear();
+    m_hasPartyMedia = false;
+    m_partyEntry = HistoryEntry();
     ++m_revision;
     emit historyChanged();
 }
@@ -472,22 +473,44 @@ void UserStore::clearPartyMedia() {
 QVariantMap UserStore::progressFor(const QString &url) const {
     QVariantMap map;
     const auto it = m_history.constFind(keyFor(url));
-    if (it == m_history.constEnd()) return map;
+    if (it != m_history.constEnd()) {
+        const HistoryEntry &e = it.value();
+        const double fraction = (e.durationMs > 0 && e.positionMs > 0)
+                                ? std::clamp(static_cast<double>(e.positionMs) / static_cast<double>(e.durationMs), 0.0, 1.0)
+                                : (e.watched ? 1.0 : 0.0);
+        map["positionMs"] = e.positionMs;
+        map["durationMs"] = e.durationMs;
+        map["fraction"] = fraction;
+        map["watched"] = e.watched;
+        map["lastPlayed"] = e.lastPlayed;
+        return map;
+    }
 
-    const HistoryEntry &e = it.value();
-    const double fraction = (e.durationMs > 0 && e.positionMs > 0)
-                            ? std::clamp(static_cast<double>(e.positionMs) / static_cast<double>(e.durationMs), 0.0, 1.0)
-                            : (e.watched ? 1.0 : 0.0);
-    map["positionMs"] = e.positionMs;
-    map["durationMs"] = e.durationMs;
-    map["fraction"] = fraction;
-    map["watched"] = e.watched;
+    if (m_hasPartyMedia && !m_partyKey.isEmpty() && keyFor(url) == m_partyKey) {
+        const double fraction = (m_partyEntry.durationMs > 0 && m_partyEntry.positionMs > 0)
+                                ? std::clamp(static_cast<double>(m_partyEntry.positionMs) / static_cast<double>(m_partyEntry.durationMs), 0.0, 1.0)
+                                : 0.0;
+        map["positionMs"] = m_partyEntry.positionMs;
+        map["durationMs"] = m_partyEntry.durationMs;
+        map["fraction"] = fraction;
+        map["watched"] = false;
+        map["lastPlayed"] = m_partyEntry.lastPlayed;
+        return map;
+    }
+
     return map;
 }
 
 qint64 UserStore::resumePositionFor(const QString &url) const {
     const auto it = m_history.constFind(keyFor(url));
-    if (it == m_history.constEnd()) return 0;
+    if (it == m_history.constEnd()) {
+        if (m_hasPartyMedia && !m_partyKey.isEmpty() && keyFor(url) == m_partyKey) {
+            if (m_partyEntry.positionMs < kMinResumeMs) return 0;
+            if (m_partyEntry.durationMs > 0 && m_partyEntry.positionMs >= m_partyEntry.durationMs) return 0;
+            return m_partyEntry.positionMs;
+        }
+        return 0;
+    }
 
     const HistoryEntry &e = it.value();
     if (e.positionMs < kMinResumeMs) return 0;
@@ -497,12 +520,20 @@ qint64 UserStore::resumePositionFor(const QString &url) const {
 
 QVariantList UserStore::continueWatching() const {
     std::vector<const HistoryEntry *> allEntries;
-    allEntries.reserve(static_cast<size_t>(m_history.size()));
+    allEntries.reserve(static_cast<size_t>(m_history.size()) + 1);
 
+    bool partyInHistory = false;
     for (auto it = m_history.constBegin(); it != m_history.constEnd(); ++it) {
         const HistoryEntry &e = it.value();
         if (e.url.isEmpty()) continue;
+        if (!m_partyKey.isEmpty() && keyFor(e.url) == m_partyKey) {
+            partyInHistory = true;
+        }
         allEntries.push_back(&e);
+    }
+
+    if (!m_partyKey.isEmpty() && m_hasPartyMedia && !partyInHistory && !m_partyEntry.url.isEmpty()) {
+        allEntries.push_back(&m_partyEntry);
     }
 
     const auto recentFirst = [this](const HistoryEntry *a, const HistoryEntry *b) {
@@ -540,7 +571,11 @@ QVariantList UserStore::continueWatching() const {
 // ----------------------------------------------------------------------------
 
 void UserStore::removeFromHistory(const QString &url) {
-    if (m_history.remove(keyFor(url))) {
+    const QString key = keyFor(url);
+    if (!m_partyKey.isEmpty() && m_partyKey == key) {
+        clearPartyMedia();
+    }
+    if (m_history.remove(key)) {
         m_dirty = true;
         scheduleSave();
         ++m_revision;

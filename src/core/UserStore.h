@@ -177,6 +177,8 @@ private:
     QString m_currentKey;
     QString m_currentPlaybackKey;
     QString m_partyKey;
+    HistoryEntry m_partyEntry;
+    bool m_hasPartyMedia = false;
     int m_revision = 0;
 
     QPointer<VLCPlayer> m_player;

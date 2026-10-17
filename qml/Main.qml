@@ -253,7 +253,7 @@ ApplicationWindow {
         // Clicking the video the party is already watching (e.g. from Continue Watching
         // after joining late) joins at the party's live timestamp instead of restarting from 0
         if (window.inTeleparty && fluxSync && fluxSync.hasPartyMedia
-                && window.sameMediaUrl(fluxSync.currentUrl, sourceUrl)) {
+                && (window.sameMediaUrl(fluxSync.currentUrl, sourceUrl) || (directUrl && window.sameMediaUrl(fluxSync.currentUrl, directUrl)))) {
             fluxSync.joinPartyPlayback()
             return
         }
@@ -263,10 +263,15 @@ ApplicationWindow {
         currentPage = "player"
 
         // Read the saved position BEFORE noteStart() touches the history entry.
-        // In a Teleparty everyone starts together from the beginning.
-        var resumeMs = (!window.inTeleparty && fluxUser) ? fluxUser.resumePositionFor(sourceUrl) : 0
+        var resumeMs = fluxUser ? fluxUser.resumePositionFor(sourceUrl) : 0
+        if (resumeMs <= 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
+            resumeMs = fluxUser.resumePositionFor(directUrl)
+        }
         var resumeProgress = (resumeMs > 0 && fluxUser) ? fluxUser.progressFor(sourceUrl) : ({})
-        var resumeFraction = resumeProgress.fraction > 0 ? resumeProgress.fraction : -1
+        if ((!resumeProgress || !resumeProgress.fraction) && resumeMs > 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
+            resumeProgress = fluxUser.progressFor(directUrl)
+        }
+        var resumeFraction = (resumeProgress && resumeProgress.fraction > 0) ? resumeProgress.fraction : -1
         if (fluxUser) fluxUser.noteStart(sourceUrl, title, playbackUrl)
 
         // Look up the next episode in the background (for the "Up next" card)
@@ -290,7 +295,7 @@ ApplicationWindow {
             var partyUrl = (playbackUrl && fluxSync.isStreamUrl(playbackUrl))
                 ? playbackUrl
                 : ((directUrl && fluxSync.isStreamUrl(directUrl)) ? directUrl : sourceUrl)
-            fluxSync.broadcastOpen(partyUrl, title)
+            fluxSync.broadcastOpen(partyUrl, title, resumeMs)
         }
     }
 
