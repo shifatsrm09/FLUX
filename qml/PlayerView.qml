@@ -237,10 +237,14 @@ Rectangle {
 
     Timer {
         id: hideControlsTimer
-        interval: 3500
+        interval: 2000
         running: !!root.player && root.player.isPlaying && !controlsBar.isUserInteracting && !topHover.hovered && !root.episodesPanelOpen
         repeat: false
-        onTriggered: root.showControls = false
+        onTriggered: {
+            root.showControls = false
+            playerMouseArea.anchorX = playerMouseArea.mouseX
+            playerMouseArea.anchorY = playerMouseArea.mouseY
+        }
     }
 
     Timer {
@@ -275,27 +279,60 @@ Rectangle {
 
     // Mouse: click = play/pause, double click = fullscreen, wheel = volume
     MouseArea {
+        id: playerMouseArea
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: root.showControls ? Qt.ArrowCursor : Qt.BlankCursor
         // Popup.CloseOnPressOutside closes the menu on press, before onClicked runs.
         // Remember its state so that same outside click doesn't also toggle playback.
         property bool menuWasOpenAtPress: false
+        property real anchorX: -1
+        property real anchorY: -1
 
         onPressed: menuWasOpenAtPress = root.menuOpen
 
-        onPositionChanged: root.wakeControls()
+        onPositionChanged: function(mouse) {
+            if (!root.showControls) {
+                // Soft deadzone: ignore micro-movements/vibrations (< 14px) when controls are hidden
+                if (anchorX >= 0 && anchorY >= 0) {
+                    var dx = mouse.x - anchorX
+                    var dy = mouse.y - anchorY
+                    if ((dx * dx + dy * dy) < 196) {
+                        return
+                    }
+                }
+            }
+            anchorX = mouse.x
+            anchorY = mouse.y
+            root.wakeControls()
+        }
 
         // Pause/resume on the very first click, with no waiting to see whether a second
         // click follows. A double click then undoes that toggle and goes fullscreen.
-        onClicked: {
+        onClicked: function(mouse) {
+            anchorX = mouse.x
+            anchorY = mouse.y
             root.wakeControls()
-            if (!menuWasOpenAtPress && root.player) root.player.togglePlay()
+            if (menuWasOpenAtPress || !root.player) return
+
+            // 15% top and 15% bottom deadspace where clicking does not toggle playback
+            var topDeadzone = root.height * 0.15
+            var bottomDeadzone = root.height * 0.85
+            if (mouse.y < topDeadzone || mouse.y > bottomDeadzone) {
+                return
+            }
+
+            root.player.togglePlay()
         }
 
-        onDoubleClicked: {
+        onDoubleClicked: function(mouse) {
             if (!menuWasOpenAtPress) {
-                if (root.player) root.player.togglePlay()
+                var topDeadzone = root.height * 0.15
+                var bottomDeadzone = root.height * 0.85
+                var wasInPlayArea = (mouse.y >= topDeadzone && mouse.y <= bottomDeadzone)
+                if (wasInPlayArea && root.player) {
+                    root.player.togglePlay()
+                }
                 root.toggleFullscreenRequested()
             }
         }

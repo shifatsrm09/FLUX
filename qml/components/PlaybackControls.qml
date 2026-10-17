@@ -14,7 +14,7 @@ Item {
     property bool episodesOpen: false
 
     readonly property bool menuOpen: tracksPopup.visible || root.episodesOpen
-    property bool isUserInteracting: (seekSlider.pressed || volumeSlider.pressed || tracksPopup.visible || controlsHover.hovered || root.episodesOpen)
+    property bool isUserInteracting: (seekSlider.pressed || seekGraceArea.pressed || volumeSlider.pressed || tracksPopup.visible || controlsHover.hovered || root.episodesOpen)
 
     // Used to stop the "press outside closes popup" + "click toggles popup" double-fire
     property double popupClosedAt: 0
@@ -104,6 +104,7 @@ Item {
 
             Text {
                 Layout.preferredWidth: 64
+                Layout.alignment: Qt.AlignVCenter
                 horizontalAlignment: Text.AlignRight
                 text: root.player ? root.player.formattedTime : "00:00"
                 color: Theme.text
@@ -115,7 +116,7 @@ Item {
                 id: seekSlider
 
                 Layout.fillWidth: true
-                Layout.preferredHeight: 28
+                Layout.preferredHeight: 36
                 from: 0.0
                 to: 1.0
                 value: root.player ? root.player.position : 0.0
@@ -136,7 +137,37 @@ Item {
                     if (root.player) seekSlider.value = root.player.position
                 }
 
-                readonly property bool engaged: seekSlider.hovered || seekSlider.pressed
+                // Invisible grace area above the slider to make seeking effortless
+                MouseArea {
+                    id: seekGraceArea
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.top
+                    height: 40
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+
+                    property real hoverX: 0
+
+                    onPositionChanged: function(mouse) {
+                        hoverX = mouse.x
+                        if (pressed) {
+                            var frac = Theme.clamp((mouse.x - seekSlider.leftPadding) / Math.max(1, seekSlider.availableWidth), 0, 1)
+                            seekSlider.value = frac
+                            if (root.player) root.player.seek(frac)
+                        }
+                    }
+
+                    onPressed: function(mouse) {
+                        hoverX = mouse.x
+                        var frac = Theme.clamp((mouse.x - seekSlider.leftPadding) / Math.max(1, seekSlider.availableWidth), 0, 1)
+                        seekSlider.value = frac
+                        if (root.player) root.player.seek(frac)
+                    }
+                }
+
+                readonly property bool engaged: seekSlider.hovered || seekSlider.pressed || seekGraceArea.containsMouse || seekGraceArea.pressed
+                readonly property real previewCursorX: seekGraceArea.containsMouse ? seekGraceArea.hoverX : seekHover.point.position.x
 
                 HoverHandler { id: seekHover }
 
@@ -178,9 +209,9 @@ Item {
 
                 // Hover time preview
                 Rectangle {
-                    visible: seekHover.hovered && !!root.player && root.player.durationMs > 0
-                    x: Theme.clamp(seekHover.point.position.x - width / 2, 0, seekSlider.width - width)
-                    y: -height - 4
+                    visible: (seekHover.hovered || seekGraceArea.containsMouse) && !!root.player && root.player.durationMs > 0
+                    x: Theme.clamp(seekSlider.previewCursorX - width / 2, 0, seekSlider.width - width)
+                    y: -height - 8
                     implicitWidth: previewText.implicitWidth + 18
                     implicitHeight: 26
                     radius: 7
@@ -193,7 +224,7 @@ Item {
                         anchors.centerIn: parent
                         text: root.player
                               ? Theme.formatTime(root.player.durationMs
-                                                 * Theme.clamp((seekHover.point.position.x - seekSlider.leftPadding) / Math.max(1, seekSlider.availableWidth), 0, 1))
+                                                 * Theme.clamp((seekSlider.previewCursorX - seekSlider.leftPadding) / Math.max(1, seekSlider.availableWidth), 0, 1))
                               : ""
                         color: Theme.text
                         font.pixelSize: 12
@@ -210,6 +241,7 @@ Item {
 
             Text {
                 Layout.preferredWidth: 64
+                Layout.alignment: Qt.AlignVCenter
                 text: root.player ? root.player.formattedDuration : "00:00"
                 color: Theme.textDim
                 font.pixelSize: 13
