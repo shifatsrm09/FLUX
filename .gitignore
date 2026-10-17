@@ -12,3 +12,4 @@ dist/
 .env.*
 !.env.example
 inspirationREADME.md
+tools/nsis/
