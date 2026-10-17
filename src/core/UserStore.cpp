@@ -51,7 +51,7 @@ SeriesLocation seriesLocation(const QString &mediaUrl) {
     if (parts.size() < 3) return {}; // Avoid treating a category folder as a show's folder.
 
     static const QRegularExpression seasonRe(
-        QStringLiteral("^(?:season|series|s)[\\s._-]*\\d{1,2}(?:\\b.*)?$"),
+        QStringLiteral("^(?:season|series|s)[\\s._-]*\\d{1,2}(?:\\b.*)?$|^specials?$|^extras?$"),
         QRegularExpression::CaseInsensitiveOption);
     if (parts.size() > 1 && seasonRe.match(parts.constLast()).hasMatch())
         parts.removeLast();
@@ -120,9 +120,12 @@ CleanMediaResult cleanMediaTitle(const QString &url, const QString &rawInput, bo
     static const QRegularExpression groupRe(QStringLiteral("\\s*-\\s*[A-Za-z0-9_.]+$"));
     s.remove(groupRe);
 
-    // Check for TV series folder notation: "Title (TV Series 2019– )", "Title [TV Mini Series 2020]", etc.
+    // Check for TV series folder notation: "Title (TV Series 2019– )", "Title [TV Mini Series 2020]", "Title (2019-2020)", etc.
     static const QRegularExpression tvFolderRe(
-        QStringLiteral("^(.*?)\\s*[\\(\\[](?:TV\\s*)?(?:Mini[- ]?)?Series[\\s._-]*(\\d{4})?[^\\)\\]]*[\\)\\]]"),
+        QStringLiteral("^(.*?)\\s*[\\(\\[](?:(?:Korean|TV|Mini|Web)[\\s._-]*)*(?:Series)?(?:[\\s._-]*)(19\\d\\d|20\\d\\d)(?:[\\s._-]*[-–—][^\\)\\]]*)?[\\)\\]]"),
+        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression tvFolderNoYearRe(
+        QStringLiteral("^(.*?)\\s*[\\(\\[](?:(?:Korean|TV|Mini|Web)[\\s._-]*)*Series[^\\)\\]]*[\\)\\]]"),
         QRegularExpression::CaseInsensitiveOption);
     const QRegularExpressionMatch tvFolderMatch = tvFolderRe.match(s);
     if (tvFolderMatch.hasMatch()) {
@@ -135,6 +138,17 @@ CleanMediaResult cleanMediaTitle(const QString &url, const QString &rawInput, bo
         static const QRegularExpression multiSpaceRe(QStringLiteral("\\s+"));
         title.replace(multiSpaceRe, QStringLiteral(" "));
         return {title.trimmed(), year, QStringLiteral("series")};
+    }
+    const QRegularExpressionMatch tvNoYearMatch = tvFolderNoYearRe.match(s);
+    if (tvNoYearMatch.hasMatch()) {
+        QString title = tvNoYearMatch.captured(1).trimmed();
+        title.replace(QLatin1Char('.'), QLatin1Char(' '));
+        title.replace(QLatin1Char('_'), QLatin1Char(' '));
+        static const QRegularExpression trimCharsRe(QStringLiteral("^[\\s\\(\\)\\[\\]\\-_.,:]+|[\\s\\(\\)\\[\\]\\-_.,:]+$"));
+        title.remove(trimCharsRe);
+        static const QRegularExpression multiSpaceRe(QStringLiteral("\\s+"));
+        title.replace(multiSpaceRe, QStringLiteral(" "));
+        return {title.trimmed(), QString(), QStringLiteral("series")};
     }
 
     // Detect series markers
@@ -219,6 +233,23 @@ CleanMediaResult cleanMediaTitle(const QString &url, const QString &rawInput, bo
                 year = parentRes.year;
             }
         }
+    }
+
+    if (year.isEmpty() && !url.trimmed().isEmpty()) {
+        static const QRegularExpression urlYearRe(QStringLiteral("[/\\\\][^/\\\\]*?\\b(19\\d\\d|20\\d\\d)\\b[^/\\\\]*?[/\\\\]"));
+        auto it = urlYearRe.globalMatch(url);
+        QList<QRegularExpressionMatch> uMatches;
+        while (it.hasNext()) uMatches.append(it.next());
+        if (!uMatches.isEmpty()) {
+            year = uMatches.last().captured(1);
+        }
+    }
+
+    // Disambiguation for Korean series Kingdom (2019)
+    if (cleanTitle.compare(QLatin1String("Kingdom"), Qt::CaseInsensitive) == 0 &&
+        (url.contains(QLatin1String("korean"), Qt::CaseInsensitive) || raw.contains(QLatin1String("korean"), Qt::CaseInsensitive))) {
+        if (year.isEmpty()) year = QStringLiteral("2019");
+        return {cleanTitle, year, QStringLiteral("series")};
     }
 
     const QString mediaType = isSeries ? QStringLiteral("series") : QStringLiteral("movie");
@@ -960,6 +991,10 @@ void UserStore::loadPosters() {
             const QString key = o.value("k").toString();
             const QString url = o.value("u").toString();
             if (key.isEmpty() || url.isEmpty()) continue;
+            if (url.contains(QLatin1String("BOTVjYjY4"))) {
+                m_postersDirty = true;
+                continue;
+            }
             PosterEntry e;
             e.url = url;
             e.usedAt = static_cast<qint64>(o.value("t").toDouble());
@@ -972,6 +1007,10 @@ void UserStore::loadPosters() {
             const QString key = o.value("k").toString();
             const QString url = o.value("u").toString();
             if (key.isEmpty() || url.isEmpty()) continue;
+            if (url.contains(QLatin1String("BOTVjYjY4"))) {
+                m_postersDirty = true;
+                continue;
+            }
             PosterEntry e;
             e.url = url;
             e.usedAt = static_cast<qint64>(o.value("t").toDouble());
@@ -985,6 +1024,10 @@ void UserStore::loadPosters() {
                 m_seriesFolders.insert(m, w);
             }
         }
+    }
+
+    if (m_postersDirty && !m_posterSaveTimer.isActive()) {
+        m_posterSaveTimer.start();
     }
 }
 
@@ -1256,6 +1299,17 @@ void UserStore::handleCinemetaResponse(const PosterFetchTask &task, const QByteA
             // No year provided: only accept if completely unambiguous (exactly 1 title match)
             if (titleMatches.size() == 1) {
                 chosenPoster = titleMatches.first().poster;
+            }
+        }
+
+        // Disambiguate Kingdom: Korean series tt6611916 (2019-2020)
+        if (chosenPoster.isEmpty() && task.cleanTitle.compare(QLatin1String("Kingdom"), Qt::CaseInsensitive) == 0 &&
+            (task.year == QLatin1String("2019") || task.url.contains(QLatin1String("korean"), Qt::CaseInsensitive) || task.originalTitle.contains(QLatin1String("korean"), Qt::CaseInsensitive))) {
+            for (const Candidate &c : titleMatches) {
+                if (c.id == QLatin1String("tt6611916") || c.releaseInfo.contains(QLatin1String("2019"))) {
+                    chosenPoster = c.poster;
+                    break;
+                }
             }
         }
     }

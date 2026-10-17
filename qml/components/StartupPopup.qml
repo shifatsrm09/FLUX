@@ -19,11 +19,11 @@ Window {
     property bool doneEmitted: false
 
     width: 300
-    height: 310
+    height: 350
     minimumWidth: 300
     maximumWidth: 300
-    minimumHeight: 310
-    maximumHeight: 310
+    minimumHeight: 350
+    maximumHeight: 350
     visible: true
     title: "FLUX"
     color: "transparent"
@@ -156,35 +156,6 @@ Window {
             }
         }
 
-        // Top-right subtle close button
-        Rectangle {
-            width: 24
-            height: 24
-            radius: 12
-            anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.topMargin: 8
-            anchors.rightMargin: 8
-            color: closeMouse.containsMouse ? "#3A3E45" : "transparent"
-            z: 5
-
-            Text {
-                anchors.centerIn: parent
-                text: "\u00D7"
-                color: closeMouse.containsMouse ? "#FFFFFF" : "#72767D"
-                font.pixelSize: 15
-                font.weight: Font.Medium
-            }
-
-            MouseArea {
-                id: closeMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: Qt.quit()
-            }
-        }
-
         // ---- Center Logo (FLUX v2.png logo centered like Discord Clyde) ----
         Item {
             id: logoContainer
@@ -192,7 +163,7 @@ Window {
             height: 72
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: parent.top
-            anchors.topMargin: 82
+            anchors.topMargin: 96
 
             Image {
                 id: logoImg
