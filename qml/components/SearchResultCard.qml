@@ -121,7 +121,7 @@ Item {
     z: root.hovered ? 20 : 0
 
     // ---- Entrance animation: fade + rise, staggered per card --------------------------
-    property bool shown: false
+    property bool shown: root.introDelay < 0
 
     opacity: root.shown ? 1.0 : 0.0
     transform: Translate {
@@ -133,13 +133,15 @@ Item {
     Behavior on opacity { NumberAnimation { duration: 420; easing.type: Easing.OutCubic } }
 
     Component.onCompleted: {
-        introTimer.start()
+        if (root.introDelay >= 0) {
+            introTimer.start()
+        }
         root.checkFetchPoster()
     }
 
     Timer {
         id: introTimer
-        interval: root.introDelay
+        interval: Math.max(0, root.introDelay)
         repeat: false
         onTriggered: root.shown = true
     }

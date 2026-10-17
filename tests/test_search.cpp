@@ -61,6 +61,15 @@ int main(int argc, char *argv[]) {
                       << "      URL:  " << item["playUrl"].toString().toStdString() << "\n";
         }
 
+        QVariantList rows = searchMgr.getSectionedGridRows(4);
+        std::cout << "\nSectioned Grid Rows (columns=4): " << rows.size() << " rows\n";
+        for (const auto &v : rows) {
+            QVariantMap r = v.toMap();
+            if (r["isHeader"].toBool()) {
+                std::cout << "  [Header] " << r["title"].toString().toStdString()
+                          << " (" << r["countText"].toString().toStdString() << ")\n";
+            }
+        }
         std::cout << "\nTest passed successfully.\n";
         app.quit();
     });

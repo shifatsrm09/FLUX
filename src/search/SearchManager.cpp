@@ -12,12 +12,45 @@
 
 namespace Flux {
 
+bool FolderFilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const {
+    if (!sourceModel()) return false;
+    const QModelIndex idx = sourceModel()->index(sourceRow, 0, sourceParent);
+    bool isFolder = sourceModel()->data(idx, SearchManager::IsFolderRole).toBool();
+    return isFolder == m_showFolders;
+}
+
 SearchManager::SearchManager(QObject *parent)
     : QAbstractListModel(parent)
     , m_libraryModel(std::make_unique<MediaLibraryModel>(this)) {
+    m_folderModel = new FolderFilterProxyModel(true, this);
+    m_folderModel->setSourceModel(this);
+
+    m_mediaModel = new FolderFilterProxyModel(false, this);
+    m_mediaModel->setSourceModel(this);
+
     m_libraryModel->loadServer(m_activeServer, m_iccSession, m_iccUrl);
     applyDefaultSelection();
     fetchTrending();
+}
+
+int SearchManager::folderCount() const {
+    int count = 0;
+    for (const auto &r : m_results) {
+        if (r.isFolder) ++count;
+    }
+    return count;
+}
+
+int SearchManager::mediaCount() const {
+    return static_cast<int>(m_results.size()) - folderCount();
+}
+
+bool SearchManager::hasFolders() const {
+    return folderCount() > 0;
+}
+
+bool SearchManager::hasMedia() const {
+    return mediaCount() > 0;
 }
 
 // Default selection: English Movies only (falls back to All if the id is missing)
@@ -131,6 +164,8 @@ void SearchManager::setActiveServer(int server) {
     m_errorMessage.clear();
     m_statusMessage.clear();
     endResetModel();
+    ++m_resultsRevision;
+    emit resultsRevisionChanged();
     emit resultCountChanged();
     emit errorMessageChanged();
     emit statusMessageChanged();
@@ -791,6 +826,8 @@ void SearchManager::clear() {
     m_results.clear();
     endResetModel();
 
+    ++m_resultsRevision;
+    emit resultsRevisionChanged();
     emit queryChanged();
     emit resultCountChanged();
 }
@@ -811,6 +848,75 @@ QVariantMap SearchManager::getResult(int index) const {
         map["posterUrl"]     = item.posterUrl;
     }
     return map;
+}
+
+QVariantList SearchManager::getSectionedGridRows(int columns) const {
+    QVariantList rows;
+    if (m_results.empty()) return rows;
+    columns = std::max(1, columns);
+
+    std::vector<int> folderIndices;
+    std::vector<int> mediaIndices;
+    folderIndices.reserve(m_results.size());
+    mediaIndices.reserve(m_results.size());
+
+    for (int i = 0; i < static_cast<int>(m_results.size()); ++i) {
+        if (m_results[static_cast<size_t>(i)].isFolder) {
+            folderIndices.push_back(i);
+        } else {
+            mediaIndices.push_back(i);
+        }
+    }
+
+    // 1. Folders section
+    if (!folderIndices.empty()) {
+        QVariantMap header;
+        header["isHeader"] = true;
+        header["isFolder"] = true;
+        header["title"] = QStringLiteral("Folders & Series");
+        header["icon"] = QStringLiteral("folder");
+        const int fCount = static_cast<int>(folderIndices.size());
+        header["countText"] = QString("%1 %2").arg(fCount).arg(fCount == 1 ? "folder" : "folders");
+        rows.append(header);
+
+        for (size_t i = 0; i < folderIndices.size(); i += static_cast<size_t>(columns)) {
+            QVariantMap row;
+            row["isHeader"] = false;
+            row["isFolder"] = true;
+            QVariantList items;
+            for (size_t c = 0; c < static_cast<size_t>(columns) && (i + c) < folderIndices.size(); ++c) {
+                items.append(getResult(folderIndices[i + c]));
+            }
+            row["items"] = items;
+            rows.append(row);
+        }
+    }
+
+    // 2. Media section
+    if (!mediaIndices.empty()) {
+        QVariantMap header;
+        header["isHeader"] = true;
+        header["isFolder"] = false;
+        header["title"] = QStringLiteral("Movies & Episodes");
+        header["icon"] = QStringLiteral("play");
+        const int mCount = static_cast<int>(mediaIndices.size());
+        header["countText"] = QString("%1 %2").arg(mCount).arg(mCount == 1 ? "item" : "items");
+        rows.append(header);
+
+        for (size_t i = 0; i < mediaIndices.size(); i += static_cast<size_t>(columns)) {
+            QVariantMap row;
+            row["isHeader"] = false;
+            row["isFolder"] = false;
+            QVariantList items;
+            for (size_t c = 0; c < static_cast<size_t>(columns) && (i + c) < mediaIndices.size(); ++c) {
+                items.append(getResult(mediaIndices[i + c]));
+            }
+            row["items"] = items;
+            rows.append(row);
+        }
+    }
+
+    return rows;
 }
 
 namespace {
@@ -958,6 +1064,8 @@ void SearchManager::finishSearch(quint64 searchId) {
         setStatusMessage(QString("%1 results found").arg(m_results.size()));
     }
 
+    ++m_resultsRevision;
+    emit resultsRevisionChanged();
     emit resultCountChanged();
     FLUX_LOG_INFO("Search", QString("[#%1] Multi-search finished with %2 results")
                   .arg(searchId).arg(m_results.size()));

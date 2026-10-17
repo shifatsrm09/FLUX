@@ -1277,7 +1277,18 @@ Item {
             }
 
             Text {
-                text: (fluxSearch ? fluxSearch.selectedCategoriesSummary : "") + "  \u00B7  " + (fluxSearch ? fluxSearch.resultCount : 0) + " results"
+                text: {
+                    if (!fluxSearch) return ""
+                    var summary = fluxSearch.selectedCategoriesSummary
+                    var total = fluxSearch.resultCount
+                    var fCount = fluxSearch.folderCount
+                    var mCount = fluxSearch.mediaCount
+                    var countStr = total + " results"
+                    if (fCount > 0 && mCount > 0) {
+                        countStr += " (" + fCount + (fCount === 1 ? " folder, " : " folders, ") + mCount + (mCount === 1 ? " video" : " videos") + ")"
+                    }
+                    return (summary.length > 0 ? (summary + "  \u00B7  ") : "") + countStr
+                }
                 color: Theme.textDim
                 font.pixelSize: 13
             }
@@ -1395,60 +1406,154 @@ Item {
             }
         }
 
-        // Results grid
-        GridView {
-            id: resultsGrid
-
-            readonly property int targetCardW: 172
-            readonly property int columns: Math.max(2, Math.floor(width / targetCardW))
+        // Sectioned Virtualized Search Results View: Folders first, then Movies/Episodes
+        ListView {
+            id: resultsListView
 
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: !!fluxSearch && !fluxSearch.isSearching && fluxSearch.hasResults
             clip: true
-            model: fluxSearch
-            cellWidth: Math.floor(width / columns)
-            cellHeight: Math.round(cellWidth * 1.5)
             boundsBehavior: Flickable.StopAtBounds
             cacheBuffer: 800
 
+            readonly property int targetCardW: 172
+            readonly property int columns: Math.max(2, Math.floor((width + 14) / (targetCardW + 14)))
+            readonly property real cardW: Math.floor((width - (columns - 1) * 14) / columns)
+            readonly property real cardH: Math.round(cardW * 1.5)
+
+            property int lastRevision: -1
+
             ScrollBar.vertical: FluxScrollBar { }
 
-            footer: Item {
-                width: resultsGrid.width
-                height: 32
+            model: {
+                var rev = fluxSearch ? fluxSearch.resultsRevision : 0
+                var searching = fluxSearch ? fluxSearch.isSearching : false
+                var hasRes = fluxSearch ? fluxSearch.hasResults : false
+                if (!fluxSearch || searching || !hasRes) return []
+                return fluxSearch.getSectionedGridRows(resultsListView.columns)
             }
 
-            delegate: SearchResultCard {
-                // Reading `revision` makes the watch badges refresh when history changes
-                readonly property var prog: {
-                    var rev = fluxUser ? fluxUser.revision : 0
-                    return fluxUser ? fluxUser.progressFor(model.playUrl) : ({})
+            onModelChanged: {
+                var rev = fluxSearch ? fluxSearch.resultsRevision : 0
+                if (rev !== lastRevision) {
+                    lastRevision = rev
+                    resultsListView.positionViewAtBeginning()
+                }
+            }
+
+            footer: Item {
+                width: resultsListView.width
+                height: 36
+            }
+
+            delegate: Item {
+                id: rowDelegate
+                required property var modelData
+                required property int index
+
+                readonly property var rowInfo: modelData
+
+                width: resultsListView.width
+                height: rowInfo.isHeader ? (rowInfo.isFolder ? 46 : 66) : (resultsListView.cardH + 14)
+
+                // SECTION HEADER
+                RowLayout {
+                    visible: rowInfo.isHeader === true
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 8
+                    spacing: 10
+
+                    Rectangle {
+                        width: 32
+                        height: 32
+                        radius: 8
+                        color: Theme.accentMuted
+
+                        FluxIcon {
+                            anchors.centerIn: parent
+                            name: rowInfo.icon || "folder"
+                            size: (rowInfo.icon === "folder") ? 18 : 16
+                            color: Theme.accent
+                        }
+                    }
+
+                    Text {
+                        text: rowInfo.title || ""
+                        color: Theme.text
+                        font.pixelSize: 18
+                        font.weight: Font.Bold
+                        font.letterSpacing: -0.2
+                    }
+
+                    Rectangle {
+                        height: 22
+                        implicitWidth: countBadgeText.implicitWidth + 16
+                        radius: 11
+                        color: Theme.surfaceHi
+                        border.width: 1
+                        border.color: Theme.border
+
+                        Text {
+                            id: countBadgeText
+                            anchors.centerIn: parent
+                            text: rowInfo.countText || ""
+                            color: Theme.textDim
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
                 }
 
-                width: resultsGrid.cellWidth
-                height: resultsGrid.cellHeight
-                showDownload: true
-                onDownloadRequested: function(url, itemTitle, isPack) { root.startDownload(url, itemTitle, isPack) }
-                title: model.title
-                parentPath: model.parentPath
-                isFolder: model.isFolder
-                formattedSize: model.formattedSize
-                extension: model.extension
-                playUrl: model.playUrl
-                libraryName: model.libraryName
-                posterUrl: model.posterUrl || ""
-                isPlaying: (!!fluxPlayer && fluxPlayer.url === model.playUrl && fluxPlayer.isPlaying)
-                progress: (prog.fraction !== undefined) ? prog.fraction : 0
-                watched: (prog.watched === true)
-                introDelay: (index % 4) * 40
+                // CARDS ROW
+                Row {
+                    visible: rowInfo.isHeader !== true
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    spacing: 14
 
-                onPlayRequested: function(url, itemTitle) {
-                    root.playMediaRequested(url, itemTitle, "")
-                }
+                    Repeater {
+                        model: rowInfo.items || []
 
-                onFolderRequested: function(url, libName) {
-                    if (fluxBrowser) fluxBrowser.open(url, libName, "")
+                        delegate: SearchResultCard {
+                            required property var modelData
+                            required property int index
+
+                            readonly property var prog: {
+                                var rev = fluxUser ? fluxUser.revision : 0
+                                return fluxUser ? fluxUser.progressFor(modelData.playUrl) : ({})
+                            }
+
+                            width: resultsListView.cardW
+                            height: resultsListView.cardH
+                            showDownload: true
+                            onDownloadRequested: function(url, itemTitle, isPack) { root.startDownload(url, itemTitle, isPack) }
+                            title: modelData.title || ""
+                            parentPath: modelData.parentPath || ""
+                            isFolder: modelData.isFolder === true
+                            formattedSize: modelData.formattedSize || ""
+                            extension: modelData.extension || ""
+                            playUrl: modelData.playUrl || ""
+                            libraryName: modelData.libraryName || ""
+                            posterUrl: modelData.posterUrl || ""
+                            isPlaying: (!!fluxPlayer && fluxPlayer.url === modelData.playUrl && fluxPlayer.isPlaying)
+                            progress: (prog.fraction !== undefined) ? prog.fraction : 0
+                            watched: (prog.watched === true)
+                            introDelay: -1
+
+                            onPlayRequested: function(url, itemTitle) {
+                                root.playMediaRequested(url, itemTitle, "")
+                            }
+
+                            onFolderRequested: function(url, libName) {
+                                if (fluxBrowser) fluxBrowser.open(url, libName, "")
+                            }
+                        }
+                    }
                 }
             }
         }

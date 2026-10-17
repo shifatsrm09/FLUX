@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QSortFilterProxyModel>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QString>
@@ -14,6 +15,20 @@
 #include "MediaLibrary.h"
 
 namespace Flux {
+
+class SearchManager;
+
+class FolderFilterProxyModel : public QSortFilterProxyModel {
+public:
+    explicit FolderFilterProxyModel(bool showFolders, QObject *parent = nullptr)
+        : QSortFilterProxyModel(parent), m_showFolders(showFolders) {}
+
+protected:
+    bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
+
+private:
+    bool m_showFolders = false;
+};
 
 class SearchManager : public QAbstractListModel {
     Q_OBJECT
@@ -44,6 +59,13 @@ class SearchManager : public QAbstractListModel {
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorMessageChanged)
     Q_PROPERTY(bool hasError READ hasError NOTIFY errorMessageChanged)
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
+    Q_PROPERTY(int resultsRevision READ resultsRevision NOTIFY resultsRevisionChanged)
+    Q_PROPERTY(QAbstractItemModel* folderModel READ folderModel CONSTANT)
+    Q_PROPERTY(QAbstractItemModel* mediaModel READ mediaModel CONSTANT)
+    Q_PROPERTY(int folderCount READ folderCount NOTIFY resultCountChanged)
+    Q_PROPERTY(int mediaCount READ mediaCount NOTIFY resultCountChanged)
+    Q_PROPERTY(bool hasFolders READ hasFolders NOTIFY resultCountChanged)
+    Q_PROPERTY(bool hasMedia READ hasMedia NOTIFY resultCountChanged)
 
     // Trending media from ICC FTP
     Q_PROPERTY(QVariantList trending READ trending NOTIFY trendingChanged)
@@ -95,6 +117,16 @@ public:
     bool hasError() const { return !m_errorMessage.isEmpty(); }
     QString statusMessage() const { return m_statusMessage; }
 
+    // Sectioned results methods
+    int resultsRevision() const { return m_resultsRevision; }
+    QAbstractItemModel* folderModel() const { return reinterpret_cast<QAbstractItemModel*>(m_folderModel); }
+    QAbstractItemModel* mediaModel() const { return reinterpret_cast<QAbstractItemModel*>(m_mediaModel); }
+    int folderCount() const;
+    int mediaCount() const;
+    bool hasFolders() const;
+    bool hasMedia() const;
+    Q_INVOKABLE QVariantList getSectionedGridRows(int columns) const;
+
     // Server properties & methods
     int activeServer() const { return m_activeServer; }
     void setActiveServer(int server);
@@ -137,6 +169,7 @@ signals:
     void queryChanged();
     void isSearchingChanged();
     void resultCountChanged();
+    void resultsRevisionChanged();
     void errorMessageChanged();
     void statusMessageChanged();
     void posterFound(const QString &url, const QString &posterUrl, const QString &title);
@@ -186,6 +219,10 @@ private:
 
     QVariantList m_trending;
     bool m_isTrendingLoading = false;
+
+    FolderFilterProxyModel *m_folderModel = nullptr;
+    FolderFilterProxyModel *m_mediaModel = nullptr;
+    int m_resultsRevision = 0;
 };
 
 } // namespace Flux
