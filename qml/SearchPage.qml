@@ -1217,13 +1217,6 @@ Item {
             searchManager: fluxSearch
             collapsible: true
             isExpanded: true
-
-            onSelectionChanged: {
-                if (fluxSearch && topSearchInput.text.trim().length > 0) {
-                    categoryFilter.isExpanded = false
-                    fluxSearch.search(topSearchInput.text.trim())
-                }
-            }
         }
 
         // State: idle / welcome prompt when no search has been performed
