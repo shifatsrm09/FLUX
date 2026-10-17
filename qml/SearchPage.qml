@@ -237,8 +237,9 @@ Item {
                         posterUrl: modelData.posterUrl || ""
                         isFolder: modelData.isFolder === true
                         progress: modelData.fraction
+                        watched: modelData.watched === true
                         showRemove: modelData.isFolder !== true
-                        extraInfo: root.watchedTimeLabel(modelData.positionMs)
+                        extraInfo: (modelData.positionMs > 0) ? root.watchedTimeLabel(modelData.positionMs) : (modelData.watched === true ? "Completed" : "")
                         introDelay: Math.min(index, 8) * 45
 
                         onPlayRequested: function(url, itemTitle) {

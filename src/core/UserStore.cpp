@@ -383,7 +383,7 @@ void UserStore::checkpoint(bool notify, bool allowZeroPosition) {
 
     if (dur > 0 && pos >= static_cast<qint64>(static_cast<double>(dur) * kWatchedFraction)) {
         e.watched = true;
-        e.positionMs = 0;
+        e.positionMs = pos;
     } else {
         e.positionMs = pos;
         if (pos >= kMinResumeMs || allowZeroPosition) e.watched = false; // replaying or seeking back
@@ -477,7 +477,7 @@ QVariantMap UserStore::progressFor(const QString &url) const {
     const HistoryEntry &e = it.value();
     const double fraction = (e.durationMs > 0 && e.positionMs > 0)
                             ? std::clamp(static_cast<double>(e.positionMs) / static_cast<double>(e.durationMs), 0.0, 1.0)
-                            : 0.0;
+                            : (e.watched ? 1.0 : 0.0);
     map["positionMs"] = e.positionMs;
     map["durationMs"] = e.durationMs;
     map["fraction"] = fraction;
@@ -490,9 +490,8 @@ qint64 UserStore::resumePositionFor(const QString &url) const {
     if (it == m_history.constEnd()) return 0;
 
     const HistoryEntry &e = it.value();
-    if (e.watched) return 0;
     if (e.positionMs < kMinResumeMs) return 0;
-    if (e.durationMs > 0 && e.positionMs >= static_cast<qint64>(static_cast<double>(e.durationMs) * kWatchedFraction)) return 0;
+    if (e.durationMs > 0 && e.positionMs >= e.durationMs) return 0;
     return e.positionMs;
 }
 
@@ -502,11 +501,7 @@ QVariantList UserStore::continueWatching() const {
 
     for (auto it = m_history.constBegin(); it != m_history.constEnd(); ++it) {
         const HistoryEntry &e = it.value();
-        const bool isParty = (!m_partyKey.isEmpty() && it.key() == m_partyKey);
-        if (!isParty) {
-            if (e.watched) continue;
-            if (e.durationMs > 0 && e.positionMs >= static_cast<qint64>(static_cast<double>(e.durationMs) * kWatchedFraction)) continue;
-        }
+        if (e.url.isEmpty()) continue;
         allEntries.push_back(&e);
     }
 
@@ -529,9 +524,10 @@ QVariantList UserStore::continueWatching() const {
         m["posterUrl"] = posterFor(e->url, e->title);
         m["positionMs"] = e->positionMs;
         m["durationMs"] = e->durationMs;
-        m["fraction"] = e->durationMs > 0
+        m["watched"] = e->watched;
+        m["fraction"] = (e->durationMs > 0 && e->positionMs > 0)
                         ? std::clamp(static_cast<double>(e->positionMs) / static_cast<double>(e->durationMs), 0.0, 1.0)
-                        : 0.0;
+                        : (e->watched ? 1.0 : 0.0);
         m["lastPlayed"] = e->lastPlayed;
         m["isFolder"] = false;
         list.append(m);
@@ -556,7 +552,7 @@ void UserStore::markWatched(const QString &url, bool watched) {
     auto it = m_history.find(keyFor(url));
     if (it == m_history.end()) return;
     it->watched = watched;
-    if (watched) it->positionMs = 0;
+    if (watched && it->durationMs > 0) it->positionMs = it->durationMs;
     m_dirty = true;
     scheduleSave();
     ++m_revision;
