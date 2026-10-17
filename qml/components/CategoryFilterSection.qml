@@ -206,50 +206,122 @@ Item {
 
         anchors.left: parent.left
         anchors.right: parent.right
-        spacing: 20
+        spacing: 14
 
-        // ---- "All categories" bar ------------------------------------------------
-        Rectangle {
-            id: allBar
+        // ---- "Categories" toggle button (shown when collapsible) -----------------------
+        RowLayout {
+            id: headerRow
+            Layout.fillWidth: true
+            visible: root.collapsible
+            Layout.topMargin: 2
+            Layout.bottomMargin: root.groupsOpen ? 6 : 2
+
+            Item { Layout.fillWidth: true }
+
+            Rectangle {
+                id: categoriesToggleBtn
+                implicitHeight: 36
+                implicitWidth: catBtnInner.implicitWidth + 32
+                radius: 18
+                color: catBtnMouse.containsMouse ? Theme.surfaceHi : (root.isExpanded ? Theme.surfaceTop : Theme.surface)
+                border.width: 1
+                border.color: catBtnMouse.containsMouse ? Theme.accent : (root.isExpanded ? Theme.accentRing : Theme.border)
+
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on border.color { ColorAnimation { duration: 120 } }
+
+                RowLayout {
+                    id: catBtnInner
+                    anchors.centerIn: parent
+                    spacing: 8
+
+                    Text {
+                        text: (root.searchManager && !root.searchManager.isAllSelected)
+                              ? ("Categories (" + root.searchManager.selectedCount + ")")
+                              : "Categories"
+                        color: catBtnMouse.containsMouse ? "#FFFFFF" : Theme.text
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+
+                    FluxIcon {
+                        name: root.isExpanded ? "chevronUp" : "chevronDown"
+                        size: 14
+                        strokeWidth: 2.4
+                        color: catBtnMouse.containsMouse ? Theme.accent : Theme.textDim
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                }
+
+                MouseArea {
+                    id: catBtnMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        root.isExpanded = !root.isExpanded
+                    }
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+        }
+
+        // ---- Category columns ----------------------------------------------------------
+        Item {
+            id: groupsWrapper
 
             Layout.fillWidth: true
-            Layout.preferredHeight: 56
-            radius: 12
+            Layout.preferredHeight: root.groupsOpen ? groupsContentCol.implicitHeight : 0
+            clip: true
+            opacity: root.groupsOpen ? 1.0 : 0.0
+            visible: height > 0.5 || opacity > 0.0
 
-            readonly property bool isAllChecked: root.searchManager ? root.searchManager.isAllSelected : true
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: 200 } }
 
-            color: allMouse.containsMouse ? Theme.surfaceHi : Theme.surface
-            border.width: 1
-            border.color: allMouse.containsMouse ? Theme.borderHi : Theme.border
+            Column {
+                id: groupsContentCol
 
-            Behavior on color { ColorAnimation { duration: 120 } }
-            Behavior on border.color { ColorAnimation { duration: 120 } }
+                width: parent.width
+                spacing: 12
 
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 16
-                anchors.rightMargin: 14
-                spacing: 14
+                // Standalone "All Categories" card
+                Rectangle {
+                    id: allStandaloneCard
 
-                // Clickable toggle area (label + check mark)
-                Item {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    readonly property bool isSelected: root.searchManager ? root.searchManager.isAllSelected : true
+
+                    width: root.colWidth
+                    height: root.rowHeight
+                    radius: 10
+                    color: allStandaloneMouse.containsMouse ? Theme.surfaceHi : Theme.surface
+                    border.width: 1
+                    border.color: allStandaloneMouse.containsMouse
+                                  ? Theme.borderHi
+                                  : (isSelected ? Theme.accentRing : Theme.border)
+
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Behavior on border.color { ColorAnimation { duration: 120 } }
 
                     RowLayout {
                         anchors.fill: parent
-                        spacing: 12
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        spacing: 10
 
                         Text {
                             Layout.fillWidth: true
                             text: "All Categories"
-                            color: allBar.isAllChecked ? Theme.text : Theme.textDim
-                            font.pixelSize: 14
+                            color: allStandaloneCard.isSelected ? Theme.text : Theme.textDim
+                            font.pixelSize: 13
                             font.weight: Font.DemiBold
+                            elide: Text.ElideRight
                         }
 
+                        // Selected state: just a check mark
                         Text {
-                            visible: allBar.isAllChecked
+                            visible: allStandaloneCard.isSelected
                             text: "\u2713"
                             color: Theme.accentHover
                             font.pixelSize: 16
@@ -258,7 +330,7 @@ Item {
                     }
 
                     MouseArea {
-                        id: allMouse
+                        id: allStandaloneMouse
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
@@ -272,128 +344,55 @@ Item {
                     }
                 }
 
-                // Selected counter
-                Rectangle {
-                    implicitHeight: 26
-                    implicitWidth: countText.implicitWidth + 22
-                    radius: 13
-                    color: Theme.surfaceHi
-                    border.width: 1
-                    border.color: Theme.border
+                Flow {
+                    id: groupsFlow
 
-                    Text {
-                        id: countText
-                        anchors.centerIn: parent
-                        text: root.searchManager ? (root.searchManager.selectedCount + " / 17 selected") : "17 / 17"
-                        color: Theme.textDim
-                        font.pixelSize: 11
-                        font.weight: Font.DemiBold
-                    }
-                }
+                    width: parent.width
+                    spacing: root.colSpacing
 
-                // Expand / collapse (results page)
-                Rectangle {
-                    visible: root.collapsible
-                    implicitHeight: 32
-                    implicitWidth: toggleRow.implicitWidth + 28
-                    radius: 16
-                    color: toggleMouse.containsMouse ? "#33FFFFFF" : "#1FFFFFFF"
+                    Repeater {
+                        model: root.categoryGroups
 
-                    Behavior on color { ColorAnimation { duration: 120 } }
+                        delegate: Column {
+                            id: groupColumn
 
-                    RowLayout {
-                        id: toggleRow
-                        anchors.centerIn: parent
-                        spacing: 6
+                            required property var modelData
 
-                        Text {
-                            text: "Categories"
-                            color: Theme.text
-                            font.pixelSize: 12
-                            font.weight: Font.DemiBold
-                        }
+                            width: root.colWidth
+                            spacing: 8
 
-                        FluxIcon {
-                            name: root.isExpanded ? "chevronUp" : "chevronDown"
-                            size: 14
-                            strokeWidth: 2.4
-                            color: Theme.textDim
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                    }
+                            // Column heading
+                            Item {
+                                width: parent.width
+                                height: 30
 
-                    MouseArea {
-                        id: toggleMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.isExpanded = !root.isExpanded
-                    }
-                }
-            }
-        }
+                                Rectangle {
+                                    id: headingBar
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 3
+                                    height: 14
+                                    radius: 1.5
+                                    color: Theme.accent
+                                }
 
-        // ---- Category columns ----------------------------------------------------------
-        Item {
-            id: groupsWrapper
-
-            Layout.fillWidth: true
-            Layout.preferredHeight: root.groupsOpen ? groupsFlow.implicitHeight : 0
-            clip: true
-            opacity: root.groupsOpen ? 1.0 : 0.0
-            visible: height > 0.5 || opacity > 0.0
-
-            Behavior on Layout.preferredHeight { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-            Behavior on opacity { NumberAnimation { duration: 200 } }
-
-            Flow {
-                id: groupsFlow
-
-                width: parent.width
-                spacing: root.colSpacing
-
-                Repeater {
-                    model: root.categoryGroups
-
-                    delegate: Column {
-                        id: groupColumn
-
-                        required property var modelData
-
-                        width: root.colWidth
-                        spacing: 8
-
-                        // Column heading
-                        Item {
-                            width: parent.width
-                            height: 30
-
-                            Rectangle {
-                                id: headingBar
-                                anchors.left: parent.left
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 3
-                                height: 14
-                                radius: 1.5
-                                color: Theme.accent
+                                Text {
+                                    anchors.left: headingBar.right
+                                    anchors.leftMargin: 9
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: groupColumn.modelData.title
+                                    color: Theme.text
+                                    font.pixelSize: 14
+                                    font.weight: Font.Bold
+                                    elide: Text.ElideRight
+                                }
                             }
 
-                            Text {
-                                anchors.left: headingBar.right
-                                anchors.leftMargin: 9
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: groupColumn.modelData.title
-                                color: Theme.text
-                                font.pixelSize: 14
-                                font.weight: Font.Bold
-                                elide: Text.ElideRight
+                            Repeater {
+                                model: groupColumn.modelData.items
+                                delegate: itemDelegate
                             }
-                        }
-
-                        Repeater {
-                            model: groupColumn.modelData.items
-                            delegate: itemDelegate
                         }
                     }
                 }
