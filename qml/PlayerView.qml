@@ -301,6 +301,11 @@ Rectangle {
         }
 
         onWheel: function(wheel) {
+            // Never adjust volume if episode panel or menu is open
+            if (root.menuOpen || root.episodesPanelOpen || epPanel.visible) {
+                wheel.accepted = true
+                return
+            }
             // 120 units (one mouse notch) = 5%; smooth touchpads accumulate
             root.wheelAcc += wheel.angleDelta.y
             var steps = Math.trunc(root.wheelAcc / 24)

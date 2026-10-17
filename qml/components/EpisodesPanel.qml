@@ -26,6 +26,7 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         onClicked: root.closeRequested()
+        onWheel: function(wheel) { wheel.accepted = true }
     }
 
     // Semi-transparent backdrop scrim on the left
@@ -51,10 +52,11 @@ Item {
         border.width: 1
         border.color: "#35373C"
 
-        // Prevent clicks in the drawer from bubbling to the backdrop
+        // Prevent clicks and wheel scrolls in the drawer from bubbling to the player underneath
         MouseArea {
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onWheel: function(wheel) { wheel.accepted = true }
         }
 
         ColumnLayout {
