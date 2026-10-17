@@ -4,9 +4,12 @@
 #include "../core/Logger.h"
 #include "../core/UserStore.h"
 
+#include <QCryptographicHash>
 #include <QFileInfo>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QSet>
+#include <QSettings>
 #include <QUrl>
 #include <algorithm>
 #include <cmath>
@@ -282,6 +285,84 @@ bool TelepartySync::isSameOrMatchingMedia(const QString &playerUrl, const QStrin
         }
     }
 
+    auto isLocalUrl = [](const QString &u) -> bool {
+        return u.startsWith(QLatin1String("file:"), Qt::CaseInsensitive) ||
+               (!u.startsWith(QLatin1String("http:"), Qt::CaseInsensitive) &&
+                !u.startsWith(QLatin1String("https:"), Qt::CaseInsensitive) &&
+                !u.startsWith(QLatin1String("ftp:"), Qt::CaseInsensitive) &&
+                !u.contains(QLatin1String("://")));
+    };
+
+    auto toCleanLocalPath = [](const QString &u) -> QString {
+        QString path = u.trimmed();
+        if (path.startsWith(QLatin1String("file:"), Qt::CaseInsensitive)) {
+            path = QUrl(path).toLocalFile();
+        }
+        return QFileInfo(path).absoluteFilePath();
+    };
+
+    if (isLocalUrl(playerUrl) && isLocalUrl(currentUrl)) {
+        if (toCleanLocalPath(playerUrl).compare(toCleanLocalPath(currentUrl), Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+
+    QString localCandidate;
+    QString remoteCandidate;
+    if (isLocalUrl(playerUrl) && !isLocalUrl(currentUrl)) {
+        localCandidate = toCleanLocalPath(playerUrl);
+        remoteCandidate = currentUrl;
+    } else if (isLocalUrl(currentUrl) && !isLocalUrl(playerUrl)) {
+        localCandidate = toCleanLocalPath(currentUrl);
+        remoteCandidate = playerUrl;
+    }
+
+    if (!localCandidate.isEmpty() && !remoteCandidate.isEmpty()) {
+        QFileInfo localFi(localCandidate);
+
+        // 1. Check QSettings for recorded completed download
+        QSettings settings;
+        const QString dlKey = QString::fromLatin1(QCryptographicHash::hash(remoteCandidate.toUtf8(), QCryptographicHash::Sha256).toHex());
+        const QString recordedPath = settings.value(QStringLiteral("downloads/completed/") + dlKey).toString();
+        if (!recordedPath.isEmpty() && QFileInfo(recordedPath).exists()) {
+            if (QFileInfo(recordedPath).absoluteFilePath().compare(localCandidate, Qt::CaseInsensitive) == 0) {
+                return true;
+            }
+        }
+
+        // 2. Check MediaCache hash naming
+        const QByteArray remoteHash = QCryptographicHash::hash(QUrl(remoteCandidate).toString(QUrl::FullyEncoded).toUtf8(),
+                                                               QCryptographicHash::Sha256).toHex();
+        if (localFi.fileName().startsWith(QString::fromLatin1(remoteHash), Qt::CaseInsensitive)) {
+            return true;
+        }
+
+        // 3. Filename matching for video streams
+        QString remoteFileName = QUrl(remoteCandidate).fileName();
+        if (remoteFileName.isEmpty()) {
+            QString decoded = QUrl::fromPercentEncoding(remoteCandidate.toUtf8());
+            const int slash = decoded.lastIndexOf(QLatin1Char('/'));
+            if (slash >= 0) remoteFileName = decoded.mid(slash + 1);
+        }
+        const int qIdx = remoteFileName.indexOf(QLatin1Char('?'));
+        if (qIdx >= 0) remoteFileName = remoteFileName.left(qIdx);
+
+        static const QSet<QString> kVideoExts = {
+            QStringLiteral("mkv"), QStringLiteral("mp4"), QStringLiteral("avi"),
+            QStringLiteral("mov"), QStringLiteral("wmv"), QStringLiteral("m4v"),
+            QStringLiteral("ts"), QStringLiteral("m2ts"), QStringLiteral("webm"),
+            QStringLiteral("flv"), QStringLiteral("mpg"), QStringLiteral("mpeg")
+        };
+
+        const QString remoteSuffix = QFileInfo(remoteFileName).suffix().toLower();
+        const QString localSuffix = localFi.suffix().toLower();
+        if (kVideoExts.contains(remoteSuffix) && kVideoExts.contains(localSuffix)) {
+            if (remoteFileName.compare(localFi.fileName(), Qt::CaseInsensitive) == 0) {
+                return true;
+            }
+        }
+    }
+
     return false;
 }
 
@@ -381,16 +462,23 @@ QString TelepartySync::encodeCatalogMovieId(const QString &url) const {
         return QStringLiteral("df:node:") + u.authority() + u.path(QUrl::FullyEncoded);
     }
 
-    // 6. Generic BDIX stream URL fallback (for any video file on BDIX)
-    if (url.endsWith(QStringLiteral(".mp4"), Qt::CaseInsensitive) ||
-        url.endsWith(QStringLiteral(".mkv"), Qt::CaseInsensitive) ||
-        url.endsWith(QStringLiteral(".avi"), Qt::CaseInsensitive) ||
-        url.endsWith(QStringLiteral(".webm"), Qt::CaseInsensitive) ||
-        url.endsWith(QStringLiteral(".ts"), Qt::CaseInsensitive) ||
-        url.endsWith(QStringLiteral(".m4v"), Qt::CaseInsensitive) ||
-        url.contains(QLatin1String("/ftps")) ||
-        url.contains(QLatin1String("DHAKA-FLIX"))) {
-        return QStringLiteral("bdix:") + u.authority() + u.path(QUrl::FullyEncoded);
+    // 6. Generic BDIX stream URL fallback (for any video file on BDIX / LAN storage)
+    const bool isBdixHost = host.startsWith(QStringLiteral("10.")) ||
+                            host.startsWith(QStringLiteral("172.")) ||
+                            host.startsWith(QStringLiteral("192.168.")) ||
+                            host.contains(QStringLiteral("bdix"), Qt::CaseInsensitive) ||
+                            host.contains(QStringLiteral("dhaka"), Qt::CaseInsensitive) ||
+                            host.contains(QStringLiteral("icc"), Qt::CaseInsensitive);
+
+    if (isBdixHost || url.contains(QLatin1String("/ftps")) || url.contains(QLatin1String("DHAKA-FLIX"))) {
+        if (url.endsWith(QStringLiteral(".mp4"), Qt::CaseInsensitive) ||
+            url.endsWith(QStringLiteral(".mkv"), Qt::CaseInsensitive) ||
+            url.endsWith(QStringLiteral(".avi"), Qt::CaseInsensitive) ||
+            url.endsWith(QStringLiteral(".webm"), Qt::CaseInsensitive) ||
+            url.endsWith(QStringLiteral(".ts"), Qt::CaseInsensitive) ||
+            url.endsWith(QStringLiteral(".m4v"), Qt::CaseInsensitive)) {
+            return QStringLiteral("bdix:") + u.authority() + u.path(QUrl::FullyEncoded);
+        }
     }
 
     return QString();

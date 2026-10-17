@@ -25,6 +25,7 @@ ApplicationWindow {
     property string currentPage: "search" // "search" | "library" | "player"
     property string pageBeforePlayer: "search" // where Back from the player returns to
     property string currentPlayingTitle: ""
+    property string currentSourceUrl: ""
     property string cacheSourceUrl: ""
     property string cacheSourceTitle: ""
     readonly property bool inTeleparty: !!fluxTeleparty && fluxTeleparty.active
@@ -152,6 +153,47 @@ ApplicationWindow {
                 return true
             }
         }
+
+        if (fluxDownloads) {
+            try {
+                var dlA = fluxDownloads.downloadedFileForUrl(a)
+                if (dlA && (dlA === b || decodeURIComponent(dlA) === decodeURIComponent(b))) return true
+                var dlB = fluxDownloads.downloadedFileForUrl(b)
+                if (dlB && (dlB === a || decodeURIComponent(dlB) === decodeURIComponent(a))) return true
+            } catch (e) {}
+        }
+
+        if (fluxCache) {
+            try {
+                var caA = fluxCache.cachedFileForUrl(a)
+                if (caA && (caA === b || decodeURIComponent(caA) === decodeURIComponent(b))) return true
+                var caB = fluxCache.cachedFileForUrl(b)
+                if (caB && (caB === a || decodeURIComponent(caB) === decodeURIComponent(a))) return true
+            } catch (e) {}
+        }
+
+        function extractCleanFileName(u) {
+            if (!u) return ""
+            var s = ""
+            try {
+                s = decodeURIComponent(u)
+            } catch (e) {
+                s = u
+            }
+            s = s.split("?")[0].split("#")[0]
+            var slash = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"))
+            return (slash >= 0 ? s.substring(slash + 1) : s).toLowerCase().trim()
+        }
+
+        var fnA = extractCleanFileName(a)
+        var fnB = extractCleanFileName(b)
+        if (fnA.length > 0 && fnA === fnB) {
+            var videoExts = [".mkv", ".mp4", ".avi", ".mov", ".wmv", ".m4v", ".ts", ".m2ts", ".webm", ".flv", ".mpg", ".mpeg"]
+            for (var i = 0; i < videoExts.length; ++i) {
+                if (fnA.endsWith(videoExts[i])) return true
+            }
+        }
+
         return false
     }
 
@@ -187,16 +229,25 @@ ApplicationWindow {
             return
         }
 
-        if (!window.inTeleparty) {
-            var downloadedUrl = fluxDownloads ? fluxDownloads.downloadedFileForUrl(sourceUrl, title) : ""
-            var cachedUrl = (!downloadedUrl && fluxCache) ? fluxCache.cachedFileForUrl(sourceUrl) : ""
-            if (downloadedUrl) playbackUrl = downloadedUrl
-            else if (cachedUrl) playbackUrl = cachedUrl
-            else if (fluxSync && fluxSync.isStreamUrl(sourceUrl)) {
-                cacheSourceUrl = sourceUrl
-                cacheSourceTitle = title
-                cacheAfterPlaybackTimer.restart()
-            }
+        window.currentSourceUrl = sourceUrl
+
+        var downloadedUrl = fluxDownloads ? fluxDownloads.downloadedFileForUrl(sourceUrl, title) : ""
+        if (!downloadedUrl && directUrl && directUrl !== sourceUrl && fluxDownloads) {
+            downloadedUrl = fluxDownloads.downloadedFileForUrl(directUrl, title)
+        }
+        var cachedUrl = (!downloadedUrl && fluxCache) ? fluxCache.cachedFileForUrl(sourceUrl) : ""
+        if (!downloadedUrl && !cachedUrl && directUrl && directUrl !== sourceUrl && fluxCache) {
+            cachedUrl = fluxCache.cachedFileForUrl(directUrl)
+        }
+
+        if (downloadedUrl) {
+            playbackUrl = downloadedUrl
+        } else if (cachedUrl) {
+            playbackUrl = cachedUrl
+        } else if (!window.inTeleparty && fluxSync && fluxSync.isStreamUrl(sourceUrl)) {
+            cacheSourceUrl = sourceUrl
+            cacheSourceTitle = title
+            cacheAfterPlaybackTimer.restart()
         }
 
         // Clicking the video the party is already watching (e.g. from Continue Watching
@@ -236,7 +287,9 @@ ApplicationWindow {
         }
 
         if (window.inTeleparty && fluxSync) {
-            var partyUrl = (playbackUrl && fluxSync.isStreamUrl(playbackUrl)) ? playbackUrl : sourceUrl
+            var partyUrl = (playbackUrl && fluxSync.isStreamUrl(playbackUrl))
+                ? playbackUrl
+                : ((directUrl && fluxSync.isStreamUrl(directUrl)) ? directUrl : sourceUrl)
             fluxSync.broadcastOpen(partyUrl, title)
         }
     }
@@ -261,27 +314,44 @@ ApplicationWindow {
         if (settingsPanel.opened) settingsPanel.dismiss()
         if (downloadsPanel.opened) downloadsPanel.close()
 
+        window.currentSourceUrl = url
         currentPlayingTitle = title
         if (currentPage !== "player") {
             pageBeforePlayer = currentPage
         }
         currentPage = "player"
 
-        if (fluxUser) fluxUser.noteStart(url, title)
         if (fluxBrowser) fluxBrowser.findNext(url)
 
         playerView.offerResume(0)
 
         function startPlayback(targetUrl) {
+            var finalUrl = targetUrl
+            var downloadedUrl = fluxDownloads ? fluxDownloads.downloadedFileForUrl(targetUrl, title) : ""
+            if (!downloadedUrl && url !== targetUrl && fluxDownloads) {
+                downloadedUrl = fluxDownloads.downloadedFileForUrl(url, title)
+            }
+            var cachedUrl = (!downloadedUrl && fluxCache) ? fluxCache.cachedFileForUrl(targetUrl) : ""
+            if (!downloadedUrl && !cachedUrl && url !== targetUrl && fluxCache) {
+                cachedUrl = fluxCache.cachedFileForUrl(url)
+            }
+            if (downloadedUrl) {
+                finalUrl = downloadedUrl
+            } else if (cachedUrl) {
+                finalUrl = cachedUrl
+            }
+
+            if (fluxUser) fluxUser.noteStart(url, title, finalUrl)
+
             if (fluxPlayer) {
-                if (window.sameMediaUrl(fluxPlayer.url, targetUrl)
+                if (window.sameMediaUrl(fluxPlayer.url, finalUrl)
                         && (fluxPlayer.state === "Paused" || fluxPlayer.state === "Playing")) {
                     if (startMs > 0) fluxPlayer.remoteSeekTo(startMs)
                     if (fluxPlayer.isPaused) fluxPlayer.remoteResume()
                 } else if (startMs > 0) {
-                    fluxPlayer.playFrom(targetUrl, startMs)
+                    fluxPlayer.playFrom(finalUrl, startMs)
                 } else {
-                    fluxPlayer.play(targetUrl)
+                    fluxPlayer.play(finalUrl)
                 }
             }
         }
@@ -469,10 +539,14 @@ ApplicationWindow {
 
         function onJoinedSession() {
             if (fluxPlayer && fluxPlayer.url.length > 0) {
-                if (fluxSync && fluxSync.isStreamUrl(fluxPlayer.url)) {
+                var streamUrl = (fluxSync && fluxSync.isStreamUrl(fluxPlayer.url))
+                    ? fluxPlayer.url
+                    : ((window.currentSourceUrl && fluxSync && fluxSync.isStreamUrl(window.currentSourceUrl)) ? window.currentSourceUrl : "")
+
+                if (streamUrl.length > 0) {
                     // Host already watching (or paused on) a direct stream: make it the party's current video
                     if (fluxTeleparty.isHost && fluxPlayer.state !== "Idle" && fluxPlayer.state !== "Stopped") {
-                        fluxSync.adoptCurrent(fluxPlayer.url, window.currentPlayingTitle)
+                        fluxSync.adoptCurrent(streamUrl, window.currentPlayingTitle)
                     }
                 } else {
                     fluxPlayer.stop()

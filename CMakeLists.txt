@@ -261,11 +261,14 @@ add_executable(flux_test_teleparty
     src/media/VLCPlayer.cpp
     src/core/Logger.h
     src/core/Logger.cpp
+    src/core/UserStore.h
+    src/core/UserStore.cpp
 )
 target_link_libraries(flux_test_teleparty PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Network
+    Qt6::Qml
     ${VLC_LIBRARIES}
 )
 
@@ -288,11 +291,14 @@ add_executable(flux_test_sync_engine
     src/media/VLCPlayer.cpp
     src/core/Logger.h
     src/core/Logger.cpp
+    src/core/UserStore.h
+    src/core/UserStore.cpp
 )
 target_link_libraries(flux_test_sync_engine PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Network
+    Qt6::Qml
     ${VLC_LIBRARIES}
 )
 
