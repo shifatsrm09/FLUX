@@ -184,12 +184,32 @@ Rectangle {
         root.episodesPanelOpen = false
     }
 
+    readonly property bool canAutoHide: !!root.player
+                                        && (root.player.isPlaying || root.player.isPaused || root.player.state === "Paused")
+                                        && !root.hasError
+                                        && !controlsBar.isUserInteracting
+                                        && !topHover.hovered
+                                        && !root.episodesPanelOpen
+
+    onCanAutoHideChanged: {
+        if (root.canAutoHide && root.showControls) {
+            hideControlsTimer.restart()
+        } else {
+            hideControlsTimer.stop()
+        }
+    }
+
     function wakeControls() {
         root.showControls = true
-        hideControlsTimer.restart()
+        if (root.canAutoHide) {
+            hideControlsTimer.restart()
+        } else {
+            hideControlsTimer.stop()
+        }
     }
 
     function showOsd(text, level) {
+        root.wakeControls()
         root.osdText = text
         root.osdLevel = (level === undefined) ? -1 : level
         root.osdVisible = true
@@ -238,7 +258,6 @@ Rectangle {
     Timer {
         id: hideControlsTimer
         interval: 2000
-        running: !!root.player && root.player.isPlaying && !controlsBar.isUserInteracting && !topHover.hovered && !root.episodesPanelOpen
         repeat: false
         onTriggered: {
             root.showControls = false
@@ -358,7 +377,7 @@ Rectangle {
     Rectangle {
         anchors.fill: parent
         color: "#000000"
-        opacity: root.showCenterPlay ? 0.35 : 0.0
+        opacity: (root.showCenterPlay && root.showControls) ? 0.35 : 0.0
         visible: opacity > 0.0
 
         Behavior on opacity { NumberAnimation { duration: 90 } }
@@ -484,9 +503,9 @@ Rectangle {
         anchors.centerIn: parent
         width: 96
         height: 96
-        opacity: root.showCenterPlay ? 1.0 : 0.0
+        opacity: (root.showCenterPlay && root.showControls) ? 1.0 : 0.0
         visible: opacity > 0.0
-        scale: root.showCenterPlay ? 1.0 : 0.8
+        scale: (root.showCenterPlay && root.showControls) ? 1.0 : 0.8
 
         Behavior on opacity { NumberAnimation { duration: 90 } }
         Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
