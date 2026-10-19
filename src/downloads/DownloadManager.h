@@ -104,6 +104,7 @@ public:
     // Search the whole library: matching pack folders first, then matching videos anywhere.
     // Every word of the query must appear in the file's path (case-insensitive).
     Q_INVOKABLE QVariantList offlineSearch(const QString &query) const;
+    Q_INVOKABLE QString offlineRelForPath(const QString &path) const;
     Q_INVOKABLE void openPath(const QString &path);   // folder, or the folder holding a file
 
     // ---- Downloads ----
@@ -121,6 +122,7 @@ public:
     Q_INVOKABLE void remove(int id);
     Q_INVOKABLE void clearFinished();
     Q_INVOKABLE void clearHistory();
+    Q_INVOKABLE void removeHistory(const QString &key);
     Q_INVOKABLE bool resumeHistory(const QString &key);
     Q_INVOKABLE void openFolder(int id);
 

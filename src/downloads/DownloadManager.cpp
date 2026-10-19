@@ -447,8 +447,16 @@ void DownloadManager::recordHistory(const Job &job, const QString &statusOverrid
     entry.insert(QStringLiteral("detail"), detail);
     entry.insert(QStringLiteral("destination"), native(job.destDir));
     entry.insert(QStringLiteral("sourceUrl"), job.sourceUrl);
-    if (!job.isPack && !job.items.empty())
+    entry.insert(QStringLiteral("isPack"), job.isPack);
+    if (job.isPack) {
+        entry.insert(QStringLiteral("libraryRel"), offlineRelForPath(job.destDir));
+    }
+    if (!job.isPack && !job.items.empty()) {
+        const QString fullPath = QDir::cleanPath(job.destDir + QLatin1Char('/') + job.items.front().relPath);
         entry.insert(QStringLiteral("fileName"), job.items.front().relPath);
+        entry.insert(QStringLiteral("filePath"), native(fullPath));
+        entry.insert(QStringLiteral("fileUrl"), QString::fromLatin1(QUrl::fromLocalFile(fullPath).toEncoded()));
+    }
     entry.insert(QStringLiteral("timestamp"), QDateTime::currentDateTime());
 
     for (qsizetype i = m_history.size() - 1; i >= 0; --i) {
@@ -835,6 +843,26 @@ QString DownloadManager::offlineParent(const QString &rel) const {
     return (parent == QLatin1String("Series") || parent == QLatin1String("Individuals")) ? QString() : parent;
 }
 
+QString DownloadManager::offlineRelForPath(const QString &path) const {
+    const QString p = QDir::cleanPath(QDir::fromNativeSeparators(path.trimmed()));
+    if (p.isEmpty()) return QString();
+
+    const QString root = QDir::cleanPath(m_root);
+    if (samePath(p, root)) return QString();
+    if (isInside(p, root)) {
+        return QDir(root).relativeFilePath(p);
+    }
+
+    // Inside an added target
+    for (const QString &t : m_targets) {
+        if (samePath(p, t) || isInside(p, t)) {
+            return QStringLiteral("@") + p;
+        }
+    }
+
+    return QStringLiteral("@") + p;
+}
+
 // Lists one folder inside an added target: sub folders that hold videos, then the videos
 QVariantList DownloadManager::targetList(const QString &absPath) const {
     QVariantList out;
@@ -846,11 +874,12 @@ QVariantList DownloadManager::targetList(const QString &absPath) const {
     if (samePath(p, m_root)) return offlineList(QString());
     if (isInside(p, m_root)) return offlineList(QDir(m_root).relativeFilePath(p));
 
-    // Only ever list inside an added target
+    // Only ever list inside an added target or an existing directory
     bool allowed = false;
     for (const QString &t : m_targets) {
         if (samePath(p, t) || isInside(p, t)) { allowed = true; break; }
     }
+    if (!allowed && QDir(p).exists()) allowed = true;
     if (!allowed) return out;
 
     const QDir dir(p);
@@ -1703,13 +1732,24 @@ void DownloadManager::clearHistory() {
     emit historyChanged();
 }
 
+void DownloadManager::removeHistory(const QString &key) {
+    if (key.isEmpty()) return;
+    for (qsizetype i = m_history.size() - 1; i >= 0; --i) {
+        if (m_history.at(i).toMap().value(QStringLiteral("key")).toString() == key) {
+            m_history.removeAt(i);
+        }
+    }
+    saveHistory();
+    emit historyChanged();
+}
+
 bool DownloadManager::resumeHistory(const QString &key) {
     for (const QVariant &value : m_history) {
         const QVariantMap entry = value.toMap();
         if (entry.value(QStringLiteral("key")).toString() != key) continue;
 
         const QString oldStatus = entry.value(QStringLiteral("status")).toString();
-        if (oldStatus != QStringLiteral("interrupted") && oldStatus != QStringLiteral("failed"))
+        if (oldStatus != QStringLiteral("interrupted") && oldStatus != QStringLiteral("failed") && oldStatus != QStringLiteral("cancelled"))
             return false;
 
         const QString url = entry.value(QStringLiteral("sourceUrl")).toString();

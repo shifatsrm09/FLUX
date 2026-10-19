@@ -425,7 +425,7 @@ ApplicationWindow {
         currentPage = (pageBeforePlayer === "library") ? "library" : "search"
     }
 
-    function showLibrary() {
+    function showLibrary(rel) {
         if (window.inTeleparty) {
             return
         }
@@ -436,6 +436,11 @@ ApplicationWindow {
             toggleFullscreen()
         }
         currentPage = "library"
+        if (rel !== undefined && rel !== null && rel.length > 0) {
+            libraryPage.clearSearch()
+            libraryPage.rel = rel
+            libraryPage.refreshTick++
+        }
     }
 
     // ---- Shortcuts ---------------------------------------------------------------
@@ -775,11 +780,16 @@ ApplicationWindow {
     DownloadsPanel {
         id: downloadsPanel
 
-        onLibraryRequested: {
+        onLibraryRequested: function(rel) {
             if (!window.inTeleparty) {
                 downloadsPanel.close()
-                window.showLibrary()
+                window.showLibrary(rel)
             }
+        }
+
+        onPlayRequested: function(url, title) {
+            downloadsPanel.close()
+            window.playMedia(url, title, "")
         }
     }
 
