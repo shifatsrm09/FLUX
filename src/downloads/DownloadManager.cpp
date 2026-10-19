@@ -188,7 +188,7 @@ int countVideosIn(const QString &dirPath, const QString &skipRoot, bool &truncat
     while (it.hasNext()) {
         const QString f = it.next();
         if (++visited > kVisitCap) { truncated = true; break; }
-        if (isInside(f, skipRoot)) continue;
+        if (!skipRoot.isEmpty() && !samePath(dirPath, skipRoot) && !isInside(dirPath, skipRoot) && isInside(f, skipRoot)) continue;
         if (isVideoSuffix(QFileInfo(f).suffix()) && ++n >= kCountCap) break;
     }
     return n;
@@ -504,6 +504,13 @@ bool DownloadManager::changeLocation(const QString &path) {
     if (p == m_root) return true;
 
     m_root = p;
+    const int oldTargetsCount = m_targets.size();
+    m_targets.erase(std::remove_if(m_targets.begin(), m_targets.end(),
+                                   [this](const QString &t) { return samePath(t, m_root) || isInside(t, m_root); }),
+                    m_targets.end());
+    if (m_targets.size() != oldTargetsCount) {
+        emit targetsChanged();
+    }
     FLUX_LOG_INFO("Downloads", QString("Download location changed to: %1").arg(native(m_root)));
     emit locationChanged();
     ++m_offlineRevision;
@@ -633,8 +640,25 @@ QVariantList DownloadManager::offlineList(const QString &relPath) const {
             out.append(m);
         }
 
+        // Folders directly in the download location (e.g. series, packs, or collections outside Series/Individuals)
+        QFileInfoList rootDirs = QDir(m_root).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::NoSort);
+        std::sort(rootDirs.begin(), rootDirs.end(), topByName);
+        for (const QFileInfo &fi : rootDirs) {
+            const QString name = fi.fileName();
+            if (name.compare(QLatin1String("Series"), Qt::CaseInsensitive) == 0 ||
+                name.compare(QLatin1String("Individuals"), Qt::CaseInsensitive) == 0) {
+                continue;
+            }
+            const int n = countVideos(fi.absoluteFilePath());
+            if (n == 0) continue;
+            QVariantMap m = folderEntry(fi, m_root, n);
+            m["section"] = QStringLiteral("Folders");
+            out.append(m);
+        }
+
         // Extra folders the user added in Settings (listed with folders before movies/episodes)
         for (const QString &t : m_targets) {
+            if (samePath(t, m_root) || isInside(t, m_root)) continue;
             const QFileInfo fi(t);
             QVariantMap m;
             m["name"] = fi.fileName().isEmpty() ? native(t) : fi.fileName();
@@ -655,6 +679,8 @@ QVariantList DownloadManager::offlineList(const QString &relPath) const {
 
         QFileInfoList movies = QDir(m_root + QStringLiteral("/Individuals"))
                                    .entryInfoList(QDir::Files, QDir::NoSort);
+        QFileInfoList rootMovies = QDir(m_root).entryInfoList(QDir::Files, QDir::NoSort);
+        movies.append(rootMovies);
         movies.erase(std::remove_if(movies.begin(), movies.end(),
                                     [](const QFileInfo &f) { return !isVideoSuffix(f.suffix()); }),
                      movies.end());
@@ -670,7 +696,9 @@ QVariantList DownloadManager::offlineList(const QString &relPath) const {
     const QDir dir(QDir::cleanPath(m_root + QLatin1Char('/') + rel));
     if (!dir.exists()) return out;
     // Never list outside the download location
-    if (!dir.canonicalPath().startsWith(QDir(m_root).canonicalPath(), Qt::CaseInsensitive)) return out;
+    const QString rootCan = QDir(m_root).canonicalPath();
+    const QString dirCan = dir.canonicalPath();
+    if (dirCan != rootCan && !dirCan.startsWith(rootCan + QLatin1Char('/'), Qt::CaseInsensitive)) return out;
 
     QCollator collator;
     collator.setNumericMode(true);
@@ -729,6 +757,7 @@ void DownloadManager::setTargets(const QStringList &paths) {
     for (const QString &raw : paths) {
         const QString p = QDir::cleanPath(QDir::fromNativeSeparators(raw.trimmed()));
         if (p.isEmpty() || !QDir::isAbsolutePath(p)) continue;
+        if (samePath(p, m_root) || isInside(p, m_root)) continue;
         bool dup = false;
         for (const QString &c : cleaned) dup = dup || samePath(c, p);
         if (!dup) cleaned << p;
@@ -813,13 +842,16 @@ QVariantList DownloadManager::targetList(const QString &absPath) const {
     const QString p = QDir::cleanPath(QDir::fromNativeSeparators(absPath.trimmed()));
     if (p.isEmpty() || p.split('/', Qt::SkipEmptyParts).contains(QStringLiteral(".."))) return out;
 
-    // Only ever list inside an added target, and never inside the download location
+    // If the path is m_root or inside m_root, delegate directly to offlineList
+    if (samePath(p, m_root)) return offlineList(QString());
+    if (isInside(p, m_root)) return offlineList(QDir(m_root).relativeFilePath(p));
+
+    // Only ever list inside an added target
     bool allowed = false;
     for (const QString &t : m_targets) {
         if (samePath(p, t) || isInside(p, t)) { allowed = true; break; }
     }
     if (!allowed) return out;
-    if (samePath(p, m_root) || isInside(p, m_root)) return out;
 
     const QDir dir(p);
     if (!dir.exists()) return out;
@@ -887,11 +919,19 @@ QVariantList DownloadManager::offlineSearch(const QString &query) const {
     collator.setNumericMode(true);
     collator.setCaseSensitivity(Qt::CaseInsensitive);
 
-    // 1. Folders whose name matches (Series packs, Individuals subfolders, and folders in added targets)
+    // 1. Folders whose name matches (Series packs, Individuals subfolders, root folders, and folders in added targets)
     QFileInfoList packs = QDir(m_root + QStringLiteral("/Series"))
                               .entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::NoSort);
     packs.append(QDir(m_root + QStringLiteral("/Individuals"))
                      .entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::NoSort));
+    QFileInfoList rootDirs = QDir(m_root).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::NoSort);
+    for (const QFileInfo &fi : rootDirs) {
+        const QString name = fi.fileName();
+        if (name.compare(QLatin1String("Series"), Qt::CaseInsensitive) != 0 &&
+            name.compare(QLatin1String("Individuals"), Qt::CaseInsensitive) != 0) {
+            packs.append(fi);
+        }
+    }
     std::sort(packs.begin(), packs.end(), [&collator](const QFileInfo &a, const QFileInfo &b) {
         return collator.compare(a.fileName(), b.fileName()) < 0;
     });
@@ -948,8 +988,13 @@ QVariantList DownloadManager::offlineSearch(const QString &query) const {
         m["section"] = QStringLiteral("Results");
         // Folder the file lives in, without the Series / Individuals container
         QString folder = QDir(m_root).relativeFilePath(fi.absolutePath());
-        const int slash = folder.indexOf('/');
-        folder = slash < 0 ? QString() : folder.mid(slash + 1);
+        if (folder.startsWith(QStringLiteral("Series/"), Qt::CaseInsensitive)) {
+            folder.remove(0, 7);
+        } else if (folder.startsWith(QStringLiteral("Individuals/"), Qt::CaseInsensitive)) {
+            folder.remove(0, 12);
+        } else if (folder == QStringLiteral("Series") || folder == QStringLiteral("Individuals") || folder == QStringLiteral(".")) {
+            folder.clear();
+        }
         m["folder"] = folder;
         out.append(m);
     }
