@@ -32,19 +32,92 @@ Item {
 
     // Re-read when downloads finish, the location changes, the page opens, a search is typed
     // or Refresh is pressed
-    readonly property var entries: {
+    readonly property var rawEntries: {
         var revision = fluxDownloads ? fluxDownloads.offlineRevision : 0
         var tick = root.refreshTick
         if (!root.active || !fluxDownloads) return []
-        var raw = root.searching ? fluxDownloads.offlineSearch(root.query)
-                                 : fluxDownloads.offlineList(root.rel)
+        return root.searching ? fluxDownloads.offlineSearch(root.query)
+                              : fluxDownloads.offlineList(root.rel)
+    }
+
+    readonly property var folderEntries: {
+        var raw = root.rawEntries
         var folders = []
-        var videos = []
         for (var i = 0; i < raw.length; ++i) {
             if (raw[i].kind === "folder") folders.push(raw[i])
-            else videos.push(raw[i])
         }
-        return folders.concat(videos)
+        return folders
+    }
+
+    readonly property var videoEntries: {
+        var raw = root.rawEntries
+        var videos = []
+        for (var i = 0; i < raw.length; ++i) {
+            if (raw[i].kind !== "folder") videos.push(raw[i])
+        }
+        return videos
+    }
+
+    readonly property var entries: root.folderEntries.concat(root.videoEntries)
+
+    function getSectionedRows(cols) {
+        var folders = root.folderEntries
+        var videos = root.videoEntries
+        var rows = []
+        var cCount = Math.max(1, cols)
+
+        var first = true
+        if (folders.length > 0) {
+            rows.push({
+                isHeader: true,
+                isFolder: true,
+                isFirstHeader: first,
+                title: "Folders",
+                icon: "folder",
+                countText: folders.length + (folders.length === 1 ? " folder" : " folders")
+            })
+            first = false
+
+            for (var i = 0; i < folders.length; i += cCount) {
+                var chunk = []
+                for (var c = 0; c < cCount && (i + c) < folders.length; ++c) {
+                    chunk.push(folders[i + c])
+                }
+                rows.push({
+                    isHeader: false,
+                    isFolder: true,
+                    isFirstHeader: false,
+                    items: chunk
+                })
+            }
+        }
+
+        if (videos.length > 0) {
+            rows.push({
+                isHeader: true,
+                isFolder: false,
+                isFirstHeader: first,
+                title: "Movies & Episodes",
+                icon: "play",
+                countText: videos.length + (videos.length === 1 ? " item" : " items")
+            })
+            first = false
+
+            for (var j = 0; j < videos.length; j += cCount) {
+                var chunkV = []
+                for (var k = 0; k < cCount && (j + k) < videos.length; ++k) {
+                    chunkV.push(videos[j + k])
+                }
+                rows.push({
+                    isHeader: false,
+                    isFolder: false,
+                    isFirstHeader: false,
+                    items: chunkV
+                })
+            }
+        }
+
+        return rows
     }
 
     // Parent folder (the manager knows about the Series / Individuals containers and added targets)
@@ -299,69 +372,131 @@ Item {
             }
         }
 
-        // ---- Card grid (same presentation as Bookmarks) ----
-        GridView {
-            id: libraryGrid
+        // ---- Sectioned Virtualized Library Results View: Folders first, then Movies/Episodes ----
+        ListView {
+            id: libraryListView
 
             readonly property int targetCardW: 172
-            readonly property int columns: Math.max(2, Math.floor(width / targetCardW))
+            readonly property int columns: Math.max(2, Math.floor((width + 14) / (targetCardW + 14)))
+            readonly property real cardW: Math.floor((width - (columns - 1) * 14) / columns)
+            readonly property real cardH: Math.round(cardW * 1.5)
 
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: root.entries.length > 0
             clip: true
-            model: root.entries
-            cellWidth: Math.floor(width / columns)
-            cellHeight: Math.round(cellWidth * 1.5)
             boundsBehavior: Flickable.StopAtBounds
             cacheBuffer: 800
 
             ScrollBar.vertical: FluxScrollBar { }
 
+            model: root.getSectionedRows(libraryListView.columns)
+
             footer: Item {
-                width: libraryGrid.width
-                height: 32
+                width: libraryListView.width
+                height: 36
             }
 
-            delegate: SearchResultCard {
+            delegate: Item {
+                id: rowDelegate
                 required property var modelData
                 required property int index
 
-                readonly property bool isVideo: modelData.kind === "video"
-                readonly property var prog: {
-                    var rev = fluxUser ? fluxUser.revision : 0
-                    return (isVideo && fluxUser) ? fluxUser.progressFor(modelData.url) : ({})
-                }
+                readonly property var rowInfo: modelData
 
-                width: libraryGrid.cellWidth
-                height: libraryGrid.cellHeight
-                showDownload: false
-                title: modelData.name || ""
-                parentPath: modelData.path || ""
-                isFolder: !isVideo
-                formattedSize: modelData.detail || ""
-                extension: modelData.extension || ""
-                playUrl: isVideo ? (modelData.url || "") : (modelData.rel || "")
-                localPath: modelData.path || ""
-                libraryName: {
-                    if (root.searching && modelData.folder && modelData.folder.length > 0) {
-                        return modelData.folder.split("/").join(" \u203A ")
+                width: libraryListView.width
+                height: rowInfo.isHeader ? (rowInfo.isFirstHeader ? 46 : 66) : (libraryListView.cardH + 14)
+
+                // SECTION HEADER
+                RowLayout {
+                    visible: rowInfo.isHeader === true
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 8
+                    spacing: 10
+
+                    Text {
+                        text: rowInfo.title || ""
+                        color: Theme.text
+                        font.pixelSize: 18
+                        font.weight: Font.Bold
+                        font.letterSpacing: -0.2
                     }
-                    return modelData.section || ""
-                }
-                isPlaying: (isVideo && !!fluxPlayer && fluxPlayer.url === modelData.url && fluxPlayer.isPlaying)
-                progress: (prog.fraction !== undefined) ? prog.fraction : 0
-                watched: (prog.watched === true)
-                introDelay: (index % 4) * 40
 
-                onPlayRequested: function(url, itemTitle) {
-                    root.playRequested(modelData.url, itemTitle)
+                    Rectangle {
+                        height: 22
+                        implicitWidth: countBadgeText.implicitWidth + 16
+                        radius: 11
+                        color: Theme.surfaceHi
+                        border.width: 1
+                        border.color: Theme.border
+
+                        Text {
+                            id: countBadgeText
+                            anchors.centerIn: parent
+                            text: rowInfo.countText || ""
+                            color: Theme.textDim
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
                 }
 
-                onFolderRequested: function(url, libName) {
-                    var target = modelData.rel
-                    root.clearSearch()
-                    root.rel = target
+                // CARDS ROW
+                Row {
+                    visible: rowInfo.isHeader !== true
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    spacing: 14
+
+                    Repeater {
+                        model: rowInfo.items || []
+
+                        delegate: SearchResultCard {
+                            required property var modelData
+                            required property int index
+
+                            readonly property bool isVideo: modelData.kind === "video"
+                            readonly property var prog: {
+                                var rev = fluxUser ? fluxUser.revision : 0
+                                return (isVideo && fluxUser) ? fluxUser.progressFor(modelData.url) : ({})
+                            }
+
+                            width: libraryListView.cardW
+                            height: libraryListView.cardH
+                            showDownload: false
+                            title: modelData.name || ""
+                            parentPath: modelData.path || ""
+                            isFolder: !isVideo
+                            formattedSize: modelData.detail || ""
+                            extension: modelData.extension || ""
+                            playUrl: isVideo ? (modelData.url || "") : (modelData.rel || "")
+                            localPath: modelData.path || ""
+                            libraryName: {
+                                if (root.searching && modelData.folder && modelData.folder.length > 0) {
+                                    return modelData.folder.split("/").join(" \u203A ")
+                                }
+                                return modelData.section || ""
+                            }
+                            isPlaying: (isVideo && !!fluxPlayer && fluxPlayer.url === modelData.url && fluxPlayer.isPlaying)
+                            progress: (prog.fraction !== undefined) ? prog.fraction : 0
+                            watched: (prog.watched === true)
+                            introDelay: (index % 4) * 40
+
+                            onPlayRequested: function(url, itemTitle) {
+                                root.playRequested(modelData.url, itemTitle)
+                            }
+
+                            onFolderRequested: function(url, libName) {
+                                var target = modelData.rel
+                                root.clearSearch()
+                                root.rel = target
+                            }
+                        }
+                    }
                 }
             }
         }
