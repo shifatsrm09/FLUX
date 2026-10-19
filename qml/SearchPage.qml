@@ -266,7 +266,7 @@ Item {
                 id: trendingSection
 
                 width: homeColumn.width
-                visible: (fluxUser ? fluxUser.server2Available : true) && !!fluxSearch && fluxSearch.trending && fluxSearch.trending.length > 0
+                visible: (fluxUser ? (fluxUser.server2Available || fluxUser.bothServersDown) : true) && !!fluxSearch && fluxSearch.trending && fluxSearch.trending.length > 0
                 height: visible ? (trendingLayout.y + trendingLayout.implicitHeight + 40) : 0
                 implicitHeight: height
 
@@ -750,6 +750,9 @@ Item {
                                 anchors.centerIn: parent
                                 text: {
                                     if (fluxUser) {
+                                        if (fluxUser.bothServersDown) {
+                                            return fluxUser.activeServer === 2 ? "ICC FTP" : "Dhaka Flix"
+                                        }
                                         if (!fluxUser.server2Available && fluxUser.server1Available) return "Dhaka Flix"
                                         if (!fluxUser.server1Available && fluxUser.server2Available) return "ICC FTP"
                                         return fluxUser.activeServer === 2 ? "ICC FTP" : "Dhaka Flix"
@@ -826,6 +829,9 @@ Item {
 
                                 readonly property bool preferIcc: {
                                     if (fluxUser) {
+                                        if (fluxUser.bothServersDown) {
+                                            return (fluxUser.activeServer === 2 && modelData.altUrl && modelData.altUrl.length > 0)
+                                        }
                                         if (!fluxUser.server2Available && fluxUser.server1Available) return false
                                         if (!fluxUser.server1Available && fluxUser.server2Available) return true
                                         return (fluxUser.activeServer === 2 && modelData.altUrl && modelData.altUrl.length > 0)
@@ -956,6 +962,10 @@ Item {
 
                 readonly property int activeServerIndex: (fluxUser && fluxUser.activeServer === 1) ? 1 : 2
                 readonly property bool isWide: root.width >= 700
+                readonly property bool bothDown: !!fluxUser && fluxUser.bothServersDown
+                readonly property bool showServer1: !fluxUser || !fluxUser.serverCheckComplete || fluxUser.server1Available || bothDown
+                readonly property bool showServer2: !fluxUser || !fluxUser.serverCheckComplete || fluxUser.server2Available || bothDown
+                readonly property bool hasBothServers: showServer1 && showServer2
 
                 implicitHeight: 42
                 implicitWidth: searchSegmentsRow.width + 8
@@ -981,12 +991,13 @@ Item {
                     id: searchSegmentsRow
                     anchors.verticalCenter: parent.verticalCenter
                     x: 4
-                    spacing: 4
+                    spacing: searchServerSelector.hasBothServers ? 4 : 0
 
                     Item {
                         id: sseg1
+                        visible: searchServerSelector.showServer1
                         height: 34
-                        width: sseg1Row.implicitWidth + 24
+                        width: visible ? (sseg1Row.implicitWidth + 24) : 0
 
                         Rectangle {
                             anchors.fill: parent
@@ -1048,8 +1059,9 @@ Item {
 
                     Item {
                         id: sseg2
+                        visible: searchServerSelector.showServer2
                         height: 34
-                        width: sseg2Row.implicitWidth + 24
+                        width: visible ? (sseg2Row.implicitWidth + 24) : 0
 
                         Rectangle {
                             anchors.fill: parent

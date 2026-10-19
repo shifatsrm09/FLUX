@@ -32,6 +32,8 @@ class UserStore : public QObject {
     Q_PROPERTY(int activeServer READ activeServer WRITE setActiveServer NOTIFY serverChanged)
     Q_PROPERTY(bool server1Available READ isServer1Available NOTIFY serverAvailabilityChanged)
     Q_PROPERTY(bool server2Available READ isServer2Available NOTIFY serverAvailabilityChanged)
+    Q_PROPERTY(bool serverCheckComplete READ isServerCheckComplete NOTIFY serverAvailabilityChanged)
+    Q_PROPERTY(bool bothServersDown READ bothServersDown NOTIFY serverAvailabilityChanged)
     Q_PROPERTY(QString iccftpUrl READ iccftpUrl WRITE setIccftpUrl NOTIFY serverChanged)
     Q_PROPERTY(QString iccftpSession READ iccftpSession WRITE setIccftpSession NOTIFY serverChanged)
     // Bumps when a poster is remembered; QML bindings read it to pick up new posters
@@ -59,6 +61,8 @@ public:
     Q_INVOKABLE void setActiveServer(int server);
     bool isServer1Available() const { return m_server1Available; }
     bool isServer2Available() const { return m_server2Available; }
+    bool isServerCheckComplete() const { return m_serverCheckComplete; }
+    bool bothServersDown() const { return m_serverCheckComplete && !m_server1Available && !m_server2Available; }
     Q_INVOKABLE void autoDetectServer();
     QString iccftpUrl() const;
     Q_INVOKABLE void setIccftpUrl(const QString &url);
@@ -188,6 +192,7 @@ private:
     bool m_dirty = false;
     bool m_server1Available = true;
     bool m_server2Available = true;
+    bool m_serverCheckComplete = false;
 };
 
 } // namespace Flux

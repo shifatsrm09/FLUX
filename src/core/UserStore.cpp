@@ -746,6 +746,7 @@ void UserStore::setTmdbApiKey(const QString &key) {
 }
 
 void UserStore::autoDetectServer() {
+    m_serverCheckComplete = false;
     auto *nam = new QNetworkAccessManager(this);
     auto *pendingCount = new int(2);
     auto *s1Ok = new bool(false);
@@ -763,6 +764,7 @@ void UserStore::autoDetectServer() {
 
             m_server1Available = s1;
             m_server2Available = s2;
+            m_serverCheckComplete = true;
             emit serverAvailabilityChanged();
 
             FLUX_LOG_INFO("UserStore", QStringLiteral("Server auto-detection complete: Dhaka Flix = %1, ICC FTP = %2")

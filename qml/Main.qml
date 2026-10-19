@@ -453,6 +453,10 @@ ApplicationWindow {
                 customTitleBar.closeMenu()
                 return
             }
+            if (networkNoticeDialog.opened) {
+                networkNoticeDialog.close()
+                return
+            }
             if (settingsPanel.opened) {
                 settingsPanel.dismiss()
                 return
@@ -490,6 +494,16 @@ ApplicationWindow {
     }
 
     // ---- Startup transition & keyboard focus management ----------------------------
+    property bool networkNoticeShown: false
+
+    function checkNetworkNotice() {
+        if (networkNoticeShown || !startupComplete) return
+        if (fluxUser && fluxUser.bothServersDown) {
+            networkNoticeShown = true
+            networkNoticeDialog.open()
+        }
+    }
+
     function completeStartup() {
         if (window.startupComplete) return
         window.startupComplete = true
@@ -501,6 +515,7 @@ ApplicationWindow {
         window.raise()
         window.requestActivate()
         startupPopup.visible = false
+        window.checkNetworkNotice()
     }
 
     onClosing: function(close) {
@@ -535,6 +550,14 @@ ApplicationWindow {
 
         function onMenuOpenChanged() {
             if (!customTitleBar.menuOpen && currentPage === "player") stage.forceActiveFocus()
+        }
+    }
+
+    Connections {
+        target: fluxUser
+
+        function onServerAvailabilityChanged() {
+            window.checkNetworkNotice()
         }
     }
 
@@ -791,6 +814,10 @@ ApplicationWindow {
             downloadsPanel.close()
             window.playMedia(url, title, "")
         }
+    }
+
+    NetworkNoticeDialog {
+        id: networkNoticeDialog
     }
 
 
