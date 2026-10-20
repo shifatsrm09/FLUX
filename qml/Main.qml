@@ -626,8 +626,9 @@ ApplicationWindow {
         target: fluxTeleparty
 
         function onStateChanged() {
-            if (!fluxTeleparty.active && fluxUser) {
-                fluxUser.clearPartyMedia()
+            if (!fluxTeleparty.active) {
+                window.localAutoMatchActive = false
+                if (fluxUser) fluxUser.clearPartyMedia()
             }
         }
 

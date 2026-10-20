@@ -236,7 +236,13 @@ Item {
                         extraInfo: (modelData.positionMs > 0) ? root.watchedTimeLabel(modelData.positionMs) : (modelData.watched === true ? "Completed" : "")
                         introDelay: Math.min(index, 8) * 45
 
+                        allowTelepartyLocalPlayback: (fluxTeleparty && fluxTeleparty.active)
+
                         onPlayRequested: function(url, itemTitle) {
+                            root.playMediaRequested(url, itemTitle, "")
+                        }
+
+                        onPlayInTelepartyRequested: function(url, itemTitle) {
                             root.playMediaRequested(url, itemTitle, "")
                         }
 
