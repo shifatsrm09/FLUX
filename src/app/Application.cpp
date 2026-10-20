@@ -100,6 +100,18 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
         const bool latchedDisabled = store->value("subtitles/latchedDisabled", false).toBool();
         player->setLatchedSubtitle(latchedName, latchedLang, latchedIndex, latchedDisabled);
 
+        auto updateTelepartyCustomCode = [this, store]() {
+            if (!m_teleparty) return;
+            if (store->devModeUnlocked() && store->useCustomTelepartyCode()) {
+                m_teleparty->setCustomRoomCode(store->customTelepartyCode());
+            } else {
+                m_teleparty->setCustomRoomCode(QString());
+            }
+        };
+        updateTelepartyCustomCode();
+        connect(store, &UserStore::customTelepartyCodeChanged, this, updateTelepartyCustomCode);
+        connect(store, &UserStore::devModeUnlockedChanged, this, updateTelepartyCustomCode);
+
         // Multi-server settings (1 = Dhaka Flix, 2 = ICC FTP)
         search->setIccftpUrl(store->iccftpUrl());
         search->setIccftpSession(store->iccftpSession());

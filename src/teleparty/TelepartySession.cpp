@@ -10,6 +10,7 @@
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QSet>
+#include <QSettings>
 #include <QUuid>
 #include <algorithm>
 
@@ -56,6 +57,9 @@ TelepartySession::TelepartySession(QObject *parent)
     connect(m_client, &SyncplayClient::fluxMessageReceived, this, &TelepartySession::onFluxMessage);
     connect(m_client, &SyncplayClient::peerPresent, this, &TelepartySession::onPeerPresent);
     connect(m_client, &SyncplayClient::peerLeft, this, &TelepartySession::onPeerLeft);
+
+    QSettings settings;
+    m_latchedRoomCode = settings.value(QStringLiteral("teleparty/latchedCode"), QString()).toString().trimmed().toUpper();
     connect(m_client, &SyncplayClient::connectionFailed, this, [this](const QString &reason) {
         if (m_state == State::Connecting || m_state == State::Reconnecting) {
             if (reason.contains(QLatin1String("TLS"), Qt::CaseInsensitive) ||
@@ -141,22 +145,50 @@ void TelepartySession::copyCode() const {
 // Host / join / leave
 // ============================================================================
 
+void TelepartySession::setCustomRoomCode(const QString &code) {
+    const QString trimmed = code.trimmed().toUpper();
+    if (m_customRoomCode == trimmed) return;
+    m_customRoomCode = trimmed;
+    emit customRoomCodeChanged();
+}
+
+void TelepartySession::setLatchedRoomCode(const QString &code) {
+    const QString trimmed = code.trimmed().toUpper();
+    if (m_latchedRoomCode == trimmed) return;
+    m_latchedRoomCode = trimmed;
+    QSettings settings;
+    if (m_latchedRoomCode.isEmpty()) {
+        settings.remove(QStringLiteral("teleparty/latchedCode"));
+    } else {
+        settings.setValue(QStringLiteral("teleparty/latchedCode"), m_latchedRoomCode);
+    }
+    emit latchedRoomCodeChanged();
+}
+
+void TelepartySession::clearLatchedRoomCode() {
+    setLatchedRoomCode(QString());
+}
+
 void TelepartySession::host() {
     if (m_state != State::Idle) return;
     setError(QString());
     m_isHost = true;
     m_attemptsLeft = kMaxHostAttempts;
-    m_code = generateCode();
+    if (!m_customRoomCode.trimmed().isEmpty()) {
+        m_code = m_customRoomCode.trimmed().toUpper();
+    } else {
+        m_code = generateCode();
+    }
     startSession();
 }
 
 void TelepartySession::join(const QString &code) {
     if (m_state != State::Idle) return;
 
-    const QString trimmed = code.trimmed();
-    static const QRegularExpression fiveDigits(QStringLiteral("^\\d{5}$"));
-    if (!fiveDigits.match(trimmed).hasMatch()) {
-        setError(QStringLiteral("Enter the 5-digit code."));
+    const QString trimmed = code.trimmed().toUpper();
+    static const QRegularExpression codeRegex(QStringLiteral("^[A-Z0-9_-]{3,16}$"));
+    if (!codeRegex.match(trimmed).hasMatch()) {
+        setError(QStringLiteral("Enter a valid code (3-16 characters)."));
         return;
     }
 
@@ -230,6 +262,12 @@ void TelepartySession::becomeJoined() {
     }
     emit joinedSession();
     FLUX_LOG_INFO("Teleparty", QString("Joined session %1 (%2 members)").arg(m_code).arg(memberCount()));
+
+    // If a guest entered a room code that starts with a letter and connected successfully,
+    // latch it for future quick reconnects.
+    if (!m_isHost && !m_code.isEmpty() && m_code.at(0).isLetter()) {
+        setLatchedRoomCode(m_code);
+    }
 }
 
 void TelepartySession::handleHostCollision() {
@@ -241,7 +279,11 @@ void TelepartySession::handleHostCollision() {
     if (!m_simulatedTransport) {
         m_client->disconnectFromServer();
     }
-    m_code = generateCode();
+    if (!m_customRoomCode.trimmed().isEmpty()) {
+        m_code = m_customRoomCode.trimmed().toUpper();
+    } else {
+        m_code = generateCode();
+    }
     startSession();
 }
 
@@ -654,7 +696,7 @@ QString TelepartySession::generateCode() {
 // Deterministic mapping of 5-digit code to a 24-character Syncplay room name (limit: 35 chars)
 QString TelepartySession::roomNameForCode(const QString &code) {
     const QByteArray hash = QCryptographicHash::hash(
-        QByteArrayLiteral("flux-teleparty-v1:") + code.toUtf8(), QCryptographicHash::Sha256).toHex();
+        QByteArrayLiteral("flux-teleparty-v1:") + code.trimmed().toUpper().toUtf8(), QCryptographicHash::Sha256).toHex();
     return QStringLiteral("FLUX-TP-") + QString::fromLatin1(hash.left(16));
 }
 

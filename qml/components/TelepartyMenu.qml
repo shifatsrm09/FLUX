@@ -66,7 +66,7 @@ Popup {
     function submitJoin() {
         if (!fluxTeleparty) return
         var code = codeField.text.trim()
-        if (code.length !== 5) return
+        if (code.length < 3) return
         fluxTeleparty.join(code)
     }
 
@@ -175,9 +175,73 @@ Popup {
                     }
                 }
 
+                // Saved latched room option (CFAT join cross(icon))
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 46
+                    visible: !!fluxTeleparty && fluxTeleparty.latchedRoomCode.length > 0
+                    radius: 10
+                    color: "#18FFFFFF"
+                    border.width: 1
+                    border.color: Theme.border
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 8
+                        spacing: 8
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 0
+                            spacing: 6
+
+                            Rectangle {
+                                width: 6
+                                height: 6
+                                radius: 3
+                                color: Theme.success
+                            }
+
+                            Text {
+                                text: fluxTeleparty ? fluxTeleparty.latchedRoomCode : ""
+                                color: Theme.text
+                                font.pixelSize: 13
+                                font.weight: Font.Bold
+                                font.letterSpacing: 1.5
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        FluxButton {
+                            implicitHeight: 30
+                            text: "Join"
+                            onClicked: {
+                                if (fluxTeleparty) {
+                                    fluxTeleparty.clearError()
+                                    fluxTeleparty.join(fluxTeleparty.latchedRoomCode)
+                                }
+                            }
+                        }
+
+                        IconButton {
+                            iconName: "close"
+                            iconSize: 13
+                            implicitWidth: 28
+                            implicitHeight: 28
+                            tip: "Forget"
+                            tipAbove: true
+                            onClicked: {
+                                if (fluxTeleparty) fluxTeleparty.clearLatchedRoomCode()
+                            }
+                        }
+                    }
+                }
+
                 Text {
                     Layout.fillWidth: true
-                    text: "Host starts a party and gives you a 5-digit code. Friends use Join and type that code."
+                    text: "Host starts a party and gives you a code. Friends use Join and type that code."
                     color: Theme.textMute
                     font.pixelSize: 11
                     wrapMode: Text.Wrap
@@ -199,7 +263,7 @@ Popup {
                 spacing: 10
 
                 Text {
-                    text: "Enter the 5-digit code"
+                    text: "Enter the party code"
                     color: Theme.text
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
@@ -221,19 +285,18 @@ Popup {
                         anchors.fill: parent
                         anchors.leftMargin: 14
                         anchors.rightMargin: 14
-                        placeholderText: "00000"
+                        placeholderText: "CODE"
                         placeholderTextColor: Theme.textMute
                         color: Theme.text
-                        font.pixelSize: 22
+                        font.pixelSize: 20
                         font.weight: Font.Bold
-                        font.letterSpacing: 8
+                        font.letterSpacing: 4
                         horizontalAlignment: TextInput.AlignHCenter
                         verticalAlignment: TextInput.AlignVCenter
-                        maximumLength: 5
-                        inputMethodHints: Qt.ImhDigitsOnly
+                        maximumLength: 16
                         selectByMouse: true
                         background: null
-                        validator: RegularExpressionValidator { regularExpression: /^\d{0,5}$/ }
+                        validator: RegularExpressionValidator { regularExpression: /^[a-zA-Z0-9_-]{0,16}$/ }
 
                         onTextChanged: {
                             if (fluxTeleparty && fluxTeleparty.errorText.length > 0) fluxTeleparty.clearError()
@@ -261,8 +324,45 @@ Popup {
                         Layout.fillWidth: true
                         implicitHeight: 40
                         text: "Join party"
-                        enabled: codeField.text.length === 5
+                        enabled: codeField.text.trim().length >= 3
                         onClicked: menu.submitJoin()
+                    }
+                }
+
+                RowLayout {
+                    visible: !!fluxTeleparty && fluxTeleparty.latchedRoomCode.length > 0
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Text {
+                        text: "Saved party:"
+                        color: Theme.textMute
+                        font.pixelSize: 11
+                    }
+
+                    Rectangle {
+                        radius: 6
+                        color: "#20FFFFFF"
+                        implicitHeight: 22
+                        implicitWidth: latchedChipTxt.implicitWidth + 14
+
+                        Text {
+                            id: latchedChipTxt
+                            anchors.centerIn: parent
+                            text: fluxTeleparty ? fluxTeleparty.latchedRoomCode : ""
+                            color: Theme.text
+                            font.pixelSize: 11
+                            font.weight: Font.Bold
+                            font.letterSpacing: 1
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                codeField.text = fluxTeleparty.latchedRoomCode
+                            }
+                        }
                     }
                 }
             }

@@ -12,6 +12,27 @@ Popup {
     property string serverTestStatus: ""
     property bool serverTesting: false
     property bool serverTestSuccess: false
+    property bool showPinPrompt: false
+    property string devPinErrorText: ""
+    property string customCodeSavedText: ""
+
+    function unlockDevMode() {
+        if (!fluxUser) return
+        if (fluxUser.verifyDevPin(devPinInput.text.trim())) {
+            devPinErrorText = ""
+            devPinInput.text = ""
+            panel.showPinPrompt = false
+        } else {
+            devPinErrorText = "Incorrect 4-digit PIN."
+        }
+    }
+
+    Timer {
+        id: customCodeSavedTimer
+        interval: 2500
+        repeat: false
+        onTriggered: panel.customCodeSavedText = ""
+    }
 
     readonly property bool atDefaultLocation: !!fluxDownloads
         && fluxDownloads.downloadLocation.toLowerCase() === fluxDownloads.defaultLocation.toLowerCase()
@@ -684,6 +705,298 @@ Popup {
                         ToggleSwitch {
                             checked: fluxUser ? fluxUser.autoplayNext : true
                             onToggled: function(value) { if (fluxUser) fluxUser.autoplayNext = value }
+                        }
+                    }
+                }
+
+                // ---- Developer Options ----
+                SectionLabel {
+                    text: "DEVELOPER OPTIONS"
+                    Layout.leftMargin: 22
+                    Layout.topMargin: 20
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 22
+                    Layout.rightMargin: 22
+                    Layout.topMargin: 10
+                    Layout.bottomMargin: 24
+                    implicitHeight: devColumn.implicitHeight + 32
+                    radius: 14
+                    color: Theme.surface
+                    border.width: 1
+                    border.color: (fluxUser && fluxUser.devModeUnlocked) ? "#4046D369" : Theme.border
+
+                    ColumnLayout {
+                        id: devColumn
+
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.margins: 16
+                        spacing: 14
+
+                        // --- 1. Developer Mode On / Off Row ---
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 12
+
+                            Rectangle {
+                                width: 34
+                                height: 34
+                                radius: 17
+                                color: (fluxUser && fluxUser.devModeUnlocked) ? "#2646D369" : "#1AFFFFFF"
+
+                                FluxIcon {
+                                    anchors.centerIn: parent
+                                    name: (fluxUser && fluxUser.devModeUnlocked) ? "check" : "settings"
+                                    size: 16
+                                    color: (fluxUser && fluxUser.devModeUnlocked) ? "#46D369" : Theme.textDim
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 0
+                                spacing: 2
+
+                                Text {
+                                    text: "Developer Mode"
+                                    color: (fluxUser && fluxUser.devModeUnlocked) ? "#46D369" : Theme.text
+                                    font.pixelSize: 14
+                                    font.weight: Font.DemiBold
+                                }
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: (fluxUser && fluxUser.devModeUnlocked)
+                                          ? "Advanced developer settings & room overrides active"
+                                          : "Enable to access developer tools and custom room overrides"
+                                    color: Theme.textMute
+                                    font.pixelSize: 12
+                                    wrapMode: Text.Wrap
+                                }
+                            }
+
+                            ToggleSwitch {
+                                checked: !!fluxUser && fluxUser.devModeUnlocked
+                                onToggled: function(val) {
+                                    if (!val) {
+                                        if (fluxUser) fluxUser.devModeUnlocked = false
+                                        panel.showPinPrompt = false
+                                        devPinInput.text = ""
+                                        panel.devPinErrorText = ""
+                                        panel.customCodeSavedText = ""
+                                    } else {
+                                        panel.showPinPrompt = true
+                                        panel.devPinErrorText = ""
+                                        devPinInput.forceActiveFocus()
+                                    }
+                                }
+                            }
+                        }
+
+                        // --- 2. PIN Entry Prompt (shown when user flips toggle ON but mode is not yet unlocked) ---
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            visible: (!fluxUser || !fluxUser.devModeUnlocked) && panel.showPinPrompt
+                            spacing: 10
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 1
+                                color: Theme.border
+                            }
+
+                            Text {
+                                text: "Enter 4-digit PIN to enable Developer Mode:"
+                                color: Theme.text
+                                font.pixelSize: 12
+                                font.weight: Font.Medium
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 10
+
+                                Rectangle {
+                                    implicitHeight: 40
+                                    implicitWidth: 140
+                                    radius: 10
+                                    color: devPinInput.activeFocus ? "#26FFFFFF" : "#1AFFFFFF"
+                                    border.width: 1
+                                    border.color: panel.devPinErrorText.length > 0 ? Theme.danger : (devPinInput.activeFocus ? Theme.accentRing : Theme.border)
+
+                                    TextField {
+                                        id: devPinInput
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 12
+                                        anchors.rightMargin: 12
+                                        echoMode: TextInput.Password
+                                        placeholderText: "\u2022 \u2022 \u2022 \u2022"
+                                        placeholderTextColor: Theme.textMute
+                                        color: Theme.text
+                                        font.pixelSize: 18
+                                        font.weight: Font.Bold
+                                        font.letterSpacing: 6
+                                        horizontalAlignment: TextInput.AlignHCenter
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        maximumLength: 8
+                                        inputMethodHints: Qt.ImhDigitsOnly
+                                        selectByMouse: true
+                                        background: null
+                                        validator: RegularExpressionValidator { regularExpression: /^\d{0,8}$/ }
+                                        onAccepted: panel.unlockDevMode()
+                                        onTextChanged: panel.devPinErrorText = ""
+                                    }
+                                }
+
+                                FluxButton {
+                                    text: "Confirm"
+                                    implicitHeight: 40
+                                    enabled: devPinInput.text.trim().length >= 4
+                                    onClicked: panel.unlockDevMode()
+                                }
+
+                                FluxButton {
+                                    text: "Cancel"
+                                    variant: "ghost"
+                                    implicitHeight: 40
+                                    onClicked: {
+                                        panel.showPinPrompt = false
+                                        devPinInput.text = ""
+                                        panel.devPinErrorText = ""
+                                    }
+                                }
+
+                                Item { Layout.fillWidth: true }
+                            }
+
+                            Text {
+                                visible: panel.devPinErrorText.length > 0
+                                text: panel.devPinErrorText
+                                color: Theme.danger
+                                font.pixelSize: 12
+                            }
+                        }
+
+                        // --- 3. Developer Options Content (shown only when unlocked / ON) ---
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            visible: !!fluxUser && fluxUser.devModeUnlocked
+                            spacing: 14
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 1
+                                color: Theme.border
+                            }
+
+                            // Personal Teleparty Code setting
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 0
+                                    spacing: 2
+
+                                    Text {
+                                        text: "Personal Teleparty Code"
+                                        color: Theme.text
+                                        font.pixelSize: 14
+                                        font.weight: Font.DemiBold
+                                    }
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: "When hosting, always generate this custom code instead of a random 5-digit number."
+                                        color: Theme.textMute
+                                        font.pixelSize: 12
+                                        wrapMode: Text.Wrap
+                                    }
+                                }
+
+                                ToggleSwitch {
+                                    checked: fluxUser ? fluxUser.useCustomTelepartyCode : false
+                                    onToggled: function(val) {
+                                        if (fluxUser) fluxUser.useCustomTelepartyCode = val
+                                    }
+                                }
+                            }
+
+                            // Custom code input field (shown when toggle is on)
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                visible: !!fluxUser && fluxUser.useCustomTelepartyCode
+                                spacing: 8
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 10
+
+                                    Rectangle {
+                                        implicitHeight: 40
+                                        Layout.fillWidth: true
+                                        Layout.preferredWidth: 0
+                                        radius: 10
+                                        color: customCodeInput.activeFocus ? "#26FFFFFF" : "#1AFFFFFF"
+                                        border.width: 1
+                                        border.color: customCodeInput.activeFocus ? Theme.accentRing : Theme.border
+
+                                        TextField {
+                                            id: customCodeInput
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 12
+                                            anchors.rightMargin: 12
+                                            text: fluxUser ? fluxUser.customTelepartyCode : ""
+                                            placeholderText: "e.g. CFAT, SHIFA, 77777"
+                                            placeholderTextColor: Theme.textMute
+                                            color: Theme.text
+                                            font.pixelSize: 14
+                                            font.weight: Font.Bold
+                                            font.letterSpacing: 2
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            maximumLength: 16
+                                            selectByMouse: true
+                                            background: null
+                                            validator: RegularExpressionValidator { regularExpression: /^[a-zA-Z0-9_-]{0,16}$/ }
+
+                                            onEditingFinished: {
+                                                if (fluxUser) fluxUser.customTelepartyCode = text.trim().toUpperCase()
+                                            }
+                                        }
+                                    }
+
+                                    FluxButton {
+                                        text: "Save"
+                                        implicitHeight: 40
+                                        enabled: customCodeInput.text.trim().length >= 3
+                                        onClicked: {
+                                            if (fluxUser) {
+                                                fluxUser.customTelepartyCode = customCodeInput.text.trim().toUpperCase()
+                                                panel.customCodeSavedText = "Personal code set to \"" + fluxUser.customTelepartyCode + "\""
+                                                customCodeSavedTimer.restart()
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    visible: panel.customCodeSavedText.length > 0
+                                    text: panel.customCodeSavedText
+                                    color: "#46D369"
+                                    font.pixelSize: 11
+                                }
+
+                                Text {
+                                    text: "3-16 alphanumeric characters. Friends enter this exact code when joining."
+                                    color: Theme.textMute
+                                    font.pixelSize: 11
+                                }
+                            }
                         }
                     }
                 }

@@ -40,6 +40,10 @@ class UserStore : public QObject {
     Q_PROPERTY(int posterRevision READ posterRevision NOTIFY postersChanged)
     Q_PROPERTY(bool autoFetchPosters READ autoFetchPosters WRITE setAutoFetchPosters NOTIFY autoFetchPostersChanged)
     Q_PROPERTY(QString tmdbApiKey READ tmdbApiKey WRITE setTmdbApiKey NOTIFY tmdbApiKeyChanged)
+    Q_PROPERTY(bool devModeUnlocked READ devModeUnlocked WRITE setDevModeUnlocked NOTIFY devModeUnlockedChanged)
+    Q_PROPERTY(QString devPin READ devPin WRITE setDevPin NOTIFY devPinChanged)
+    Q_PROPERTY(bool useCustomTelepartyCode READ useCustomTelepartyCode WRITE setUseCustomTelepartyCode NOTIFY customTelepartyCodeChanged)
+    Q_PROPERTY(QString customTelepartyCode READ customTelepartyCode WRITE setCustomTelepartyCode NOTIFY customTelepartyCodeChanged)
 
 public:
     explicit UserStore(QObject *parent = nullptr);
@@ -104,6 +108,16 @@ public:
     Q_INVOKABLE void fetchPoster(const QString &url, const QString &title = QString(), bool isFolder = false);
     Q_INVOKABLE void clearPosters();
 
+    bool devModeUnlocked() const;
+    void setDevModeUnlocked(bool unlocked);
+    QString devPin() const;
+    void setDevPin(const QString &pin);
+    bool useCustomTelepartyCode() const;
+    void setUseCustomTelepartyCode(bool use);
+    QString customTelepartyCode() const;
+    void setCustomTelepartyCode(const QString &code);
+    Q_INVOKABLE bool verifyDevPin(const QString &pin);
+
     // Called on application exit
     Q_INVOKABLE void shutdown();
 
@@ -116,6 +130,9 @@ signals:
     void postersChanged();
     void autoFetchPostersChanged();
     void tmdbApiKeyChanged();
+    void devModeUnlockedChanged();
+    void devPinChanged();
+    void customTelepartyCodeChanged();
 
 private:
     struct PosterFetchTask {
@@ -193,6 +210,7 @@ private:
     bool m_server1Available = true;
     bool m_server2Available = true;
     bool m_serverCheckComplete = false;
+    bool m_devUnlocked = false;
 };
 
 } // namespace Flux

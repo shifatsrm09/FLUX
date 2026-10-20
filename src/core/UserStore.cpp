@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "../media/VLCPlayer.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -1506,6 +1507,96 @@ void UserStore::shutdown() {
     m_posterQueue.clear();
     m_pendingPosterFetches.clear();
     m_settings.sync();
+}
+
+static QString readDevPinFromEnv() {
+    // 1. Check environment variable first
+    const QString envVar = qEnvironmentVariable("DEV_PIN").trimmed();
+    if (!envVar.isEmpty()) return envVar;
+    const QString envVarLower = qEnvironmentVariable("dev_pin").trimmed();
+    if (!envVarLower.isEmpty()) return envVarLower;
+
+    // 2. Check .env file in multiple possible runtime directories
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QStringList candidatePaths = {
+        QDir(appDir).filePath(QStringLiteral(".env")),
+        QDir(appDir + QStringLiteral("/..")).filePath(QStringLiteral(".env")),
+        QDir(appDir + QStringLiteral("/../..")).filePath(QStringLiteral(".env")),
+        QDir::current().filePath(QStringLiteral(".env"))
+    };
+
+    for (const QString &path : candidatePaths) {
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&file);
+            while (!in.atEnd()) {
+                QString line = in.readLine().trimmed();
+                if (line.startsWith(QLatin1Char('#')) || line.isEmpty()) continue;
+                if (line.startsWith(QLatin1String("dev_pin="), Qt::CaseInsensitive)) {
+                    QString val = line.mid(8).trimmed();
+                    if ((val.startsWith(QLatin1Char('"')) && val.endsWith(QLatin1Char('"'))) ||
+                        (val.startsWith(QLatin1Char('\'')) && val.endsWith(QLatin1Char('\'')))) {
+                        val = val.mid(1, val.length() - 2);
+                    }
+                    if (!val.isEmpty()) return val;
+                }
+            }
+        }
+    }
+    return QString();
+}
+
+bool UserStore::devModeUnlocked() const {
+    return m_devUnlocked;
+}
+
+void UserStore::setDevModeUnlocked(bool unlocked) {
+    if (m_devUnlocked == unlocked) return;
+    m_devUnlocked = unlocked;
+    if (!unlocked) {
+        setUseCustomTelepartyCode(false);
+        setCustomTelepartyCode(QString());
+    }
+    emit devModeUnlockedChanged();
+}
+
+QString UserStore::devPin() const {
+    return readDevPinFromEnv();
+}
+
+void UserStore::setDevPin(const QString &pin) {
+    Q_UNUSED(pin);
+}
+
+bool UserStore::verifyDevPin(const QString &pin) {
+    const QString trimmed = pin.trimmed();
+    const QString envPin = readDevPinFromEnv();
+    if (!envPin.isEmpty() && trimmed == envPin) {
+        setDevModeUnlocked(true);
+        return true;
+    }
+    return false;
+}
+
+bool UserStore::useCustomTelepartyCode() const {
+    return m_settings.value(QStringLiteral("teleparty/useCustomCode"), false).toBool();
+}
+
+void UserStore::setUseCustomTelepartyCode(bool use) {
+    if (useCustomTelepartyCode() == use) return;
+    setValue(QStringLiteral("teleparty/useCustomCode"), use);
+    emit customTelepartyCodeChanged();
+}
+
+QString UserStore::customTelepartyCode() const {
+    return m_settings.value(QStringLiteral("teleparty/customCode"), QString()).toString();
+}
+
+void UserStore::setCustomTelepartyCode(const QString &code) {
+    const QString trimmed = code.trimmed().toUpper();
+    if (customTelepartyCode() == trimmed) return;
+    setValue(QStringLiteral("teleparty/customCode"), trimmed);
+    emit customTelepartyCodeChanged();
 }
 
 } // namespace Flux
