@@ -16,6 +16,7 @@ Item {
 
     // True while this page is on screen (the disk is only read then)
     property bool active: false
+    property bool telepartyActive: false
 
     // Folder being browsed, relative to the download location ("" = top level)
     property string rel: ""
@@ -29,6 +30,7 @@ Item {
 
     // Ask the app to play a file (a file:// URL)
     signal playRequested(string url, string title)
+    signal playInTelepartyRequested(string url, string title)
 
     // Re-read when downloads finish, the location changes, the page opens, a search is typed
     // or Refresh is pressed
@@ -468,6 +470,7 @@ Item {
                             width: libraryListView.cardW
                             height: libraryListView.cardH
                             showDownload: false
+                            allowTelepartyLocalPlayback: root.telepartyActive
                             title: modelData.name || ""
                             parentPath: modelData.path || ""
                             isFolder: !isVideo
@@ -487,7 +490,15 @@ Item {
                             introDelay: (index % 4) * 40
 
                             onPlayRequested: function(url, itemTitle) {
-                                root.playRequested(modelData.url, itemTitle)
+                                if (root.telepartyActive) {
+                                    root.playInTelepartyRequested(modelData.url, itemTitle)
+                                } else {
+                                    root.playRequested(modelData.url, itemTitle)
+                                }
+                            }
+
+                            onPlayInTelepartyRequested: function(url, itemTitle) {
+                                root.playInTelepartyRequested(modelData.url, itemTitle)
                             }
 
                             onFolderRequested: function(url, libName) {

@@ -55,6 +55,10 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     // Teleparty: watch together through a public MQTT broker (no server of ours)
     m_teleparty = std::make_unique<TelepartySession>(this);
     m_sync = std::make_unique<TelepartySync>(m_teleparty.get(), m_player.get(), this);
+    m_sync->setForceAsyncInspection(true);
+    LocalVerificationPolicy localPolicy;
+    localPolicy.requireContentFingerprint = false;
+    m_sync->setLocalVerificationPolicy(localPolicy);
     m_sync->setUserStore(m_userStore.get());
 
     // 2b. Restore saved user settings

@@ -678,7 +678,8 @@ public:
                                             bool computeFullHash = false,
                                             LocalCompatibilityReason *outErrorReason = nullptr,
                                             CancelToken cancelToken = nullptr,
-                                            bool useCache = true);
+                                            bool useCache = true,
+                                            bool computeFingerprint = true);
 
     // Asynchronous inspection on a worker thread with cancellation support
     static CancelToken inspectFileAsync(QObject *context,
@@ -686,7 +687,8 @@ public:
                                         const QString &titleHint,
                                         qint64 knownDurationMs,
                                         bool computeFullHash,
-                                        InspectCallback callback);
+                                        InspectCallback callback,
+                                        bool computeFingerprint = true);
 
     // Returns true if the file on disk has been deleted, replaced, or modified since descriptor extraction
     static bool hasFileChangedSince(const QString &filePath, const LocalMediaDescriptor &desc);

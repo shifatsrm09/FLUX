@@ -13,6 +13,8 @@ Item {
     property var window: null
     property bool isMaximized: window ? window.visibility === Window.Maximized : false
     property bool showNowPlaying: false
+    property bool nowPlayingNeedsMedia: false
+    property string nowPlayingWarning: ""
 
     property bool solid: false          // opaque background (scrolled / results page)
     property bool overlayMode: false    // player mode: transparent, window controls only
@@ -303,9 +305,11 @@ Item {
             implicitHeight: 24
             implicitWidth: nowPlayingRow.implicitWidth + 18
             radius: 12
-            color: nowPlayingMouse.containsMouse ? "#405865F2" : Theme.accentSoft
+            color: root.nowPlayingNeedsMedia
+                   ? (nowPlayingMouse.containsMouse ? "#70A9212B" : "#55A9212B")
+                   : (nowPlayingMouse.containsMouse ? "#405865F2" : Theme.accentSoft)
             border.width: 1
-            border.color: Theme.accentRing
+            border.color: root.nowPlayingNeedsMedia ? "#FFFF6573" : Theme.accentRing
 
             Behavior on color { ColorAnimation { duration: 120 } }
 
@@ -315,13 +319,13 @@ Item {
                 spacing: 6
 
                 Equalizer {
-                    running: root.showNowPlaying && root.visible
+                    running: root.showNowPlaying && !root.nowPlayingNeedsMedia && root.visible
                     Layout.alignment: Qt.AlignVCenter
                 }
 
                 Text {
-                    text: "Now Playing"
-                    color: Theme.text
+                    text: root.nowPlayingNeedsMedia ? "Add local file" : "Now Playing"
+                    color: root.nowPlayingNeedsMedia ? "#FFFF9AA2" : Theme.text
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
                     Layout.alignment: Qt.AlignVCenter
@@ -334,6 +338,12 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.nowPlayingClicked()
+            }
+
+            FluxToolTip {
+                visible: root.nowPlayingNeedsMedia && nowPlayingMouse.containsMouse
+                delay: 350
+                text: root.nowPlayingWarning
             }
         }
 

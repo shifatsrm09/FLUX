@@ -356,7 +356,10 @@ bool TelepartySession::isRecognizedEventType(const QString &eventType) {
         QStringLiteral("state"),
         QStringLiteral("syncme"),
         QStringLiteral("ts"),
-        QStringLiteral("rd")
+        QStringLiteral("rd"),
+        QStringLiteral("lopen"),
+        QStringLiteral("lver"),
+        QStringLiteral("lstart")
     };
     return kAllowedEvents.contains(eventType);
 }

@@ -143,8 +143,19 @@ TelepartySync::TelepartySync(TelepartySession *session, VLCPlayer *player, QObje
         connect(m_session, &TelepartySession::memberLeft, this, [this](const QString &peerId) {
             m_peerReadiness.remove(peerId);
             if (m_peerLocalStatus.remove(peerId)) {
-                tryCommitLocalPlaybackStart();
                 emit localVerificationChanged();
+            }
+            if (m_mediaMode == TelepartyMediaMode::LocalFile && peerId == m_localMediaAuthorityPeerId) {
+                // Media authority departed; failover to session host
+                m_localMediaAuthorityPeerId = m_session->hostMemberId();
+                if (m_session->isHost()) {
+                    m_localMediaAuthorityPeerId = m_session->memberId();
+                    sendState();
+                    tryCommitLocalPlaybackStart();
+                }
+                emit localVerificationChanged();
+            } else if (m_localMediaAuthorityPeerId == m_session->memberId()) {
+                tryCommitLocalPlaybackStart();
             }
         });
         connect(m_session, &TelepartySession::memberJoined, this, [this](const QString &peerId) {
@@ -753,8 +764,7 @@ void TelepartySync::onUserToggledPlay(bool playing, qint64 timeMs) {
     if (m_mediaMode == TelepartyMediaMode::LocalFile) {
         updateLocalVerificationReadiness(true);
         if (!isLocalParticipantSynchronized()) {
-            // Do not allow an unready or incompatible participant (or pre-commit host)
-            // to start playback or emit state updates that corrupt the shared timeline.
+            // A participant without a verified local copy cannot control this media.
             if (playing && m_player && !m_player->isPaused()) {
                 ScopedInternalAction guard(m_internalActionDepth);
                 m_player->remotePause();
@@ -900,9 +910,10 @@ void TelepartySync::sendState() {
     }
 
     if (m_mediaMode == TelepartyMediaMode::LocalFile) {
-        // In Local Teleparty mode, only the authoritative host announces the shared
+        // In Local Teleparty mode, only the participant who selected the media announces the shared
         // LocalMediaDescriptor ("lopen") so newcomers/reconnectors can verify their local copy.
-        if (!m_session->isHost() || !m_hostLocalDescriptor.isValidForSession()) {
+        if (m_localMediaAuthorityPeerId != m_session->memberId() ||
+            !m_hostLocalDescriptor.isValidForSession()) {
             return;
         }
         const qint64 hostNow = estimatedHostNowMs();
@@ -943,22 +954,20 @@ void TelepartySync::sendState() {
     const qint64 hostNow = estimatedHostNowMs();
     const qint64 rev = std::max<qint64>(1, m_timeline.revision());
 
-    if (!m_timeline.isValid() || m_session->isHost()) {
-        TimelineSnapshot snap = m_timeline.snapshot();
-        snap.sessionId = m_session->code();
-        snap.revision = rev;
-        snap.authorId = m_session->memberId();
-        snap.mediaId = movieId;
-        snap.mediaUrl = m_currentUrl;
-        snap.mediaTitle = m_currentTitle;
-        snap.durationMs = durMs;
-        snap.basePositionMs = posMs;
-        snap.hostTimestampMs = hostNow;
-        snap.playing = playing;
-        snap.playbackRate = 1.0;
-        snap.valid = true;
-        m_timeline.forceUpdate(snap);
-    }
+    TimelineSnapshot snap = m_timeline.snapshot();
+    snap.sessionId = m_session->code();
+    snap.revision = rev;
+    snap.authorId = m_session->memberId();
+    snap.mediaId = movieId;
+    snap.mediaUrl = m_currentUrl;
+    snap.mediaTitle = m_currentTitle;
+    snap.durationMs = durMs;
+    snap.basePositionMs = posMs;
+    snap.hostTimestampMs = hostNow;
+    snap.playing = playing;
+    snap.playbackRate = 1.0;
+    snap.valid = true;
+    m_timeline.forceUpdate(snap);
 
     QVariantMap d;
     d.insert(QStringLiteral("id"), movieId);
@@ -1124,6 +1133,12 @@ void TelepartySync::onEvent(const QString &type, const QVariantMap &data, const 
         handleTimeSync(data, from);
     } else if (type == QLatin1String("rd")) {
         handleReadiness(data, from);
+    } else if (type == QLatin1String("lopen")) {
+        handleLocalOpen(data, from);
+    } else if (type == QLatin1String("lver")) {
+        handleLocalVerifyReport(data, from);
+    } else if (type == QLatin1String("lstart")) {
+        handleLocalStartCommit(data, from);
     } else if (type == QLatin1String("play") || type == QLatin1String("pause") || type == QLatin1String("seek")) {
         handlePlaybackTransition(type, data, from);
     }
@@ -1272,19 +1287,8 @@ void TelepartySync::handlePlaybackTransition(const QString &type, const QVariant
                               .arg(type, incomingMid, m_hostLocalDescriptor.mediaId));
             return;
         }
-        // Reject playback transitions from unready/unverified guests
-        const QString hostPeerId = m_session ? m_session->hostMemberId() : QString();
-        if (!hostPeerId.isEmpty() && from != hostPeerId) {
-            const auto it = m_peerLocalStatus.constFind(from);
-            if (it == m_peerLocalStatus.constEnd() ||
-                it->state != LocalVerificationState::ReadyToSync ||
-                it->mediaId != m_hostLocalDescriptor.mediaId) {
-                FLUX_LOG_WARN("Teleparty",
-                              QString("Rejected '%1' event from unverified/unready peer '%2'")
-                                  .arg(type, from));
-                return;
-            }
-        }
+        // The room membership is the control authority. Local decoder readiness
+        // must not block play/pause/seek events while another member is opening.
     }
 
     const qint64 t = cleanTime(data.value(QStringLiteral("t")));
@@ -1413,6 +1417,7 @@ void TelepartySync::clearLocalSessionState() {
     m_localCompatibilityReason = LocalCompatibilityReason::None;
     m_hostLocalDescriptor = LocalMediaDescriptor{};
     m_guestLocalDescriptor = LocalMediaDescriptor{};
+    m_localMediaAuthorityPeerId.clear();
     m_localFilePath.clear();
     m_peerLocalStatus.clear();
     m_localPlaybackCommitted = false;
@@ -1436,8 +1441,10 @@ bool TelepartySync::isLocalParticipantSynchronized() const {
     }
     return m_hostLocalDescriptor.isValidForSession() &&
            !m_currentUrl.isEmpty() &&
-           m_localVerificationState == LocalVerificationState::ReadyToSync &&
-           m_localPlaybackCommitted;
+           m_guestLocalDescriptor.fileSizeBytes > 0 &&
+           m_localVerificationState != LocalVerificationState::IncompatibleMedia &&
+           m_localVerificationState != LocalVerificationState::UnresolvedMetadata &&
+           m_localVerificationState != LocalVerificationState::PlaybackError;
 }
 
 bool TelepartySync::areAllParticipantsReadyToSync() const {
@@ -1494,15 +1501,16 @@ QString TelepartySync::localErrorText() const {
         return QString();
     }
     if (m_localReadinessWaitTimedOut && !m_localPlaybackCommitted) {
-        return QStringLiteral("Timed out waiting for all participants to verify and ready their local video.");
+        return QStringLiteral("Timed out preparing the local video for synchronized playback.");
     }
     if (m_localVerificationState == LocalVerificationState::IncompatibleMedia ||
         m_localVerificationState == LocalVerificationState::UnresolvedMetadata ||
         m_localVerificationState == LocalVerificationState::PlaybackError) {
         return localCompatibilityReasonToMessage(m_localCompatibilityReason);
     }
-    // Surface peer incompatibility if the host is waiting on a guest who failed verification
-    if (m_session && m_session->isHost() && !m_localPlaybackCommitted) {
+    // Surface peer incompatibility to the participant who started this video.
+    if (m_session && m_localMediaAuthorityPeerId == m_session->memberId() &&
+        !m_localPlaybackCommitted) {
         for (auto it = m_peerLocalStatus.constBegin(); it != m_peerLocalStatus.constEnd(); ++it) {
             if (it->mediaId == m_hostLocalDescriptor.mediaId &&
                 it->revision == m_hostLocalDescriptor.revision) {
@@ -1529,10 +1537,10 @@ QString TelepartySync::localStatusText() const {
     case LocalVerificationState::None:
         return QString();
     case LocalVerificationState::WaitingForLocalSelection:
-        return QStringLiteral("Select '%1' (%2) from your Library to verify compatibility.")
-            .arg(m_hostLocalDescriptor.displayTitle, formatTime(m_hostLocalDescriptor.durationMs));
+        return QStringLiteral("Select '%1' from your Library to match this video.")
+            .arg(m_hostLocalDescriptor.displayTitle);
     case LocalVerificationState::InspectingLocalMedia:
-        return QStringLiteral("Inspecting and fingerprinting local video…");
+        return QStringLiteral("Matching local video by name…");
     case LocalVerificationState::VerifiedCompatible:
     case LocalVerificationState::OpeningMedia:
         return QStringLiteral("Verified compatible — opening local video…");
@@ -1548,12 +1556,14 @@ QString TelepartySync::localStatusText() const {
                 .arg(readyParticipantCount())
                 .arg(m_session ? std::max(1, m_session->memberCount()) : 1);
         }
+        if (m_session && m_localMediaAuthorityPeerId != m_session->memberId()) {
+            return QStringLiteral("Your local copy is ready — waiting for the participant who started playback…");
+        }
         const int total = m_session ? m_session->memberCount() : 1;
         if (total <= 1) {
-            return QStringLiteral("Local video ready — waiting for guests to join and select '%1'…")
-                .arg(m_hostLocalDescriptor.displayTitle);
+            return QStringLiteral("Local video ready — starting playback.");
         }
-        return QStringLiteral("Waiting for all participants to verify local video (%1/%2 ready)…")
+        return QStringLiteral("Local video ready — starting with %1/%2 participants ready.")
             .arg(readyParticipantCount())
             .arg(total);
     }
@@ -1565,10 +1575,6 @@ bool TelepartySync::broadcastLocalOpen(const QString &fileUrlOrPath,
                                        const QString &title,
                                        qint64 knownDurationMs) {
     if (!m_session || !m_session->active()) {
-        return false;
-    }
-    if (!m_session->isHost()) {
-        FLUX_LOG_WARN("Teleparty", "Rejected broadcastLocalOpen: only the room host can declare shared local media");
         return false;
     }
 
@@ -1585,6 +1591,7 @@ bool TelepartySync::broadcastLocalOpen(const QString &fileUrlOrPath,
                    : 0);
 
     cancelActiveInspection();
+    m_localMediaAuthorityPeerId = m_session->memberId();
     m_mediaMode = TelepartyMediaMode::LocalFile;
     m_localVerificationState = LocalVerificationState::InspectingLocalMedia;
     m_localCompatibilityReason = LocalCompatibilityReason::None;
@@ -1599,7 +1606,8 @@ bool TelepartySync::broadcastLocalOpen(const QString &fileUrlOrPath,
             m_verificationPolicy.requireExactFullFileHash,
             [this, resolvedUrl, localPath](LocalMediaDescriptor desc, LocalCompatibilityReason errReason) {
                 finishHostLocalInspection(resolvedUrl, localPath, std::move(desc), errReason);
-            });
+            },
+            m_verificationPolicy.requireContentFingerprint);
         return true;
     }
 
@@ -1609,7 +1617,10 @@ bool TelepartySync::broadcastLocalOpen(const QString &fileUrlOrPath,
         title,
         effectiveDurationMs,
         m_verificationPolicy.requireExactFullFileHash,
-        &errReason);
+        &errReason,
+        nullptr,
+        true,
+        m_verificationPolicy.requireContentFingerprint);
     finishHostLocalInspection(resolvedUrl, localPath, std::move(desc), errReason);
     return m_hostLocalDescriptor.isValidForSession();
 }
@@ -1619,12 +1630,16 @@ void TelepartySync::finishHostLocalInspection(const QString &resolvedUrl,
                                               LocalMediaDescriptor desc,
                                               LocalCompatibilityReason errReason) {
     m_activeInspectCancel.reset();
-    if (!m_session || !m_session->active() || !m_session->isHost()) {
+    if (!m_session || !m_session->active() ||
+        m_localMediaAuthorityPeerId != m_session->memberId()) {
         return;
     }
 
-    if (errReason != LocalCompatibilityReason::None || desc.durationMs <= 0) {
-        if (errReason == LocalCompatibilityReason::InsufficientMetadata || desc.durationMs <= 0) {
+    const bool hasUsableName = !desc.normalizedTitle.isEmpty() && !desc.displayTitle.isEmpty()
+                               && desc.fileSizeBytes > 0;
+    if ((errReason != LocalCompatibilityReason::None &&
+         errReason != LocalCompatibilityReason::InsufficientMetadata) || !hasUsableName) {
+        if (errReason == LocalCompatibilityReason::InsufficientMetadata || !hasUsableName) {
             m_localVerificationState = LocalVerificationState::UnresolvedMetadata;
             m_localCompatibilityReason = LocalCompatibilityReason::InsufficientMetadata;
         } else if (errReason == LocalCompatibilityReason::UnsupportedContainer) {
@@ -1726,7 +1741,7 @@ void TelepartySync::finishHostLocalInspection(const QString &resolvedUrl,
         }
     }
 
-    // Hold host player paused at initial position until all required participants are ReadyToSync
+    // Keep the host paused at the initial position until its own decoder is ready.
     if (m_player && m_player->url() == m_currentUrl && m_player->isPlaying()) {
         ScopedInternalAction guard(m_internalActionDepth);
         m_player->remoteSetRate(1.0);
@@ -1758,12 +1773,9 @@ void TelepartySync::handleLocalOpen(const QVariantMap &data, const QString &from
         return;
     }
 
-    // Security & Host Authority enforcement: only the room host may declare or replace local media
-    const QString hostPeerId = m_session->hostMemberId();
-    if (m_session->isHost() || (!hostPeerId.isEmpty() && from != hostPeerId)) {
-        FLUX_LOG_WARN("Teleparty",
-                      QString("Rejected 'lopen' event from non-host peer '%1' (host='%2')")
-                          .arg(from, hostPeerId));
+    // A local-media declaration comes from the participant who selected it.
+    // Syncplay room membership authenticates the sender; ignore our own echo.
+    if (from.isEmpty() || from == m_session->memberId()) {
         return;
     }
 
@@ -1791,8 +1803,11 @@ void TelepartySync::handleLocalOpen(const QVariantMap &data, const QString &from
     const bool hostPlaying = (data.value(QStringLiteral("p"), 0).toInt() != 0);
     const bool hostCommitted = (data.value(QStringLiteral("committed"), 0).toInt() != 0);
 
-    // Ignore stale revisions
+    const bool sameAuthority = (m_localMediaAuthorityPeerId == from);
+    // Ignore stale revisions from the current media leader. A different room
+    // member may start a new video with an independent revision counter.
     if (m_mediaMode == TelepartyMediaMode::LocalFile &&
+        sameAuthority &&
         m_hostLocalDescriptor.isValidForSession() &&
         incoming.revision < m_hostLocalDescriptor.revision) {
         return;
@@ -1866,6 +1881,7 @@ void TelepartySync::handleLocalOpen(const QVariantMap &data, const QString &from
 
     // New local media declaration (or host switched to a different local video)
     cancelActiveInspection();
+    m_localMediaAuthorityPeerId = from;
     m_needState = false;
     m_stateTimer.stop();
     m_scheduler.reset();
@@ -1937,20 +1953,25 @@ void TelepartySync::handleLocalOpen(const QVariantMap &data, const QString &from
                              posMs,
                              incoming.durationMs);
     emit localMediaPromptRequested(incoming.displayTitle, incoming.durationMs, incoming.containerFormat);
-    emit activity(QStringLiteral("Host selected local video: %1 — choose your matching local copy in Library")
+    emit activity(QStringLiteral("A participant selected local video: %1 — choose your matching local copy in Library")
                       .arg(incoming.displayTitle));
 }
 
 bool TelepartySync::selectGuestLocalMedia(const QString &fileUrlOrPath,
                                           const QString &title,
-                                          qint64 knownDurationMs) {
+                                          qint64 knownDurationMs,
+                                          bool isQuietAutoMatch) {
     if (!m_session || !m_session->active()) {
         return false;
     }
-    if (m_session->isHost()) {
+    if (!m_hostLocalDescriptor.isValidForSession()) {
         return broadcastLocalOpen(fileUrlOrPath, title, knownDurationMs);
     }
-    if (m_mediaMode != TelepartyMediaMode::LocalFile || !m_hostLocalDescriptor.isValidForSession()) {
+    if (m_localMediaAuthorityPeerId == m_session->memberId()) {
+        FLUX_LOG_WARN("Teleparty", "The media leader already selected this local video");
+        return false;
+    }
+    if (m_mediaMode != TelepartyMediaMode::LocalFile) {
         FLUX_LOG_WARN("Teleparty", "Cannot verify guest local media: no active host LocalMediaDescriptor");
         return false;
     }
@@ -1979,9 +2000,10 @@ bool TelepartySync::selectGuestLocalMedia(const QString &fileUrlOrPath,
             title,
             effectiveDurationMs,
             m_verificationPolicy.requireExactFullFileHash,
-            [this, resolvedUrl, localPath](LocalMediaDescriptor guestDesc, LocalCompatibilityReason errReason) {
-                finishGuestLocalInspection(resolvedUrl, localPath, std::move(guestDesc), errReason);
-            });
+            [this, resolvedUrl, localPath, isQuietAutoMatch](LocalMediaDescriptor guestDesc, LocalCompatibilityReason errReason) {
+                finishGuestLocalInspection(resolvedUrl, localPath, std::move(guestDesc), errReason, isQuietAutoMatch);
+            },
+            m_verificationPolicy.requireContentFingerprint);
         return true;
     }
 
@@ -1991,8 +2013,11 @@ bool TelepartySync::selectGuestLocalMedia(const QString &fileUrlOrPath,
         title,
         effectiveDurationMs,
         m_verificationPolicy.requireExactFullFileHash,
-        &errReason);
-    finishGuestLocalInspection(resolvedUrl, localPath, std::move(guestDesc), errReason);
+        &errReason,
+        nullptr,
+        true,
+        m_verificationPolicy.requireContentFingerprint);
+    finishGuestLocalInspection(resolvedUrl, localPath, std::move(guestDesc), errReason, isQuietAutoMatch);
     return m_localVerificationState == LocalVerificationState::VerifiedCompatible ||
            m_localVerificationState == LocalVerificationState::OpeningMedia ||
            m_localVerificationState == LocalVerificationState::BufferingMedia ||
@@ -2002,7 +2027,8 @@ bool TelepartySync::selectGuestLocalMedia(const QString &fileUrlOrPath,
 void TelepartySync::finishGuestLocalInspection(const QString &resolvedUrl,
                                                const QString &resolvedLocalPath,
                                                LocalMediaDescriptor guestDesc,
-                                               LocalCompatibilityReason errReason) {
+                                               LocalCompatibilityReason errReason,
+                                               bool isQuietAutoMatch) {
     m_activeInspectCancel.reset();
     if (!m_session || !m_session->active() || m_mediaMode != TelepartyMediaMode::LocalFile) {
         return;
@@ -2011,20 +2037,24 @@ void TelepartySync::finishGuestLocalInspection(const QString &resolvedUrl,
     // Handle file-level inspection failures (missing, empty/unreadable, unsupported container)
     if (errReason == LocalCompatibilityReason::MissingFile ||
         errReason == LocalCompatibilityReason::UnreadableOrEmptyFile) {
-        m_localVerificationState = LocalVerificationState::PlaybackError;
-        m_localCompatibilityReason = errReason;
-        m_guestLocalDescriptor = LocalMediaDescriptor{};
-        m_localFilePath.clear();
-        m_currentUrl.clear();
-        m_localPlaybackCommitted = false;
-        if (m_player && !m_player->isPaused()) {
-            ScopedInternalAction guard(m_internalActionDepth);
-            m_player->remotePause();
+        if (!isQuietAutoMatch) {
+            m_localVerificationState = LocalVerificationState::PlaybackError;
+            m_localCompatibilityReason = errReason;
+            m_guestLocalDescriptor = LocalMediaDescriptor{};
+            m_localFilePath.clear();
+            m_currentUrl.clear();
+            m_localPlaybackCommitted = false;
+            if (m_player && !m_player->isPaused()) {
+                ScopedInternalAction guard(m_internalActionDepth);
+                m_player->remotePause();
+            }
+            sendLocalVerificationReport();
+            emit currentMediaChanged();
+            emit localVerificationChanged();
+            emit activity(localCompatibilityReasonToMessage(errReason));
+        } else {
+            emit localCandidateCheckFailed(localCompatibilityReasonToMessage(errReason));
         }
-        sendLocalVerificationReport();
-        emit currentMediaChanged();
-        emit localVerificationChanged();
-        emit activity(localCompatibilityReasonToMessage(errReason));
         return;
     }
 
@@ -2032,20 +2062,24 @@ void TelepartySync::finishGuestLocalInspection(const QString &resolvedUrl,
         LocalMediaVerifier::verify(m_hostLocalDescriptor, guestDesc, m_verificationPolicy);
 
     if (!verifyRes.isCompatible()) {
-        m_localVerificationState = verifyRes.state;
-        m_localCompatibilityReason = verifyRes.reason;
-        m_guestLocalDescriptor = guestDesc;
-        m_localFilePath.clear();
-        m_currentUrl.clear();
-        m_localPlaybackCommitted = false;
-        if (m_player && !m_player->isPaused()) {
-            ScopedInternalAction guard(m_internalActionDepth);
-            m_player->remotePause();
+        if (!isQuietAutoMatch) {
+            m_localVerificationState = verifyRes.state;
+            m_localCompatibilityReason = verifyRes.reason;
+            m_guestLocalDescriptor = guestDesc;
+            m_localFilePath.clear();
+            m_currentUrl.clear();
+            m_localPlaybackCommitted = false;
+            if (m_player && !m_player->isPaused()) {
+                ScopedInternalAction guard(m_internalActionDepth);
+                m_player->remotePause();
+            }
+            sendLocalVerificationReport();
+            emit currentMediaChanged();
+            emit localVerificationChanged();
+            emit activity(verifyRes.userMessage);
+        } else {
+            emit localCandidateCheckFailed(verifyRes.userMessage);
         }
-        sendLocalVerificationReport();
-        emit currentMediaChanged();
-        emit localVerificationChanged();
-        emit activity(verifyRes.userMessage);
         return;
     }
 
@@ -2057,6 +2091,8 @@ void TelepartySync::finishGuestLocalInspection(const QString &resolvedUrl,
     m_localCompatibilityReason = verifyRes.reason;
     m_localVerificationState = LocalVerificationState::VerifiedCompatible;
     m_localReadinessWaitTimedOut = false;
+    m_localPlaybackCommitted = m_hostSessionAlreadyStarted && m_timeline.isValid() &&
+                               m_timeline.snapshot().playing;
 
     TimelineSnapshot snap = m_timeline.snapshot();
     snap.mediaUrl = m_currentUrl;
@@ -2081,6 +2117,7 @@ void TelepartySync::finishGuestLocalInspection(const QString &resolvedUrl,
 
     updateLocalVerificationReadiness(false);
     sendLocalVerificationReport();
+    scheduleLocalPlaybackResume();
 
     if (m_localVerificationState == LocalVerificationState::ReadyToSync && m_hostSessionAlreadyStarted) {
         m_localPlaybackCommitted = true;
@@ -2109,7 +2146,8 @@ void TelepartySync::finishGuestLocalInspection(const QString &resolvedUrl,
 }
 
 void TelepartySync::sendLocalVerificationReport() {
-    if (!m_session || !m_session->active() || m_session->isHost()) {
+    if (!m_session || !m_session->active() ||
+        m_localMediaAuthorityPeerId == m_session->memberId()) {
         return;
     }
     if (m_mediaMode != TelepartyMediaMode::LocalFile || !m_hostLocalDescriptor.isValidForSession()) {
@@ -2156,7 +2194,7 @@ void TelepartySync::handleLocalVerifyReport(const QVariantMap &data, const QStri
     st.updatedAtLocalMs = localNowMs();
     m_peerLocalStatus.insert(from, st);
 
-    if (m_session->isHost()) {
+    if (m_localMediaAuthorityPeerId == m_session->memberId()) {
         tryCommitLocalPlaybackStart();
     }
     emit localVerificationChanged();
@@ -2164,13 +2202,17 @@ void TelepartySync::handleLocalVerifyReport(const QVariantMap &data, const QStri
 }
 
 void TelepartySync::tryCommitLocalPlaybackStart() {
-    if (!m_session || !m_session->active() || !m_session->isHost()) {
+    if (!m_session || !m_session->active() ||
+        m_localMediaAuthorityPeerId != m_session->memberId()) {
         return;
     }
     if (m_mediaMode != TelepartyMediaMode::LocalFile || m_localPlaybackCommitted) {
         return;
     }
-    if (!areAllParticipantsReadyToSync()) {
+    // Start as soon as the host's own copy is ready. Guests without a matching
+    // local file remain paused and can join later after selecting their copy.
+    if (m_localVerificationState != LocalVerificationState::ReadyToSync ||
+        !m_hostLocalDescriptor.isValidForSession() || m_currentUrl.isEmpty()) {
         return;
     }
 
@@ -2216,7 +2258,7 @@ void TelepartySync::tryCommitLocalPlaybackStart() {
     d.insert(QStringLiteral("p"), 1);
     m_session->sendEvent(QStringLiteral("lstart"), d);
 
-    align(posMs, true, QStringLiteral("All participants verified — starting Local Teleparty"), ActionOrigin::ScheduledRemote);
+    align(posMs, true, QStringLiteral("Starting Local Teleparty"), ActionOrigin::ScheduledRemote);
     emit localVerificationChanged();
     emit diagnosticsChanged();
 }
@@ -2226,11 +2268,7 @@ void TelepartySync::handleLocalStartCommit(const QVariantMap &data, const QStrin
         return;
     }
 
-    // Only the authoritative host can commit playback start
-    const QString hostPeerId = m_session->hostMemberId();
-    if (m_session->isHost() || (!hostPeerId.isEmpty() && from != hostPeerId)) {
-        FLUX_LOG_WARN("Teleparty",
-                      QString("Rejected 'lstart' commit from non-host peer '%1'").arg(from));
+    if (from != m_localMediaAuthorityPeerId || from == m_session->memberId()) {
         return;
     }
 
@@ -2242,20 +2280,33 @@ void TelepartySync::handleLocalStartCommit(const QVariantMap &data, const QStrin
 
     m_hostSessionAlreadyStarted = true;
     const bool playing = (data.value(QStringLiteral("p"), 1).toInt() != 0);
+    m_localReadinessTimeoutTimer.stop();
+    const qint64 t = cleanTime(data.value(QStringLiteral("t"), 0));
+    const qint64 rawHt = data.value(QStringLiteral("ht"), 0).toLongLong();
+    const qint64 rev = data.value(QStringLiteral("rev"), m_timeline.nextRevision()).toLongLong();
+    const qint64 hostTimestamp = (rawHt > 0 && m_clockEstimator.hasEstimate())
+                                     ? rawHt
+                                     : estimatedHostNowMs();
 
-    // If this guest is not yet verified and ReadyToSync, update the timeline anchor
-    // but do NOT mark the guest as committed or start local playback!
-    if (m_localVerificationState != LocalVerificationState::ReadyToSync || m_currentUrl.isEmpty()) {
-        const qint64 t = cleanTime(data.value(QStringLiteral("t"), 0));
-        const qint64 rawHt = data.value(QStringLiteral("ht"), 0).toLongLong();
-        const qint64 rev = data.value(QStringLiteral("rev"), m_timeline.nextRevision()).toLongLong();
-        TimelineSnapshot snap = m_timeline.snapshot();
-        snap.revision = std::max<qint64>(snap.revision, rev);
-        snap.authorId = from;
-        snap.basePositionMs = t;
-        snap.hostTimestampMs = (rawHt > 0 && m_clockEstimator.hasEstimate()) ? rawHt : estimatedHostNowMs();
-        snap.playing = playing;
-        m_timeline.forceUpdate(snap);
+    TimelineSnapshot snap = m_timeline.snapshot();
+    snap.sessionId = m_session->code();
+    snap.revision = std::max<qint64>(snap.revision, rev);
+    snap.authorId = from;
+    snap.mediaId = mid;
+    snap.mediaUrl = m_currentUrl;
+    snap.mediaTitle = m_hostLocalDescriptor.displayTitle;
+    snap.durationMs = m_hostLocalDescriptor.durationMs;
+    snap.basePositionMs = t;
+    snap.hostTimestampMs = hostTimestamp;
+    snap.playing = playing;
+    snap.playbackRate = 1.0;
+    snap.valid = true;
+    m_timeline.forceUpdate(snap);
+
+    // Keep the host's start state even if the guest decoder is still opening. The
+    // verified local copy can start as soon as VLC accepts playback; readiness for
+    // seek corrections is tracked separately by updateLocalVerificationReadiness().
+    if (m_currentUrl.isEmpty()) {
         emit localVerificationChanged();
         return;
     }
@@ -2263,9 +2314,40 @@ void TelepartySync::handleLocalStartCommit(const QVariantMap &data, const QStrin
     m_localPlaybackCommitted = true;
     m_localReadinessWaitTimedOut = false;
     m_localReadinessTimeoutTimer.stop();
-
-    handlePlaybackTransition(playing ? QStringLiteral("play") : QStringLiteral("pause"), data, from);
+    if (m_player && isSameOrMatchingMedia(m_player->url(), m_currentUrl)) {
+        const qint64 livePosition = m_timeline.expectedPositionMs(estimatedHostNowMs());
+        align(livePosition,
+              playing,
+              playing ? QStringLiteral("Starting Local Teleparty") : QString(),
+              ActionOrigin::JoinSync);
+    }
+    scheduleLocalPlaybackResume();
     emit localVerificationChanged();
+}
+
+void TelepartySync::scheduleLocalPlaybackResume() {
+    if (m_localResumeCheckPending || m_mediaMode != TelepartyMediaMode::LocalFile ||
+        !m_localPlaybackCommitted || !m_timeline.isValid() || !m_timeline.snapshot().playing ||
+        !m_player || m_player->state() != QLatin1String("Paused") ||
+        !isSameOrMatchingMedia(m_player->url(), m_currentUrl)) {
+        return;
+    }
+
+    m_localResumeCheckPending = true;
+    const QString mediaId = m_hostLocalDescriptor.mediaId;
+    QTimer::singleShot(350, this, [this, mediaId]() {
+        m_localResumeCheckPending = false;
+        if (m_mediaMode == TelepartyMediaMode::LocalFile && m_localPlaybackCommitted &&
+            m_hostLocalDescriptor.mediaId == mediaId && m_timeline.isValid() &&
+            m_timeline.snapshot().playing && m_player &&
+            isSameOrMatchingMedia(m_player->url(), m_currentUrl) &&
+            m_player->state() == QLatin1String("Paused")) {
+            align(m_timeline.expectedPositionMs(estimatedHostNowMs()),
+                  true,
+                  QStringLiteral("Synchronized with Local Teleparty"),
+                  ActionOrigin::JoinSync);
+        }
+    });
 }
 
 void TelepartySync::updateLocalVerificationReadiness(bool allowBroadcast) {
@@ -2324,13 +2406,15 @@ void TelepartySync::updateLocalVerificationReadiness(bool allowBroadcast) {
             nextState = LocalVerificationState::PlaybackError;
             m_localCompatibilityReason = LocalCompatibilityReason::UnplayableMedia;
             m_localPlaybackCommitted = false;
-        } else if (m_localPlaybackCommitted) {
-            nextState = LocalVerificationState::ReadyToSync;
         } else if (st == QLatin1String("Opening") || st == QLatin1String("Idle")) {
             nextState = LocalVerificationState::OpeningMedia;
         } else if (m_player->isBuffering() || st.startsWith(QLatin1String("Buffering"))) {
             nextState = LocalVerificationState::BufferingMedia;
-        } else if ((st == QLatin1String("Playing") || st == QLatin1String("Paused")) && m_player->isSeekable()) {
+        } else if (st == QLatin1String("Playing") || st == QLatin1String("Paused")) {
+            // A local file can report non-seekable briefly while VLC is opening its
+            // demuxer. Playback readiness must not wait for seeking to become available.
+            nextState = LocalVerificationState::ReadyToSync;
+        } else if (m_localPlaybackCommitted) {
             nextState = LocalVerificationState::ReadyToSync;
         } else {
             nextState = LocalVerificationState::PlaybackError;
@@ -2340,17 +2424,20 @@ void TelepartySync::updateLocalVerificationReadiness(bool allowBroadcast) {
     }
 
     // Hold local player paused at the initial position until playback start is committed
-    if (!m_localPlaybackCommitted && m_player && isSameOrMatchingMedia(m_player->url(), m_currentUrl) && m_player->isPlaying()) {
+    const bool startingAfterHost = m_hostSessionAlreadyStarted &&
+                                   nextState == LocalVerificationState::ReadyToSync;
+    if (!m_localPlaybackCommitted && !startingAfterHost && m_player &&
+        isSameOrMatchingMedia(m_player->url(), m_currentUrl) && m_player->isPlaying()) {
         ScopedInternalAction guard(m_internalActionDepth);
         m_player->remotePause();
     }
 
     if (nextState != m_localVerificationState) {
         m_localVerificationState = nextState;
-        if (allowBroadcast && !m_session->isHost()) {
+        if (allowBroadcast && m_localMediaAuthorityPeerId != m_session->memberId()) {
             sendLocalVerificationReport();
         }
-        if (m_session->isHost()) {
+        if (m_localMediaAuthorityPeerId == m_session->memberId()) {
             tryCommitLocalPlaybackStart();
         } else if (m_localVerificationState == LocalVerificationState::ReadyToSync &&
                    m_hostSessionAlreadyStarted &&
@@ -2362,6 +2449,7 @@ void TelepartySync::updateLocalVerificationReadiness(bool allowBroadcast) {
                   m_timeline.snapshot().playing,
                   QStringLiteral("Synchronized with Local Teleparty"),
                   ActionOrigin::JoinSync);
+            scheduleLocalPlaybackResume();
         }
         emit localVerificationChanged();
     }
@@ -2389,7 +2477,7 @@ void TelepartySync::retryLocalReadinessWait() {
     if (m_localReadinessTimeoutMs > 0) {
         m_localReadinessTimeoutTimer.start(static_cast<int>(std::min<qint64>(m_localReadinessTimeoutMs, 600000)));
     }
-    if (m_session->isHost()) {
+    if (m_localMediaAuthorityPeerId == m_session->memberId()) {
         sendState();
         tryCommitLocalPlaybackStart();
     } else {
@@ -2679,6 +2767,7 @@ void TelepartySync::onPlayerStateChanged() {
     updateLocalReadiness(true);
     if (m_mediaMode == TelepartyMediaMode::LocalFile) {
         updateLocalVerificationReadiness(true);
+        scheduleLocalPlaybackResume();
         return;
     }
 
@@ -2734,12 +2823,20 @@ void TelepartySync::onAuthorityChanged(const QString &authorityMemberId, bool lo
         m_clockEstimator.setAuthorityPeerId(authorityMemberId);
         m_clockSyncTimer.stop();
 
+        if (m_mediaMode == TelepartyMediaMode::LocalFile) {
+            if (m_localMediaAuthorityPeerId.isEmpty() ||
+                !m_session->memberIds().contains(m_localMediaAuthorityPeerId)) {
+                m_localMediaAuthorityPeerId = authorityMemberId;
+            }
+            if (localIsAuthority) {
+                m_localMediaAuthorityPeerId = m_session->memberId();
+                sendState();
+                tryCommitLocalPlaybackStart();
+            }
+        }
         if (wasGuest && m_timeline.isValid()) {
             m_timeline.migrateHostClock(authorityMemberId, oldEstHostNow, newLocalNow);
             sendState();
-            if (m_mediaMode == TelepartyMediaMode::LocalFile) {
-                tryCommitLocalPlaybackStart();
-            }
         }
     } else {
         if (m_clockEstimator.authorityPeerId() != authorityMemberId || m_clockEstimator.isSelfAuthority()) {

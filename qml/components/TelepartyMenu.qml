@@ -122,9 +122,11 @@ Popup {
 
             Text {
                 Layout.fillWidth: true
-                text: menu.inSession
-                      ? "Everything you play, pause or skip is shared with the party."
-                      : "Watch the same stream together, in sync."
+                    text: menu.inSession
+                          ? (fluxSync && fluxSync.localMode
+                             ? "Local video: each participant needs a matching file in their Library."
+                             : "Everything you play, pause or skip is shared with the party.")
+                          : "Watch the same stream or a matching Library video together."
                 color: Theme.textMute
                 font.pixelSize: 11
                 wrapMode: Text.Wrap
@@ -183,7 +185,7 @@ Popup {
 
                 Text {
                     Layout.fillWidth: true
-                    text: "Teleparty syncs direct streams from the catalog. Leave the party to use Offline Library videos."
+                    text: "In a party, right-click a Library video and choose Play in TELEPARTY. Everyone needs a matching local copy."
                     color: Theme.textMute
                     font.pixelSize: 11
                     wrapMode: Text.Wrap
@@ -371,6 +373,16 @@ Popup {
                                  : (n + " people in this party")
                     color: Theme.textDim
                     font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    visible: !!fluxSync && fluxSync.localMode && fluxSync.localStatusText.length > 0
+                    text: fluxSync ? fluxSync.localStatusText : ""
+                    color: fluxSync && fluxSync.localVerificationState === "WaitingForLocalSelection"
+                           ? "#FFFF9AA2" : Theme.textDim
+                    font.pixelSize: 11
                     wrapMode: Text.Wrap
                 }
 

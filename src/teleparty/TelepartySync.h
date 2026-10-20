@@ -31,7 +31,8 @@ class UserStore;
 //   ts      {q, l?} / {p, q, r, s}       4-timestamp monotonic clock-offset & RTT exchange
 //   rd      {s, t, rev}                  participant decoder/buffer readiness report
 //
-// Only validated catalog http(s) streams are shared; offline files exist on one machine only.
+// Catalog streams are resolved locally. Local files are shared by descriptor only after each
+// participant verifies a matching copy; filesystem paths never leave the device.
 class TelepartySync : public QObject {
     Q_OBJECT
 
@@ -58,6 +59,7 @@ class TelepartySync : public QObject {
     Q_PROPERTY(bool localMode READ isLocalSession NOTIFY localVerificationChanged)
     Q_PROPERTY(QString mediaMode READ mediaModeString NOTIFY localVerificationChanged)
     Q_PROPERTY(QString localVerificationState READ localVerificationStateString NOTIFY localVerificationChanged)
+    Q_PROPERTY(QString localEpisodeTag READ localEpisodeTagString NOTIFY localVerificationChanged)
     Q_PROPERTY(QString localStatusText READ localStatusText NOTIFY localVerificationChanged)
     Q_PROPERTY(QString localErrorText READ localErrorText NOTIFY localVerificationChanged)
     Q_PROPERTY(bool allParticipantsReady READ areAllParticipantsReadyToSync NOTIFY localVerificationChanged)
@@ -104,7 +106,8 @@ public:
     // Guest selects a local video from their library to verify against the host's LocalMediaDescriptor
     Q_INVOKABLE bool selectGuestLocalMedia(const QString &fileUrlOrPath,
                                            const QString &title = QString(),
-                                           qint64 knownDurationMs = 0);
+                                           qint64 knownDurationMs = 0,
+                                           bool isQuietAutoMatch = false);
 
     // Retries waiting for participant readiness (or re-requests state) after a readiness timeout
     Q_INVOKABLE void retryLocalReadinessWait();
@@ -126,6 +129,7 @@ public:
     QString mediaModeString() const { return telepartyMediaModeToString(m_mediaMode); }
     LocalVerificationState localVerificationState() const { return m_localVerificationState; }
     QString localVerificationStateString() const { return localVerificationStateToString(m_localVerificationState); }
+    QString localEpisodeTagString() const { return m_hostLocalDescriptor.episodeTag; }
     LocalCompatibilityReason localCompatibilityReason() const { return m_localCompatibilityReason; }
     QString localStatusText() const;
     QString localErrorText() const;
@@ -198,6 +202,9 @@ signals:
     // Emitted when a guest needs to select the corresponding local video from their library
     void localMediaPromptRequested(const QString &expectedTitle, qint64 expectedDurationMs, const QString &expectedContainer);
 
+    // Emitted quietly during candidate iteration if a trial candidate fails verification
+    void localCandidateCheckFailed(const QString &reason);
+
     // Another member opened (or you are catching up with) a video: open it in the UI
     void remoteOpenRequested(const QString &url, const QString &title, qint64 startMs);
 
@@ -241,7 +248,9 @@ private:
     void finishGuestLocalInspection(const QString &resolvedUrl,
                                     const QString &resolvedLocalPath,
                                     LocalMediaDescriptor guestDesc,
-                                    LocalCompatibilityReason errReason);
+                                    LocalCompatibilityReason errReason,
+                                    bool isQuietAutoMatch = false);
+    void scheduleLocalPlaybackResume();
     void updateLocalVerificationReadiness(bool allowBroadcast = true);
     void sendLocalVerificationReport();
     void tryCommitLocalPlaybackStart();
@@ -350,12 +359,14 @@ private:
     LocalCompatibilityReason m_localCompatibilityReason = LocalCompatibilityReason::None;
     LocalMediaDescriptor m_hostLocalDescriptor;
     LocalMediaDescriptor m_guestLocalDescriptor;
+    QString m_localMediaAuthorityPeerId;
     QString m_localFilePath;
     QHash<QString, ParticipantLocalStatus> m_peerLocalStatus;
     LocalMediaInspector::CancelToken m_activeInspectCancel;
     bool m_forceAsyncInspection = false;
     bool m_localPlaybackCommitted = false;
     bool m_hostSessionAlreadyStarted = false;
+    bool m_localResumeCheckPending = false;
     bool m_localReadinessWaitTimedOut = false;
     qint64 m_localReadinessWaitStartedMs = 0;
     qint64 m_localReadinessTimeoutMs = kDefaultLocalReadinessTimeoutMs;

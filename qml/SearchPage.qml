@@ -201,13 +201,7 @@ Item {
                     boundsBehavior: Flickable.StopAtBounds
                     model: {
                         var items = fluxUser ? fluxUser.continueWatching : []
-                        items = items.filter(function(item) { return item.isFolder !== true })
-                        if (fluxTeleparty && fluxTeleparty.active && fluxSync) {
-                            return items.filter(function(item) {
-                                return fluxSync.isStreamUrl(item.url)
-                            })
-                        }
-                        return items
+                        return items.filter(function(item) { return item.isFolder !== true })
                     }
 
                     function scrollBy(dx) {

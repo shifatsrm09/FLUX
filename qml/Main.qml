@@ -28,12 +28,12 @@ ApplicationWindow {
     property string currentSourceUrl: ""
     property string cacheSourceUrl: ""
     property string cacheSourceTitle: ""
+    property var localMatchCandidates: []
+    property int localMatchCandidateIndex: 0
+    property int localMatchDurationMs: 0
+    property string localMatchTitle: ""
+    property bool localAutoMatchActive: false
     readonly property bool inTeleparty: !!fluxTeleparty && fluxTeleparty.active
-    onInTelepartyChanged: {
-        if (inTeleparty && currentPage === "library") {
-            window.returnToSearch()
-        }
-    }
 
     // Round floating button for the bottom-right dock (optional badge = active downloads)
     component DockButton: Rectangle {
@@ -224,8 +224,9 @@ ApplicationWindow {
 
     function playResolvedMedia(sourceUrl, directUrl, title) {
         var playbackUrl = directUrl
-        // Teleparty is for direct streams only. Offline Library playback stays outside the room.
+        // Teleparty: if attempting to play local media while in a room, route to local teleparty playback
         if (window.inTeleparty && fluxSync && !fluxSync.isStreamUrl(sourceUrl) && !fluxSync.isStreamUrl(directUrl)) {
+            window.playLibraryInTeleparty(playbackUrl || sourceUrl, title)
             return
         }
 
@@ -297,6 +298,69 @@ ApplicationWindow {
                 : ((directUrl && fluxSync.isStreamUrl(directUrl)) ? directUrl : sourceUrl)
             fluxSync.broadcastOpen(partyUrl, title, resumeMs)
         }
+    }
+
+    function playLibraryInTeleparty(url, title) {
+        if (!inTeleparty || !fluxSync || !url || url.length === 0) return
+        // Any participant can choose the next shared local video. Matching copies
+        // are resolved by the other room members after the new declaration arrives.
+        fluxSync.broadcastLocalOpen(url, title)
+    }
+
+    function findLocalTelepartyCopy(title, durationMs) {
+        if (!inTeleparty || !fluxSync || !fluxDownloads) return
+
+        localAutoMatchActive = true
+        localMatchTitle = title || fluxSync.currentTitle
+        localMatchDurationMs = durationMs || 0
+        localMatchCandidateIndex = 0
+        localMatchCandidates = []
+
+        var tag = (fluxSync.localEpisodeTag || "").toLowerCase()
+        var results = fluxDownloads.offlineSearch(localMatchTitle)
+        var expectedEpisode = tag.match(/^s(\d{1,2})e(\d{1,3})$/)
+        var tagged = []
+        var videos = []
+        for (var i = 0; i < results.length; ++i) {
+            var item = results[i]
+            if (!item || item.kind !== "video" || !item.url) continue
+            videos.push(item)
+            if (expectedEpisode) {
+                var fileIdentity = (item.name || "") + " " + (item.path || "")
+                var fileEpisode = fileIdentity.match(/s(\d{1,2})[ ._-]*e(\d{1,3})/i)
+                if (!fileEpisode) fileEpisode = fileIdentity.match(/(\d{1,2})x(\d{1,3})/i)
+                if (fileEpisode && parseInt(fileEpisode[1], 10) === parseInt(expectedEpisode[1], 10)
+                        && parseInt(fileEpisode[2], 10) === parseInt(expectedEpisode[2], 10)) {
+                    tagged.push(item)
+                }
+            }
+        }
+
+        // A renamed copy may not include the show's title in its path. Try its episode
+        // tag as a second discovery key, then let the content verifier decide the match.
+        if (videos.length === 0 && tag.length > 0) {
+            results = fluxDownloads.offlineSearch(tag)
+            for (var j = 0; j < results.length; ++j) {
+                var fallback = results[j]
+                if (fallback && fallback.kind === "video" && fallback.url) videos.push(fallback)
+            }
+        }
+
+        // Episode tags keep a broad series title from causing dozens of unnecessary
+        // fingerprint checks. Fall back to title matches for unusual episode naming.
+        localMatchCandidates = (tagged.length > 0 ? tagged : videos).slice(0, 40)
+        tryNextLocalTelepartyCopy()
+    }
+
+    function tryNextLocalTelepartyCopy() {
+        if (!localAutoMatchActive || !fluxSync) return
+        while (localMatchCandidateIndex < localMatchCandidates.length) {
+            var candidate = localMatchCandidates[localMatchCandidateIndex++]
+            if (fluxSync.selectGuestLocalMedia(candidate.url, localMatchTitle, localMatchDurationMs, true)) {
+                return // Inspection runs asynchronously; failures trigger onLocalCandidateCheckFailed quietly.
+            }
+        }
+        localAutoMatchActive = false // No match: leave the guest on the red missing-file pill.
     }
 
     Timer {
@@ -426,10 +490,7 @@ ApplicationWindow {
     }
 
     function showLibrary(rel) {
-        if (window.inTeleparty) {
-            return
-        }
-        if (fluxPlayer) {
+        if (fluxPlayer && !window.inTeleparty) {
             fluxPlayer.pause()
         }
         if (isFullscreen) {
@@ -602,6 +663,25 @@ ApplicationWindow {
             }
         }
 
+        function onLocalMediaPromptRequested(expectedTitle, expectedDurationMs, expectedContainer) {
+            window.findLocalTelepartyCopy(expectedTitle, expectedDurationMs)
+        }
+
+        function onLocalCandidateCheckFailed(reason) {
+            if (window.localAutoMatchActive) {
+                Qt.callLater(window.tryNextLocalTelepartyCopy)
+            }
+        }
+
+        function onLocalVerificationChanged() {
+            if (!fluxSync) return
+            var state = fluxSync.localVerificationState
+            if (state === "VerifiedCompatible" || state === "OpeningMedia"
+                    || state === "BufferingMedia" || state === "ReadyToSync") {
+                window.localAutoMatchActive = false
+            }
+        }
+
         function onActivity(text) {
             if (window.currentPage === "player") {
                 playerView.showOsd(text, -1)
@@ -691,13 +771,22 @@ ApplicationWindow {
             anchors.fill: parent
             topInset: customTitleBar.height
             active: currentPage === "library"
+            telepartyActive: window.inTeleparty
             opacity: currentPage === "library" ? 1.0 : 0.0
             visible: opacity > 0.0
 
             Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
             onPlayRequested: function(url, title) {
-                window.playMedia(url, title)
+                if (window.inTeleparty) {
+                    window.playLibraryInTeleparty(url, title)
+                } else {
+                    window.playMedia(url, title)
+                }
+            }
+
+            onPlayInTelepartyRequested: function(url, title) {
+                window.playLibraryInTeleparty(url, title)
             }
         }
 
@@ -720,6 +809,11 @@ ApplicationWindow {
             onToggleFullscreenRequested: window.toggleFullscreen()
             onBackRequested: window.returnToSearch()
             onPlayNextRequested: function(url, name) {
+                if (window.inTeleparty && fluxSync && fluxSync.localMode
+                        && !fluxSync.isStreamUrl(url)) {
+                    fluxSync.broadcastLocalOpen(url, name)
+                    return
+                }
                 window.playMedia(url, Formatter.formatMedia(name, false, "").title)
             }
         }
@@ -738,7 +832,17 @@ ApplicationWindow {
                                                 : (currentPage === "search" ? (searchPage.bookmarksOpen ? "bookmarks" : (searchPage.showSearch ? "search" : "home")) : "")
             overlayMode: currentPage === "player"
             shown: !window.isFullscreen && (currentPage !== "player" || playerView.showControls || menuOpen)
-            offlineLocked: window.inTeleparty
+            offlineLocked: false
+            nowPlayingNeedsMedia: window.inTeleparty && !!fluxSync && fluxSync.localMode
+                                  && !window.localAutoMatchActive
+                                  && (fluxSync.localVerificationState === "WaitingForLocalSelection"
+                                      || fluxSync.localVerificationState === "IncompatibleMedia"
+                                      || fluxSync.localVerificationState === "UnresolvedMetadata"
+                                      || fluxSync.localVerificationState === "PlaybackError")
+            nowPlayingWarning: fluxSync
+                               ? "A participant is playing \"" + fluxSync.currentTitle
+                                 + "\". Add this file to your Library and choose Play in TELEPARTY."
+                               : "Add the playing file to your Library to join playback."
             showNowPlaying: !!fluxPlayer
                             && (fluxPlayer.isPlaying
                                 || (window.inTeleparty
@@ -748,6 +852,12 @@ ApplicationWindow {
                             && currentPage !== "player"
 
             onNowPlayingClicked: {
+                if (window.inTeleparty && fluxSync && fluxSync.localMode
+                        && (fluxSync.localVerificationState === "WaitingForLocalSelection"
+                            || fluxSync.localVerificationState === "IncompatibleMedia")) {
+                    window.showLibrary()
+                    return
+                }
                 if (window.inTeleparty && fluxSync && fluxSync.hasPartyMedia
                         && (!fluxPlayer || !window.sameMediaUrl(fluxPlayer.url, fluxSync.currentUrl)
                             || fluxPlayer.state === "Idle" || fluxPlayer.state === "Stopped")) {
@@ -760,7 +870,7 @@ ApplicationWindow {
             onHomeClicked: window.returnToHome()
             onSearchClicked: window.showSearch()
             onBookmarksClicked: window.showBookmarks()
-            onLibraryClicked: if (!window.inTeleparty) window.showLibrary()
+            onLibraryClicked: window.showLibrary()
         }
 
         // Bottom-right dock: downloads + settings (browsing pages only)

@@ -1117,7 +1117,7 @@ QString localCompatibilityReasonToMessage(LocalCompatibilityReason reason) {
     case LocalCompatibilityReason::UnplayableMedia:
         return QStringLiteral("Selected local file could not be decoded or played by libVLC.");
     case LocalCompatibilityReason::InsufficientMetadata:
-        return QStringLiteral("Insufficient media metadata or unknown duration; cannot verify compatibility.");
+        return QStringLiteral("Could not identify this media from its name.");
     case LocalCompatibilityReason::TitleMismatch:
         return QStringLiteral("Incompatible video: title does not match the host's selected movie.");
     case LocalCompatibilityReason::EpisodeMismatch:
@@ -1147,16 +1147,11 @@ bool LocalMediaDescriptor::isValidForSession() const {
     if (normalizedTitle.isEmpty() || displayTitle.isEmpty()) {
         return false;
     }
-    if (durationMs <= 0 || durationMs > AuthoritativeTimeline::kMaxMediaPositionMs) {
-        return false;
-    }
+    if (durationMs < 0 || durationMs > AuthoritativeTimeline::kMaxMediaPositionMs) return false;
     if (fileSizeBytes <= 0) {
         return false;
     }
     if (containerFormat.isEmpty() || !LocalMediaInspector::isSupportedContainer(containerFormat)) {
-        return false;
-    }
-    if (contentFingerprint.isEmpty() || !contentFingerprint.startsWith(QLatin1String("v1:"))) {
         return false;
     }
     if (containsPrivatePathLeak(displayTitle) ||
@@ -1987,7 +1982,8 @@ LocalMediaDescriptor LocalMediaInspector::inspectFile(const QString &filePath,
                                                       bool computeFullHash,
                                                       LocalCompatibilityReason *outErrorReason,
                                                       CancelToken cancelToken,
-                                                      bool useCache) {
+                                                       bool useCache,
+                                                       bool computeFingerprint) {
     if (outErrorReason) {
         *outErrorReason = LocalCompatibilityReason::None;
     }
@@ -2032,7 +2028,8 @@ LocalMediaDescriptor LocalMediaInspector::inspectFile(const QString &filePath,
             const CachedMediaEntry &entry = it.value();
             if (entry.fileSizeBytes == fileSize &&
                 entry.lastModifiedMs == mtimeMs &&
-                (!computeFullHash || entry.hasFullHash)) {
+                (!computeFullHash || entry.hasFullHash) &&
+                (!computeFingerprint || !entry.descriptor.contentFingerprint.isEmpty())) {
                 LocalMediaDescriptor cached = entry.descriptor;
                 if (!titleHint.trimmed().isEmpty()) {
                     QString hintNorm, hintDisp, hintEp, hintYr, hintEd;
@@ -2067,20 +2064,23 @@ LocalMediaDescriptor LocalMediaInspector::inspectFile(const QString &filePath,
         parseAviFileContainer(file, fileSize, hdr);
     }
 
-    const QString byteDigest = hashRegionWindows(
-        file, 0, fileSize, kDefaultWindowCount, kDefaultWindowBytes, cancelToken);
-    if (byteDigest.isEmpty()) {
-        if (outErrorReason) *outErrorReason = LocalCompatibilityReason::UnreadableOrEmptyFile;
-        return desc;
-    }
-
-    QString payloadDigest = byteDigest;
-    if (hdr.essenceSize > 0 && hdr.essenceOffset >= 0 && hdr.essenceOffset + hdr.essenceSize <= fileSize) {
-        payloadDigest = hashRegionWindows(
-            file, hdr.essenceOffset, hdr.essenceSize, kDefaultWindowCount, kDefaultWindowBytes, cancelToken);
-        if (payloadDigest.isEmpty()) {
+    QString byteDigest;
+    QString payloadDigest;
+    if (computeFingerprint) {
+        byteDigest = hashRegionWindows(
+            file, 0, fileSize, kDefaultWindowCount, kDefaultWindowBytes, cancelToken);
+        if (byteDigest.isEmpty()) {
             if (outErrorReason) *outErrorReason = LocalCompatibilityReason::UnreadableOrEmptyFile;
             return desc;
+        }
+        payloadDigest = byteDigest;
+        if (hdr.essenceSize > 0 && hdr.essenceOffset >= 0 && hdr.essenceOffset + hdr.essenceSize <= fileSize) {
+            payloadDigest = hashRegionWindows(
+                file, hdr.essenceOffset, hdr.essenceSize, kDefaultWindowCount, kDefaultWindowBytes, cancelToken);
+            if (payloadDigest.isEmpty()) {
+                if (outErrorReason) *outErrorReason = LocalCompatibilityReason::UnreadableOrEmptyFile;
+                return desc;
+            }
         }
     }
     file.close();
@@ -2092,13 +2092,49 @@ LocalMediaDescriptor LocalMediaInspector::inspectFile(const QString &filePath,
                       desc.yearTag,
                       desc.editionTag);
 
+    bool isNumericOnly = true;
+    for (const QChar &ch : desc.normalizedTitle) {
+        if (!ch.isDigit() && !ch.isSpace()) {
+            isNumericOnly = false;
+            break;
+        }
+    }
+    if (isNumericOnly || desc.normalizedTitle.isEmpty()) {
+        QDir parentDir = fi.dir();
+        QString parentDirName = parentDir.dirName();
+        if (parentDirName.compare(QLatin1String("Series"), Qt::CaseInsensitive) == 0 ||
+            parentDirName.compare(QLatin1String("Individuals"), Qt::CaseInsensitive) == 0) {
+            parentDirName.clear();
+        }
+        if (!parentDirName.isEmpty()) {
+            QString pNorm, pDisp, pEp, pYr, pEd;
+            parseTitleAndTags(parentDirName, pNorm, pDisp, pEp, pYr, pEd);
+            if (!pNorm.isEmpty()) {
+                desc.normalizedTitle = pNorm;
+                if (!pDisp.isEmpty()) desc.displayTitle = pDisp;
+                if (desc.yearTag.isEmpty() && !pYr.isEmpty()) desc.yearTag = pYr;
+                if (desc.editionTag.isEmpty() && !pEd.isEmpty()) desc.editionTag = pEd;
+                if (desc.episodeTag.isEmpty()) {
+                    int epNum = fi.baseName().toInt();
+                    if (epNum > 0) {
+                        int sNum = 1;
+                        static const QRegularExpression sRegex(QStringLiteral("s(\\d{1,2})"), QRegularExpression::CaseInsensitiveOption);
+                        auto sm = sRegex.match(pEp);
+                        if (sm.hasMatch()) sNum = sm.captured(1).toInt();
+                        desc.episodeTag = QStringLiteral("s%1e%2").arg(sNum, 2, 10, QChar('0')).arg(epNum, 2, 10, QChar('0'));
+                    }
+                }
+            }
+        }
+    }
+
     if (!titleHint.trimmed().isEmpty()) {
         QString hintNorm, hintDisp, hintEp, hintYr, hintEd;
         parseTitleAndTags(titleHint.trimmed(), hintNorm, hintDisp, hintEp, hintYr, hintEd);
         if (!hintDisp.isEmpty() && !LocalMediaDescriptor::containsPrivatePathLeak(hintDisp)) {
             desc.displayTitle = hintDisp;
         }
-        if (desc.normalizedTitle.isEmpty() && !hintNorm.isEmpty()) desc.normalizedTitle = hintNorm;
+        if ((desc.normalizedTitle.isEmpty() || isNumericOnly) && !hintNorm.isEmpty()) desc.normalizedTitle = hintNorm;
         if (desc.episodeTag.isEmpty() && !hintEp.isEmpty())        desc.episodeTag = hintEp;
         if (desc.yearTag.isEmpty() && !hintYr.isEmpty())           desc.yearTag = hintYr;
         if (desc.editionTag.isEmpty() && !hintEd.isEmpty())        desc.editionTag = hintEd;
@@ -2113,10 +2149,12 @@ LocalMediaDescriptor LocalMediaInspector::inspectFile(const QString &filePath,
     desc.width = hdr.width;
     desc.height = hdr.height;
     desc.frameRate = hdr.frameRate;
-    desc.contentFingerprint = QStringLiteral("v1:%1:%2:%3:%4")
-                                  .arg(kDefaultWindowCount)
-                                  .arg(kDefaultWindowBytes)
-                                  .arg(byteDigest, payloadDigest);
+    if (computeFingerprint) {
+        desc.contentFingerprint = QStringLiteral("v1:%1:%2:%3:%4")
+                                      .arg(kDefaultWindowCount)
+                                      .arg(kDefaultWindowBytes)
+                                      .arg(byteDigest, payloadDigest);
+    }
 
     if (computeFullHash) {
         desc.fullFileSha256 = computeFullFileSha256(localPath, cancelToken);
@@ -2144,17 +2182,18 @@ LocalMediaInspector::CancelToken LocalMediaInspector::inspectFileAsync(QObject *
                                                                        const QString &titleHint,
                                                                        qint64 knownDurationMs,
                                                                        bool computeFullHash,
-                                                                       InspectCallback callback) {
+                                                                       InspectCallback callback,
+                                                                       bool computeFingerprint) {
     auto cancelToken = std::make_shared<std::atomic<bool>>(false);
     QPointer<QObject> weakContext(context);
 
-    QThreadPool::globalInstance()->start([weakContext, filePath, titleHint, knownDurationMs, computeFullHash, cancelToken, cb = std::move(callback)]() mutable {
+    QThreadPool::globalInstance()->start([weakContext, filePath, titleHint, knownDurationMs, computeFullHash, computeFingerprint, cancelToken, cb = std::move(callback)]() mutable {
         if (cancelToken->load(std::memory_order_relaxed)) {
             return;
         }
         LocalCompatibilityReason errReason = LocalCompatibilityReason::None;
         LocalMediaDescriptor desc = inspectFile(
-            filePath, titleHint, knownDurationMs, computeFullHash, &errReason, cancelToken, true);
+            filePath, titleHint, knownDurationMs, computeFullHash, &errReason, cancelToken, true, computeFingerprint);
         if (cancelToken->load(std::memory_order_relaxed)) {
             return;
         }
@@ -2224,7 +2263,7 @@ LocalCompatibilityResult LocalMediaVerifier::verify(const LocalMediaDescriptor &
         res.userMessage = localCompatibilityReasonToMessage(res.reason);
         return res;
     }
-    if (guestDesc.durationMs <= 0 || guestDesc.normalizedTitle.isEmpty()) {
+    if (guestDesc.normalizedTitle.isEmpty()) {
         res.state = LocalVerificationState::UnresolvedMetadata;
         res.reason = LocalCompatibilityReason::InsufficientMetadata;
         res.userMessage = localCompatibilityReasonToMessage(res.reason);
@@ -2296,14 +2335,20 @@ LocalCompatibilityResult LocalMediaVerifier::verify(const LocalMediaDescriptor &
         return res;
     }
 
-    // 6. Duration tolerance check
-    res.durationDeltaMs = std::llabs(hostDesc.durationMs - guestDesc.durationMs);
-    res.durationWithinTolerance = (res.durationDeltaMs <= std::max<qint64>(0, policy.durationToleranceMs));
-    if (!res.durationWithinTolerance) {
-        res.state = LocalVerificationState::IncompatibleMedia;
-        res.reason = LocalCompatibilityReason::DurationMismatch;
-        res.userMessage = localCompatibilityReasonToMessage(res.reason);
-        return res;
+    // 6. Duration tolerance check:
+    // When both durations are known (> 0), enforce duration tolerance to prevent trailers or different cuts matching.
+    if (hostDesc.durationMs > 0 && guestDesc.durationMs > 0) {
+        res.durationDeltaMs = std::llabs(hostDesc.durationMs - guestDesc.durationMs);
+        res.durationWithinTolerance = (res.durationDeltaMs <= std::max<qint64>(0, policy.durationToleranceMs));
+        if (!res.durationWithinTolerance) {
+            res.state = LocalVerificationState::IncompatibleMedia;
+            res.reason = LocalCompatibilityReason::DurationMismatch;
+            res.userMessage = localCompatibilityReasonToMessage(res.reason);
+            return res;
+        }
+    } else {
+        res.durationDeltaMs = 0;
+        res.durationWithinTolerance = true;
     }
 
     // 7. Content fingerprint verification
