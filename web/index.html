@@ -74,23 +74,48 @@
       <div class="network-dialog-head">
         <div>
           <p class="network-dialog-kicker">LOCAL NETWORK TEST</p>
-          <h2 id="network-dialog-title">Can FLUX reach your network?</h2>
+          <h2 id="network-dialog-title">Before you check</h2>
         </div>
         <button class="network-dialog-close" id="network-check-close" type="button" aria-label="Close network check">×</button>
       </div>
-      <p class="network-dialog-copy">If any one of them works. You can use FLUX</p>
-      <div class="network-check-state" aria-live="polite">
-        <span class="network-check-indicator" id="network-check-indicator" data-state="checking" aria-hidden="true"></span>
-        <p id="network-check-result" role="status">Checking both FLUX network sources…</p>
-      </div>
-      <ul class="network-check-sources" aria-label="Network source results">
-        <li><span><strong>DHAKA FLIX</strong><small>172.16.50.4</small></span><span class="source-result" id="source-result-gateway" data-state="checking">Checking</span></li>
-        <li><span><strong>ICC FTP</strong><small>10.16.100.244</small></span><span class="source-result" id="source-result-dashboard" data-state="checking">Checking</span></li>
-      </ul>
-      <div class="network-dialog-foot">
-        <p>Allow local network access if your browser prompts you.</p>
-        <button id="network-check-again" class="network-result-button" type="button">Check again</button>
-      </div>
+      <section class="network-check-intro" id="network-check-intro">
+        <p class="network-dialog-copy"><strong>Use Brave or Chrome for the best chance of a successful check.</strong></p>
+        <p class="network-dialog-copy">An “Unavailable” result doesn’t necessarily mean FLUX won’t work. Browser security and CORS restrictions can sometimes block this check. Download FLUX and try the app to confirm whether it works on your network.</p>
+        <button id="network-check-proceed" class="network-result-button positive" type="button">I understand</button>
+      </section>
+      <section class="network-check-panel" id="network-check-panel" hidden>
+        <div class="network-check-results" id="network-check-results">
+        <p class="network-dialog-copy">If either source is reachable, FLUX should work on your network.</p>
+        <div class="network-check-state" aria-live="polite">
+          <span class="network-check-indicator" id="network-check-indicator" data-state="checking" aria-hidden="true"></span>
+          <p id="network-check-result" role="status">Checking the DHAKA FLIX gateway…</p>
+        </div>
+        <ul class="network-check-sources" aria-label="Network source results">
+          <li><span><strong>DHAKA FLIX</strong><small>172.16.50.4</small></span><span class="source-result" id="source-result-gateway" data-state="checking">Checking</span></li>
+          <li><span><strong>ICC FTP</strong><small>10.16.100.244</small><small class="network-source-note">Most likely, it works on your Wi-Fi. The checker isn’t ready yet; I’m working on it.</small></span><span class="source-result" id="source-result-dashboard" data-state="checking">In progress</span></li>
+        </ul>
+        <div class="network-dialog-foot">
+          <p>Allow local network access if your browser prompts you.</p>
+          <div class="network-dialog-actions">
+            <button id="network-guaranteed-check" class="network-result-button" type="button" aria-expanded="false" aria-controls="network-manual-check">Guaranteed Check</button>
+            <a id="network-check-download" class="network-result-button positive" href="https://github.com/shifatsrm09/FLUX/releases/latest" aria-label="Download the latest FLUX setup installer">Download now</a>
+          </div>
+        </div>
+        </div>
+        <section class="network-manual-check" id="network-manual-check" hidden aria-label="Manual network check links">
+          <p>Paste these links into your browser. If they open, FLUX should work on your network.</p>
+          <div class="manual-check-link">
+            <span><strong>DHAKA FLIX</strong><a href="http://172.16.50.4/" target="_blank" rel="noreferrer">http://172.16.50.4/</a></span>
+            <button class="network-result-button copy-network-link" type="button" data-copy-url="http://172.16.50.4/">Copy</button>
+          </div>
+          <div class="manual-check-link">
+            <span><strong>ICC FTP</strong><a href="http://10.16.100.244/dashboard.php?session=dfdba61c89248f58f669948cf0aee3824f76e768d4380343d80f2a0ef739bc1b" target="_blank" rel="noreferrer">http://10.16.100.244/dashboard.php?session=dfdba61c89248f58f669948cf0aee3824f76e768d4380343d80f2a0ef739bc1b</a><small>May require your private ICC session link.</small></span>
+            <button class="network-result-button copy-network-link" type="button" data-copy-url="http://10.16.100.244/dashboard.php?session=dfdba61c89248f58f669948cf0aee3824f76e768d4380343d80f2a0ef739bc1b">Copy</button>
+          </div>
+          <p class="manual-check-copy-status" id="manual-check-copy-status" aria-live="polite"></p>
+          <button id="network-check-back" class="network-result-button" type="button">Back to checker</button>
+        </section>
+      </section>
     </dialog>
     <script src="./script.js" defer></script>
   </body>
