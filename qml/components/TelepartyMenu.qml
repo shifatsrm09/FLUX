@@ -185,7 +185,7 @@ Popup {
 
                 Text {
                     Layout.fillWidth: true
-                    text: "In a party, right-click a Library video and choose Play in TELEPARTY. Everyone needs a matching local copy."
+                    text: "In a party, click or open any video to sync playback with everyone. For local videos, room members need a matching local copy."
                     color: Theme.textMute
                     font.pixelSize: 11
                     wrapMode: Text.Wrap

@@ -29,7 +29,6 @@ Item {
 
     // Hover download button (files: download; folders: download the whole pack)
     property bool showDownload: false
-    property bool allowTelepartyLocalPlayback: false
     property bool dlFlash: false       // brief "added" confirmation
 
     // Entrance animation stagger (ms)
@@ -39,7 +38,6 @@ Item {
     signal folderRequested(string url, string libraryName)
     signal removeRequested(string url)
     signal downloadRequested(string url, string title, bool isPack)
-    signal playInTelepartyRequested(string url, string title)
 
     // Bookmark state (reading `revision` makes this re-evaluate whenever bookmarks change)
     readonly property bool bookmarked: {
@@ -561,10 +559,8 @@ Item {
             canBookmark: root.effectiveLocalPath.length === 0 || !root.isFolder
             canDownload: !root.isLocal && root.playUrl.length > 0
             canShowInFolder: root.effectiveLocalPath.length > 0
-            canPlayInTeleparty: root.allowTelepartyLocalPlayback && root.isLocal && !root.isFolder
 
             onOpenRequested: root.activate()
-            onPlayInTelepartyRequested: root.playInTelepartyRequested(root.playUrl, root.parsed.title)
             onBookmarkToggled: root.toggleBookmark()
             onDownloadRequested: root.requestDownload()
             onShowInFolderRequested: {

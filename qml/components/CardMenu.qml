@@ -11,13 +11,11 @@ Menu {
     property bool canBookmark: true
     property bool canDownload: true
     property bool canShowInFolder: false
-    property bool canPlayInTeleparty: false
 
     signal openRequested()
     signal bookmarkToggled()
     signal downloadRequested()
     signal showInFolderRequested()
-    signal playInTelepartyRequested()
 
     padding: 6
     modal: false
@@ -70,12 +68,6 @@ Menu {
         onTriggered: menu.openRequested()
     }
 
-    Entry {
-        visible: menu.canPlayInTeleparty
-        text: "Play in TELEPARTY"
-        tint: "#FF6B75"
-        onTriggered: menu.playInTelepartyRequested()
-    }
 
     Entry {
         visible: menu.canBookmark

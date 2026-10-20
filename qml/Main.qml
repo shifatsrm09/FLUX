@@ -302,6 +302,20 @@ ApplicationWindow {
 
     function playLibraryInTeleparty(url, title) {
         if (!inTeleparty || !fluxSync || !url || url.length === 0) return
+        if (fluxSync.localMode && fluxSync.hasPartyMedia) {
+            if (fluxSync.localVerificationState === "WaitingForLocalSelection"
+                    || fluxSync.localVerificationState === "IncompatibleMedia"
+                    || fluxSync.localVerificationState === "UnresolvedMetadata"
+                    || fluxSync.localVerificationState === "PlaybackError") {
+                if (fluxSync.selectGuestLocalMedia(url, title, 0, false)) {
+                    return
+                }
+            } else if (window.sameMediaUrl(fluxSync.currentUrl, url)) {
+                if (currentPage !== "player") pageBeforePlayer = currentPage
+                currentPage = "player"
+                return
+            }
+        }
         // Any participant can choose the next shared local video. Matching copies
         // are resolved by the other room members after the new declaration arrives.
         fluxSync.broadcastLocalOpen(url, title)
@@ -785,10 +799,6 @@ ApplicationWindow {
                     window.playMedia(url, title)
                 }
             }
-
-            onPlayInTelepartyRequested: function(url, title) {
-                window.playLibraryInTeleparty(url, title)
-            }
         }
 
         // Cinematic full-viewport player
@@ -842,7 +852,7 @@ ApplicationWindow {
                                       || fluxSync.localVerificationState === "PlaybackError")
             nowPlayingWarning: fluxSync
                                ? "A participant is playing \"" + fluxSync.currentTitle
-                                 + "\". Add this file to your Library and choose Play in TELEPARTY."
+                                 + "\". Add this file to your Library and open it to join."
                                : "Add the playing file to your Library to join playback."
             showNowPlaying: !!fluxPlayer
                             && (fluxPlayer.isPlaying
