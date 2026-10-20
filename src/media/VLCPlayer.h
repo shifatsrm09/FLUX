@@ -129,6 +129,12 @@ public slots:
     QStringList preferredAudio() const { return m_preferredAudio; }
     QString preferredSubtitle() const { return m_preferredSubtitle; }
 
+    QString latchedSubtitleName() const { return m_latchedSubtitleName; }
+    QString latchedSubtitleLang() const { return m_latchedSubtitleLang; }
+    int latchedSubtitleIndex() const { return m_latchedSubtitleIndex; }
+    bool latchedSubtitleDisabled() const { return m_latchedSubtitleDisabled; }
+    void setLatchedSubtitle(const QString &name, const QString &lang, int index, bool disabled);
+
 signals:
     void urlChanged();
     void stateChanged();
@@ -228,6 +234,13 @@ private:
     bool m_audioPrefApplied = false;
     bool m_subPrefApplied = false;
     int m_autoTrackAttempts = 0;
+
+    // Latched subtitle choice across episodes (e.g. series Play Next)
+    QString m_latchedSubtitleName;
+    QString m_latchedSubtitleLang;
+    QString m_latchedSubtitleRawName;
+    int m_latchedSubtitleIndex = -1;
+    bool m_latchedSubtitleDisabled = false;
 
     // Playback rate (1.0 = normal speed; adaptive Teleparty drift control uses 0.96..1.04)
     double m_playbackRate = 1.0;

@@ -245,9 +245,29 @@ void disambiguateTracks(QVariantList &list) {
 }
 
 bool trackMatches(const QVariantMap &t, const QString &pref) {
-    return t.value("lang").toString().compare(pref, Qt::CaseInsensitive) == 0
-        || t.value("name").toString().contains(pref, Qt::CaseInsensitive)
-        || t.value("rawName").toString().contains(pref, Qt::CaseInsensitive);
+    if (pref.trimmed().isEmpty()) return false;
+    const QString tLang = t.value("lang").toString();
+    const QString tName = t.value("name").toString();
+    const QString tRaw = t.value("rawName").toString();
+
+    if (tLang.compare(pref, Qt::CaseInsensitive) == 0
+        || tName.compare(pref, Qt::CaseInsensitive) == 0
+        || tName.contains(pref, Qt::CaseInsensitive)
+        || tRaw.contains(pref, Qt::CaseInsensitive)) {
+        return true;
+    }
+
+    const QString prefLang = detectLanguage(pref);
+    if (!prefLang.isEmpty()) {
+        if (!tLang.isEmpty() && tLang.compare(prefLang, Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+        if (detectLanguage(tName).compare(prefLang, Qt::CaseInsensitive) == 0 ||
+            detectLanguage(tRaw).compare(prefLang, Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // Commentary / forced / SDH variants are a worse default than the plain track
@@ -1332,33 +1352,82 @@ void VLCPlayer::applyLanguagePreferences() {
         }
     }
 
-    // ---- Subtitles ----
+    // ---- Subtitles (Latched Preference Support) ----
     if (!m_subPrefApplied) {
-        const QString pref = m_preferredSubtitle.trimmed();
-        if (pref.isEmpty()) {
-            m_subPrefApplied = true;
-        } else if (pref.compare(QStringLiteral("off"), Qt::CaseInsensitive) == 0) {
+        const QVariantList real = realTracks(m_subtitleTracks);
+        if (m_latchedSubtitleDisabled || m_preferredSubtitle.compare(QStringLiteral("off"), Qt::CaseInsensitive) == 0) {
             m_subPrefApplied = true;
             if (libvlc_video_get_spu(m_mediaPlayer) != -1) {
                 libvlc_video_set_spu(m_mediaPlayer, -1);
                 emit selectedSubtitleTrackChanged();
             }
-        } else {
-            const QVariantList real = realTracks(m_subtitleTracks);
-            if (!real.isEmpty()) {
-                m_subPrefApplied = true;
-                const QVariantMap best = bestTrackFor(real, pref);
-                if (!best.isEmpty()) {
-                    const int id = best.value("id").toInt();
-                    if (id != libvlc_video_get_spu(m_mediaPlayer)) {
-                        FLUX_LOG_INFO("VLCPlayer", QString("Auto-selecting preferred subtitle '%1' (track %2)").arg(pref).arg(id));
-                        libvlc_video_set_spu(m_mediaPlayer, id);
-                        emit selectedSubtitleTrackChanged();
+        } else if (!real.isEmpty()) {
+            QVariantMap best;
+
+            // 1. Exact display name match (e.g. "English (2)", "English 2", "Bangla", "Hindi")
+            if (!m_latchedSubtitleName.isEmpty()) {
+                for (const QVariant &v : real) {
+                    const QVariantMap t = v.toMap();
+                    if (t.value("name").toString().compare(m_latchedSubtitleName, Qt::CaseInsensitive) == 0) {
+                        best = t;
+                        break;
                     }
                 }
-            } else if (m_autoTrackAttempts > 8) {
-                m_subPrefApplied = true;   // stream has no subtitles; stop trying
             }
+
+            // 2. Exact raw name match (e.g. "Subtitle 2", "Track 2 - [Bangla]")
+            if (best.isEmpty() && !m_latchedSubtitleRawName.isEmpty()) {
+                for (const QVariant &v : real) {
+                    const QVariantMap t = v.toMap();
+                    if (t.value("rawName").toString().compare(m_latchedSubtitleRawName, Qt::CaseInsensitive) == 0) {
+                        best = t;
+                        break;
+                    }
+                }
+            }
+
+            // 3. Match by relative index if the track at that index matches the language or name
+            if (best.isEmpty() && m_latchedSubtitleIndex >= 0 && m_latchedSubtitleIndex < real.size()) {
+                const QVariantMap candidate = real.at(m_latchedSubtitleIndex).toMap();
+                if (trackMatches(candidate, m_latchedSubtitleName) ||
+                    (!m_latchedSubtitleLang.isEmpty() && trackMatches(candidate, m_latchedSubtitleLang))) {
+                    best = candidate;
+                }
+            }
+
+            // 4. Match by language across all tracks
+            if (best.isEmpty() && !m_latchedSubtitleLang.isEmpty()) {
+                best = bestTrackFor(real, m_latchedSubtitleLang);
+            }
+
+            // 5. Match by display name substring / alias
+            if (best.isEmpty() && !m_latchedSubtitleName.isEmpty()) {
+                best = bestTrackFor(real, m_latchedSubtitleName);
+            }
+
+            // 6. Match by exact relative track index (e.g. identical MKV batch with generic names)
+            if (best.isEmpty() && m_latchedSubtitleIndex >= 0 && m_latchedSubtitleIndex < real.size()) {
+                best = real.at(m_latchedSubtitleIndex).toMap();
+            }
+
+            // 7. General user preference fallback (e.g. "English")
+            if (best.isEmpty() && !m_preferredSubtitle.isEmpty() && m_preferredSubtitle != QLatin1String("off")) {
+                best = bestTrackFor(real, m_preferredSubtitle);
+            }
+
+            if (!best.isEmpty()) {
+                m_subPrefApplied = true;
+                const int id = best.value("id").toInt();
+                if (id != libvlc_video_get_spu(m_mediaPlayer)) {
+                    FLUX_LOG_INFO("VLCPlayer", QString("Auto-selecting latched subtitle '%1' (track ID %2)").arg(best.value("name").toString()).arg(id));
+                    libvlc_video_set_spu(m_mediaPlayer, id);
+                    emit selectedSubtitleTrackChanged();
+                }
+            } else if (m_autoTrackAttempts > 8) {
+                m_subPrefApplied = true;
+            }
+        } else if (m_autoTrackAttempts > 8) {
+            m_subPrefApplied = true;
         }
     }
 }
@@ -1392,30 +1461,70 @@ void VLCPlayer::learnAudioChoice(int trackId) {
     }
 }
 
-void VLCPlayer::learnSubtitleChoice(int spuId) {
-    QString key;
-    if (spuId < 0) {
-        key = QStringLiteral("off");
-    } else {
-        QString name;
-        QString lang;
-        for (const QVariant &v : m_subtitleTracks) {
-            const QVariantMap t = v.toMap();
-            if (t.value("id").toInt() == spuId) {
-                name = t.value("name").toString();
-                lang = t.value("lang").toString();
-                break;
-            }
-        }
-        key = lang.isEmpty() ? languageKey(name) : lang;
+void VLCPlayer::setLatchedSubtitle(const QString &name, const QString &lang, int index, bool disabled) {
+    m_latchedSubtitleName = name;
+    m_latchedSubtitleLang = lang;
+    m_latchedSubtitleIndex = index;
+    m_latchedSubtitleDisabled = disabled;
+    if (disabled) {
+        m_preferredSubtitle = QStringLiteral("off");
+    } else if (!lang.isEmpty()) {
+        m_preferredSubtitle = lang;
+    } else if (!name.isEmpty()) {
+        m_preferredSubtitle = name;
     }
-    if (key.isEmpty()) return;
+}
 
-    if (key != m_preferredSubtitle) {
-        m_preferredSubtitle = key;
-        FLUX_LOG_INFO("VLCPlayer", QString("Learned subtitle preference: %1").arg(m_preferredSubtitle));
+void VLCPlayer::learnSubtitleChoice(int spuId) {
+    if (spuId < 0) {
+        m_latchedSubtitleDisabled = true;
+        m_latchedSubtitleName = QStringLiteral("Disable");
+        m_latchedSubtitleLang.clear();
+        m_latchedSubtitleRawName.clear();
+        m_latchedSubtitleIndex = -1;
+        m_preferredSubtitle = QStringLiteral("off");
+        FLUX_LOG_INFO("VLCPlayer", "Latched subtitle choice: Disabled");
         emit languagePreferencesChanged();
+        return;
     }
+
+    m_latchedSubtitleDisabled = false;
+    QString name;
+    QString lang;
+    QString rawName;
+    int realIndex = 0;
+    int foundIndex = -1;
+
+    for (const QVariant &v : m_subtitleTracks) {
+        const QVariantMap t = v.toMap();
+        const int id = t.value("id").toInt();
+        if (id < 0) continue;
+        if (id == spuId) {
+            name = t.value("name").toString();
+            lang = t.value("lang").toString();
+            rawName = t.value("rawName").toString();
+            foundIndex = realIndex;
+            break;
+        }
+        ++realIndex;
+    }
+
+    if (foundIndex < 0) return;
+
+    m_latchedSubtitleName = name;
+    m_latchedSubtitleLang = lang;
+    m_latchedSubtitleRawName = rawName;
+    m_latchedSubtitleIndex = foundIndex;
+
+    const QString key = !lang.isEmpty() ? lang : (!name.isEmpty() ? name : rawName);
+    if (!key.isEmpty()) {
+        m_preferredSubtitle = key;
+    }
+
+    FLUX_LOG_INFO("VLCPlayer", QString("Latched subtitle preference: name='%1', lang='%2', raw='%3', index=%4")
+                                   .arg(m_latchedSubtitleName, m_latchedSubtitleLang, m_latchedSubtitleRawName)
+                                   .arg(m_latchedSubtitleIndex));
+    emit languagePreferencesChanged();
 }
 
 void VLCPlayer::refreshTracks() {

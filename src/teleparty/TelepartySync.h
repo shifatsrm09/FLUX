@@ -365,6 +365,7 @@ private:
     LocalMediaInspector::CancelToken m_activeInspectCancel;
     bool m_forceAsyncInspection = false;
     bool m_localPlaybackCommitted = false;
+    bool m_localPlaybackAligned = false;
     bool m_hostSessionAlreadyStarted = false;
     bool m_localResumeCheckPending = false;
     bool m_localReadinessWaitTimedOut = false;

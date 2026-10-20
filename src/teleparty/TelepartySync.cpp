@@ -1421,6 +1421,7 @@ void TelepartySync::clearLocalSessionState() {
     m_localFilePath.clear();
     m_peerLocalStatus.clear();
     m_localPlaybackCommitted = false;
+    m_localPlaybackAligned = false;
     m_hostSessionAlreadyStarted = false;
     m_localReadinessWaitTimedOut = false;
     m_localReadinessWaitStartedMs = 0;
@@ -1692,6 +1693,7 @@ void TelepartySync::finishHostLocalInspection(const QString &resolvedUrl,
     m_partyPlaying = false;
     m_partyUpdatedLocalMs = localNowMs();
     m_localPlaybackCommitted = false;
+    m_localPlaybackAligned = false;
     m_hostSessionAlreadyStarted = false;
     m_localReadinessWaitTimedOut = false;
     m_localReadinessWaitStartedMs = m_partyUpdatedLocalMs;
@@ -1899,6 +1901,7 @@ void TelepartySync::handleLocalOpen(const QVariantMap &data, const QString &from
     m_partyPlaying = hostPlaying;
     m_partyUpdatedLocalMs = localNowMs();
     m_localPlaybackCommitted = false;
+    m_localPlaybackAligned = false;
     m_hostSessionAlreadyStarted = hostCommitted;
     m_localReadinessWaitTimedOut = false;
     m_localReadinessWaitStartedMs = m_partyUpdatedLocalMs;
@@ -2217,6 +2220,7 @@ void TelepartySync::tryCommitLocalPlaybackStart() {
     }
 
     m_localPlaybackCommitted = true;
+    m_localPlaybackAligned = true;
     m_hostSessionAlreadyStarted = true;
     m_localReadinessWaitTimedOut = false;
     m_localReadinessTimeoutTimer.stop();
@@ -2314,14 +2318,16 @@ void TelepartySync::handleLocalStartCommit(const QVariantMap &data, const QStrin
     m_localPlaybackCommitted = true;
     m_localReadinessWaitTimedOut = false;
     m_localReadinessTimeoutTimer.stop();
-    if (m_player && isSameOrMatchingMedia(m_player->url(), m_currentUrl)) {
+    if (m_player && isSameOrMatchingMedia(m_player->url(), m_currentUrl) &&
+        m_localVerificationState == LocalVerificationState::ReadyToSync) {
+        m_localPlaybackAligned = true;
         const qint64 livePosition = m_timeline.expectedPositionMs(estimatedHostNowMs());
         align(livePosition,
               playing,
               playing ? QStringLiteral("Starting Local Teleparty") : QString(),
               ActionOrigin::JoinSync);
+        scheduleLocalPlaybackResume();
     }
-    scheduleLocalPlaybackResume();
     emit localVerificationChanged();
 }
 
@@ -2440,13 +2446,14 @@ void TelepartySync::updateLocalVerificationReadiness(bool allowBroadcast) {
         if (m_localMediaAuthorityPeerId == m_session->memberId()) {
             tryCommitLocalPlaybackStart();
         } else if (m_localVerificationState == LocalVerificationState::ReadyToSync &&
-                   m_hostSessionAlreadyStarted &&
-                   !m_localPlaybackCommitted) {
+                   (m_hostSessionAlreadyStarted || m_localPlaybackCommitted) &&
+                   !m_localPlaybackAligned) {
+            m_localPlaybackAligned = true;
             m_localPlaybackCommitted = true;
             m_localReadinessTimeoutTimer.stop();
             const qint64 livePos = m_timeline.expectedPositionMs(estimatedHostNowMs());
             align(livePos,
-                  m_timeline.snapshot().playing,
+                  m_timeline.isValid() ? m_timeline.snapshot().playing : true,
                   QStringLiteral("Synchronized with Local Teleparty"),
                   ActionOrigin::JoinSync);
             scheduleLocalPlaybackResume();

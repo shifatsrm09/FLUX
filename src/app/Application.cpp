@@ -94,6 +94,12 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
         }
         player->setLanguagePreferences(audioPrefs, subtitlePref);
 
+        const QString latchedName = store->value("subtitles/latchedName").toString();
+        const QString latchedLang = store->value("subtitles/latchedLang").toString();
+        const int latchedIndex = store->value("subtitles/latchedIndex", -1).toInt();
+        const bool latchedDisabled = store->value("subtitles/latchedDisabled", false).toBool();
+        player->setLatchedSubtitle(latchedName, latchedLang, latchedIndex, latchedDisabled);
+
         // Multi-server settings (1 = Dhaka Flix, 2 = ICC FTP)
         search->setIccftpUrl(store->iccftpUrl());
         search->setIccftpSession(store->iccftpSession());
@@ -129,6 +135,10 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
         connect(player, &VLCPlayer::languagePreferencesChanged, store, [store, player]() {
             store->setValue("audio/preferredAudio", player->preferredAudio());
             store->setValue("audio/preferredSubtitle", player->preferredSubtitle());
+            store->setValue("subtitles/latchedName", player->latchedSubtitleName());
+            store->setValue("subtitles/latchedLang", player->latchedSubtitleLang());
+            store->setValue("subtitles/latchedIndex", player->latchedSubtitleIndex());
+            store->setValue("subtitles/latchedDisabled", player->latchedSubtitleDisabled());
         });
         connect(search, &SearchManager::selectedLibrariesChanged, store, [store, search]() {
             store->setValue(QStringLiteral("categories/selected_s%1").arg(search->activeServer()),
