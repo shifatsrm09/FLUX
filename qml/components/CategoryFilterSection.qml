@@ -130,7 +130,7 @@ Item {
     readonly property int columnCount: Math.max(1, Math.min(6, Math.floor((root.width + root.colSpacing) / (root.colMinWidth + root.colSpacing))))
     readonly property real colWidth: Math.max(160, Math.floor((root.width - (root.columnCount - 1) * root.colSpacing) / root.columnCount))
 
-    implicitHeight: mainColumn.implicitHeight
+    implicitHeight: visible ? mainColumn.implicitHeight : 0
 
     // =========================================================================
     // One selectable category row

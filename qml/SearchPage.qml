@@ -1216,10 +1216,11 @@ Item {
             Item { Layout.fillWidth: true }
         }
 
-        // 3. Category filters (collapsible, automatically collapses on search)
+        // 3. Category filters (collapsible, automatically collapses on search; only shown for Server 1)
         CategoryFilterSection {
             id: categoryFilter
             Layout.fillWidth: true
+            visible: !fluxUser || fluxUser.activeServer === 1
             libraryModel: fluxLibrary
             searchManager: fluxSearch
             collapsible: true
@@ -1260,7 +1261,9 @@ Item {
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "Select categories above or enter a title to discover movies & shows."
+                text: (fluxUser && fluxUser.activeServer === 2)
+                      ? "Enter a title to discover movies & shows."
+                      : "Select categories above or enter a title to discover movies & shows."
                 color: Theme.textDim
                 font.pixelSize: 14
             }
