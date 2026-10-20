@@ -41,8 +41,11 @@ const networkCheckDialog = document.querySelector("#network-check-dialog");
 const networkCheckResult = document.querySelector("#network-check-result");
 const networkCheckIndicator = document.querySelector("#network-check-indicator");
 const networkCheckAgain = document.querySelector("#network-check-again");
-const networkCheckUrl = "http://172.16.50.4/";
-let activeNetworkCheck = null;
+const networkSources = [
+  { url: "http://172.16.50.4/", resultId: "#source-result-gateway" },
+  { url: "http://10.16.100.244/dashboard.php", resultId: "#source-result-dashboard" },
+];
+let activeNetworkChecks = [];
 let networkCheckRun = 0;
 let localNetworkPermission = "unknown";
 getLocalNetworkPermission().then((permission) => {
@@ -58,32 +61,93 @@ document.querySelector("#network-check-close").addEventListener("click", () => {
 
 networkCheckDialog.addEventListener("close", () => {
   networkCheckRun += 1;
-  activeNetworkCheck?.abort();
-  activeNetworkCheck = null;
+  activeNetworkChecks.forEach((controller) => controller.abort());
+  activeNetworkChecks = [];
 });
 
 async function runNetworkCheck() {
   if (!networkCheckDialog.open) networkCheckDialog.showModal();
 
-  activeNetworkCheck?.abort();
   const run = ++networkCheckRun;
 
-  networkCheckResult.textContent = "Checking 172.16.50.4…";
+  networkCheckResult.textContent = "Checking both FLUX network sources…";
   networkCheckIndicator.dataset.state = "checking";
   networkCheckAgain.disabled = true;
-
-  const controller = new AbortController();
-  activeNetworkCheck = controller;
-  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  networkSources.forEach((source) => setNetworkSourceResult(source, "checking", "Checking"));
 
   try {
     if (localNetworkPermission === "denied") {
       networkCheckResult.textContent = "Local network access is blocked for this site. Allow it in your browser’s site settings, then try again.";
       networkCheckIndicator.dataset.state = "failure";
+      networkSources.forEach((source) => setNetworkSourceResult(source, "failure", "Blocked"));
       return;
     }
 
-    await fetch(networkCheckUrl, {
+    const results = await Promise.all(networkSources.map((source) => checkNetworkSource(source, run)));
+    if (run !== networkCheckRun) return;
+
+    const reachableCount = results.filter((result) => result.reachable).length;
+    if (reachableCount > 0) {
+      networkCheckResult.textContent = reachableCount === networkSources.length
+        ? "FLUX can reach both BDIX network sources. It should work on this network."
+        : "FLUX can reach one BDIX network source. It should work on this network.";
+      networkCheckIndicator.dataset.state = "success";
+      return;
+    }
+
+    const permission = await getLocalNetworkPermission();
+    localNetworkPermission = permission;
+    if (permission === "denied") {
+      networkCheckResult.textContent = "Local network access is blocked for this site. Allow it in your browser’s site settings, then try again.";
+    } else if (permission === "unsupported") {
+      networkCheckResult.textContent = "This browser can’t confirm local network access. Try the latest Chrome or Edge, then allow access if prompted.";
+    } else if (permission === "prompt") {
+      networkCheckResult.textContent = "Allow local network access for this site in your browser’s site settings, then reload and try again.";
+    } else if (results.every((result) => result.timedOut)) {
+      networkCheckResult.textContent = "Neither BDIX source responded. Check that you’re on the right network and try again.";
+    } else {
+      networkCheckResult.textContent = "Your browser allows local network access, but neither BDIX source responded.";
+    }
+    networkCheckIndicator.dataset.state = "failure";
+  } catch (error) {
+    if (run === networkCheckRun) {
+      const permission = await getLocalNetworkPermission();
+      localNetworkPermission = permission;
+      if (permission === "denied") {
+        networkCheckResult.textContent = "Local network access is blocked for this site. Allow it in your browser’s site settings, then try again.";
+      } else if (permission === "unsupported") {
+        networkCheckResult.textContent = "This browser can’t confirm local network access. Try the latest Chrome or Edge, then allow access if prompted.";
+      } else if (permission === "prompt") {
+        networkCheckResult.textContent = "Allow local network access for this site in your browser’s site settings, then reload and try again.";
+      } else if (activeNetworkChecks.length === 0) {
+        networkCheckResult.textContent = "Neither BDIX network source responded. Check your network and try again.";
+      } else if (permission === "granted") {
+        networkCheckResult.textContent = "Your browser allows local network access, but neither BDIX source responded. Check your network and try again.";
+      } else {
+        networkCheckResult.textContent = "The browser blocked this local network check. Try the latest Chrome or Edge and allow access for this site.";
+      }
+      networkCheckIndicator.dataset.state = "failure";
+    }
+  } finally {
+    if (run === networkCheckRun) {
+      activeNetworkChecks = [];
+      networkCheckAgain.disabled = false;
+    }
+  }
+}
+
+async function checkNetworkSource(source, run) {
+  if (localNetworkPermission === "denied") {
+    setNetworkSourceResult(source, "failure", "Blocked");
+    return { reachable: false, timedOut: false };
+  }
+
+  const controller = new AbortController();
+  activeNetworkChecks.push(controller);
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+
+  try {
+    await fetch(source.url, {
       method: "GET",
       mode: "no-cors",
       cache: "no-store",
@@ -92,37 +156,25 @@ async function runNetworkCheck() {
       targetAddressSpace: "local",
     });
 
-    if (run === networkCheckRun) {
-      networkCheckResult.textContent = "FLUX should work on this network.";
-      networkCheckIndicator.dataset.state = "success";
-    }
-  } catch (error) {
-    if (run === networkCheckRun) {
-      const permission = localNetworkPermission === "unknown"
-        ? await getLocalNetworkPermission()
-        : localNetworkPermission;
-      localNetworkPermission = permission;
-      if (permission === "denied") {
-        networkCheckResult.textContent = "Local network access is blocked for this site. Allow it in your browser’s site settings, then try again.";
-      } else if (permission === "unsupported") {
-        networkCheckResult.textContent = "This browser can’t confirm local network access. Try the latest Chrome or Edge, then allow access if prompted.";
-      } else if (permission === "prompt") {
-        networkCheckResult.textContent = "Allow local network access for this site in your browser’s site settings, then reload and try again.";
-      } else if (controller.signal.aborted) {
-        networkCheckResult.textContent = "No response from the FLUX network source. Check that you’re on the right network and try again.";
-      } else if (permission === "granted") {
-        networkCheckResult.textContent = "Your browser allows local network access, but 172.16.50.4 didn’t respond. Check your network and try again.";
-      } else {
-        networkCheckResult.textContent = "The browser blocked this local network check. Try the latest Chrome or Edge and allow access for this site.";
-      }
-      networkCheckIndicator.dataset.state = "failure";
-    }
+    if (run === networkCheckRun) setNetworkSourceResult(source, "success", "Reachable");
+    return { reachable: true, timedOut: false };
+  } catch {
+    if (run === networkCheckRun) setNetworkSourceResult(source, "failure", controller.signal.aborted ? "Timed out" : "Unavailable");
+    return { reachable: false, timedOut: controller.signal.aborted };
   } finally {
     window.clearTimeout(timeout);
-    if (run === networkCheckRun) {
-      activeNetworkCheck = null;
-      networkCheckAgain.disabled = false;
-    }
+  }
+}
+
+function setNetworkSourceResult(source, state, label) {
+  const result = document.querySelector(source.resultId);
+  result.dataset.state = state;
+  if (state === "success") {
+    result.innerHTML = `<span class="source-result-check" aria-hidden="true">✓</span>${label}`;
+  } else if (state === "failure") {
+    result.innerHTML = `<span class="source-result-cross" aria-hidden="true">×</span>${label}`;
+  } else {
+    result.textContent = label;
   }
 }
 

@@ -42,7 +42,7 @@
         <p class="release-note" id="release-note" aria-live="polite">Finding the latest release…</p>
         <button class="network-check-trigger" id="network-check-open" type="button">
           <span class="network-check-icon" aria-hidden="true">⌁</span>
-          Can my FLUX work in my Network?
+          Can I run FLUX?
           <span class="network-check-arrow" aria-hidden="true">↗</span>
         </button>
 
@@ -78,11 +78,15 @@
         </div>
         <button class="network-dialog-close" id="network-check-close" type="button" aria-label="Close network check">×</button>
       </div>
-      <p class="network-dialog-copy">We’ll check whether this device can reach the FLUX network source.</p>
+      <p class="network-dialog-copy">If any one of them works. You can use FLUX</p>
       <div class="network-check-state" aria-live="polite">
         <span class="network-check-indicator" id="network-check-indicator" data-state="checking" aria-hidden="true"></span>
-        <p id="network-check-result" role="status">Checking 172.16.50.4…</p>
+        <p id="network-check-result" role="status">Checking both FLUX network sources…</p>
       </div>
+      <ul class="network-check-sources" aria-label="Network source results">
+        <li><span><strong>DHAKA FLIX</strong><small>172.16.50.4</small></span><span class="source-result" id="source-result-gateway" data-state="checking">Checking</span></li>
+        <li><span><strong>ICC FTP</strong><small>10.16.100.244</small></span><span class="source-result" id="source-result-dashboard" data-state="checking">Checking</span></li>
+      </ul>
       <div class="network-dialog-foot">
         <p>Allow local network access if your browser prompts you.</p>
         <button id="network-check-again" class="network-result-button" type="button">Check again</button>
