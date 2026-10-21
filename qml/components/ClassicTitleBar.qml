@@ -108,6 +108,17 @@ Item {
         }
     }
 
+    Binding {
+        target: (typeof fluxSnap !== "undefined" && fluxSnap) ? fluxSnap : null
+        property: "leftInteractiveWidth"
+        value: root.overlayMode ? 0 : (brandRow.x + brandRow.width + 12)
+    }
+
+    Binding {
+        target: (typeof fluxSnap !== "undefined" && fluxSnap) ? fluxSnap : null
+        property: "rightInteractiveWidth"
+        value: rightRow.width + 8
+    }
     // ---- Backgrounds ---------------------------------------------------------
 
     // Soft gradient scrim (transparent nav over hero)
@@ -148,7 +159,7 @@ Item {
 
         onPressed: function(mouse) {
             if (mouse.button === Qt.LeftButton && root.window) {
-                root.window.startSystemMove()
+                if (Qt.platform.os !== "windows") root.window.startSystemMove()
             }
         }
 
@@ -289,6 +300,7 @@ Item {
 
     // ---- Right: now playing, dev tools, window controls ----
     RowLayout {
+        id: rightRow
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.bottom: parent.bottom

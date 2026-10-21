@@ -288,6 +288,42 @@ Item {
             ctx.fill()
             break
 
+        case "film":
+        case "movie":
+            // Clapperboard slate base
+            ctx.beginPath()
+            ctx.roundedRect(3, 8, 18, 12.5, 2, 2)
+            ctx.stroke()
+            // Clapper top bar
+            ctx.beginPath()
+            ctx.roundedRect(3, 3.5, 18, 4.5, 1.5, 1.5)
+            ctx.stroke()
+            // Slanted stripes on top bar
+            poly(ctx, [7.5, 3.5, 5.5, 8], false)
+            ctx.stroke()
+            poly(ctx, [12, 3.5, 10, 8], false)
+            ctx.stroke()
+            poly(ctx, [16.5, 3.5, 14.5, 8], false)
+            ctx.stroke()
+            // Centered play triangle
+            poly(ctx, [10.5, 11, 15.5, 14.25, 10.5, 17.5], true)
+            ctx.fill()
+            break
+
+        case "tv":
+        case "series":
+            // Television / display screen
+            ctx.beginPath()
+            ctx.roundedRect(3, 4, 18, 13, 2, 2)
+            ctx.stroke()
+            // Base stand
+            poly(ctx, [9.5, 17, 7, 20.5, 17, 20.5, 14.5, 17], false)
+            ctx.stroke()
+            // Play glyph
+            poly(ctx, [10.5, 7.5, 15.5, 10.5, 10.5, 13.5], true)
+            ctx.fill()
+            break
+
         case "swap":
             // Two vertical arrows pointing in opposite directions
             poly(ctx, [7.5, 6, 7.5, 18], false)

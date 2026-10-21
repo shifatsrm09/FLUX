@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "WindowsSnapHelper.h"
 #include "../media/VLCInstance.h"
 #include "../media/VLCPlayer.h"
 #include "../media/VLCVideoItem.h"
@@ -222,6 +223,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     rootContext->setContextProperty("fluxSync", m_sync.get());
     rootContext->setContextProperty("fluxLibrary", m_searchManager->libraryModel());
     rootContext->setContextProperty("fluxLogger", &Logger::instance());
+    rootContext->setContextProperty("fluxSnap", WindowsSnapHelper::instance());
 
     // 5. Startup update check is driven immediately by the Discord-style StartupPopup window
 

@@ -191,6 +191,10 @@ Item {
             seed: root.title
             bigText: root.bigText
             isFolder: root.isFolder
+            isEpisode: root.meta.episode.length > 0
+            episodeText: root.meta.episode
+            yearText: root.meta.year
+            mediaTitle: root.parsed.title
             hovered: root.hovered
             visible: posterImage.opacity < 1.0
         }

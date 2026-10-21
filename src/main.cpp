@@ -9,7 +9,9 @@
 #include <QString>
 #include <QIcon>
 #include <QFile>
+#include <QQuickWindow>
 #include "app/Application.h"
+#include "app/WindowsSnapHelper.h"
 #include "core/Logger.h"
 #include "core/Version.h"
 
@@ -92,6 +94,17 @@ int main(int argc, char *argv[]) {
         FLUX_LOG_ERROR("Main", "Unable to load QML interface!");
         return -1;
     }
+
+    QQuickWindow *quickWindow = nullptr;
+    if (!engine.rootObjects().isEmpty()) {
+        quickWindow = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+    }
+
+#ifdef Q_OS_WIN
+    if (quickWindow) {
+        Flux::installWindowsSnapHelper(quickWindow);
+    }
+#endif
 
     FLUX_LOG_INFO("Main", "FLUX UI successfully launched. Entering main event loop.");
     return app.exec();

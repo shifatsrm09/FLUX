@@ -1,209 +1,150 @@
 import QtQuick
 import "Theme.js" as Theme
 
-// Typographic "poster" artwork. There is no image data in the library, so each title gets a
-// stable, hand-composed layout (one of six) built from simple shapes + a giant outlined
-// year / episode / initial. Drawn on top of the card's palette gradient.
+// Typographic and iconographic artwork for items without a poster image.
+// Episodes, movies, and folders each have clean, tailored visual designs that
+// strictly fit within vertical card bounds with zero overflow or clipping.
 Item {
     id: root
 
     property string seed: ""
     property string bigText: ""
     property bool isFolder: false
+    property bool isEpisode: false
+    property string episodeText: ""
+    property string yearText: ""
+    property string mediaTitle: ""
     property bool hovered: false
 
-    readonly property int composition: Theme.posterStyle(root.seed)
+    // Auto-detect if this is an episode if not explicitly set
+    readonly property bool effectiveIsEpisode: {
+        if (root.isFolder) return false
+        if (root.isEpisode) return true
+        if (root.episodeText && root.episodeText.length > 0) return true
+        if (root.bigText && (/^E\d+/i.test(root.bigText) || /^S\d+/i.test(root.bigText))) return true
+        if (root.seed && /\bS\d{1,2}E\d{1,3}\b/i.test(root.seed)) return true
+        return false
+    }
+
+    // Clean, bounded badge text (e.g. "S1 · E02", "2024", "MOVIE")
+    readonly property string badgeText: {
+        if (root.isFolder) return ""
+        if (root.episodeText && root.episodeText.length > 0) {
+            return root.episodeText.toUpperCase()
+        }
+        if (root.yearText && root.yearText.length > 0) {
+            return root.yearText
+        }
+        if (root.bigText && root.bigText.length > 0) {
+            if (/^\d{4}$/.test(root.bigText)) return root.bigText
+            if (/^E\d+/i.test(root.bigText)) return "EPISODE " + root.bigText.substring(1)
+            if (/^S\d+/i.test(root.bigText)) return root.bigText.toUpperCase()
+        }
+        var ym = root.seed ? root.seed.match(/\b(19\d{2}|20\d{2})\b/) : null
+        if (ym) return ym[1]
+        return root.effectiveIsEpisode ? "EPISODE" : "MOVIE"
+    }
 
     // Folder art proportions: Maintain a classic landscape aspect ratio (~1.48:1)
     // so it never stretches vertically regardless of whether the card is wide or tall.
     readonly property real folderW: Math.round(Math.max(76, Math.min(root.width * 0.54, 108)))
     readonly property real folderH: Math.round(folderW * 0.68)
 
-    // Everything drifts slightly on hover for a subtle parallax
+    // Emblem dimensions for movies & episodes
+    readonly property real emblemSize: Math.round(Math.min(64, Math.max(46, root.width * 0.34)))
+
+    // Artwork container with subtle hover lift
     Item {
         id: art
-
         anchors.fill: parent
         transformOrigin: Item.Center
-        scale: root.hovered ? 1.06 : 1.0
-        x: root.hovered ? -4 : 0
+        scale: root.hovered ? 1.04 : 1.0
 
-        Behavior on scale { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
-        Behavior on x { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
 
-        // ---- 0: Bokeh ----------------------------------------------------------------
+        // ==============================================================================
+        // Movie & Episode Fallback Art
+        // ==============================================================================
         Item {
-            visible: !root.isFolder && root.composition === 0
-            anchors.fill: parent
-
-            Rectangle {
-                width: root.height * 1.15
-                height: width
-                radius: width / 2
-                x: root.width * 0.52
-                y: -root.height * 0.3
-                color: "#0DFFFFFF"
-            }
-
-            Rectangle {
-                width: root.height * 0.75
-                height: width
-                radius: width / 2
-                x: root.width * 0.68
-                y: root.height * 0.42
-                color: "#265865F2"
-            }
-
-            Rectangle {
-                width: root.height * 0.34
-                height: width
-                radius: width / 2
-                x: root.width * 0.40
-                y: root.height * 0.1
-                color: "#0AFFFFFF"
-            }
-        }
-
-        // ---- 1: Diagonal stripes -----------------------------------------------------
-        Item {
-            visible: !root.isFolder && root.composition === 1
-            anchors.fill: parent
-
-            Repeater {
-                model: (!root.isFolder && root.composition === 1) ? 7 : 0
-
-                delegate: Rectangle {
-                    required property int index
-
-                    width: root.height * 2.6
-                    height: (index % 2 === 0) ? 10 : 4
-                    rotation: -32
-                    x: root.width * 0.72 + (index - 3) * 12.7 - width / 2
-                    y: root.height * 0.5 + (index - 3) * 20.4 - height / 2
-                    color: "#0DFFFFFF"
-                }
-            }
-        }
-
-        // ---- 2: Concentric rings -----------------------------------------------------
-        Item {
-            visible: !root.isFolder && root.composition === 2
-            anchors.fill: parent
-
-            Repeater {
-                model: (!root.isFolder && root.composition === 2) ? 4 : 0
-
-                delegate: Rectangle {
-                    required property int index
-
-                    width: root.height * (0.35 + index * 0.3)
-                    height: width
-                    radius: width / 2
-                    x: root.width * 0.80 - width / 2
-                    y: root.height * 0.42 - height / 2
-                    color: "transparent"
-                    border.width: 1
-                    border.color: index === 0 ? "#4D5865F2" : "#16FFFFFF"
-                }
-            }
-        }
-
-        // ---- 3: Horizon / sliced sun -------------------------------------------------
-        Item {
-            visible: !root.isFolder && root.composition === 3
-            anchors.fill: parent
-
-            Rectangle {
-                id: sun
-                width: root.height * 0.66
-                height: width
-                radius: width / 2
-                x: root.width * 0.72 - width / 2
-                y: root.height * 0.42 - height / 2
-                color: "#18FFFFFF"
-            }
-
-            Repeater {
-                model: (!root.isFolder && root.composition === 3) ? 4 : 0
-
-                delegate: Rectangle {
-                    required property int index
-
-                    x: sun.x - 2
-                    width: sun.width + 4
-                    height: 2 + index * 2
-                    y: sun.y + sun.height * (0.5 + index * 0.13)
-                    color: Theme.posterBottom(root.seed)
-                }
-            }
-        }
-
-        // ---- 4: Monolith -------------------------------------------------------------
-        Item {
-            visible: !root.isFolder && root.composition === 4
-            anchors.fill: parent
-
-            Rectangle {
-                x: root.width * 0.70
-                width: root.width * 0.18
-                height: root.height
-                color: "#0AFFFFFF"
-            }
-
-            Rectangle {
-                x: root.width * 0.70
-                width: 2
-                height: root.height
-                color: "#665865F2"
-            }
-
-            Rectangle {
-                x: root.width * 0.52
-                width: root.width * 0.05
-                height: root.height
-                color: "#06FFFFFF"
-            }
-        }
-
-        // ---- 5: Dot grid -------------------------------------------------------------
-        Item {
-            visible: !root.isFolder && root.composition === 5
-            anchors.fill: parent
-
-            Repeater {
-                model: (!root.isFolder && root.composition === 5) ? 30 : 0
-
-                delegate: Rectangle {
-                    required property int index
-
-                    width: 4
-                    height: 4
-                    radius: 2
-                    x: root.width * 0.58 + (index % 6) * 17
-                    y: 18 + Math.floor(index / 6) * 17
-                    color: ((index % 7) === 0) ? "#665865F2" : "#1AFFFFFF"
-                }
-            }
-        }
-
-        // ---- Giant outlined year / episode / initial ----------------------------------
-        Text {
-            visible: !root.isFolder && root.bigText.length > 0
+            visible: !root.isFolder
+            anchors.top: parent.top
+            anchors.left: parent.left
             anchors.right: parent.right
-            anchors.rightMargin: 14
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: -root.height * 0.1
-            text: root.bigText
-            color: "#0DFFFFFF"
-            style: Text.Outline
-            styleColor: "#2EFFFFFF"
-            font.weight: Font.Black
-            font.pixelSize: Math.round(root.height * (root.bigText.length <= 1 ? 0.95
-                                                      : root.bigText.length <= 2 ? 0.78
-                                                      : root.bigText.length <= 4 ? 0.5 : 0.36))
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Math.round(root.height * 0.38) // Preserve lower space for title block
+
+            // Elegant center column containing media emblem and metadata badge
+            Column {
+                anchors.centerIn: parent
+                anchors.verticalCenterOffset: -4
+                spacing: 12
+                width: parent.width
+                z: 1
+
+                // Center emblem
+                Rectangle {
+                    id: emblemBox
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: root.emblemSize
+                    height: width
+                    radius: Math.round(width * 0.32)
+                    color: root.hovered ? "#24FFFFFF" : "#18FFFFFF"
+                    border.width: 1
+                    border.color: root.hovered ? "#3AFFFFFF" : "#28FFFFFF"
+
+                    // Subtle atmospheric radial glow
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: Math.round(parent.width * 2.2)
+                        height: width
+                        radius: width / 2
+                        color: root.effectiveIsEpisode ? "#105865F2" : "#12FFFFFF"
+                        z: -1
+                    }
+
+                    Behavior on color { ColorAnimation { duration: 200 } }
+                    Behavior on border.color { ColorAnimation { duration: 200 } }
+
+                    FluxIcon {
+                        name: root.effectiveIsEpisode ? "tv" : "film"
+                        size: Math.round(emblemBox.width * 0.52)
+                        color: root.hovered ? "#FFFFFF" : "#E2E8F0"
+                        anchors.centerIn: parent
+                        Behavior on color { ColorAnimation { duration: 200 } }
+                    }
+                }
+
+                // Metadata pill badge (EPISODE 02 / 2024 / MOVIE)
+                Rectangle {
+                    visible: root.badgeText.length > 0
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: Math.min(parent.width - 24, badgeLabel.implicitWidth + 20)
+                    height: 22
+                    radius: 11
+                    color: "#1FFFFFFF"
+                    border.width: 1
+                    border.color: "#2EFFFFFF"
+                    clip: true
+
+                    Text {
+                        id: badgeLabel
+                        anchors.centerIn: parent
+                        width: Math.min(implicitWidth, parent.width - 12)
+                        text: root.badgeText
+                        color: "#E2E8F0"
+                        font.pixelSize: 10
+                        font.weight: Font.Bold
+                        font.letterSpacing: 0.9
+                        elide: Text.ElideRight
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+            }
         }
 
-        // ---- Folder: stacked sheets ---------------------------------------------------
+        // ==============================================================================
+        // Folder Art (Stacked sheets with folder icon)
+        // ==============================================================================
         Item {
             visible: root.isFolder
             anchors.fill: parent
