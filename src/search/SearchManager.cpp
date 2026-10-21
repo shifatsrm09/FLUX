@@ -12,6 +12,50 @@
 
 namespace Flux {
 
+namespace {
+
+bool isNonPlayableMediaOrGame(const QString &name, const QJsonObject &obj = QJsonObject()) {
+    // 1. Check category/type fields in JSON metadata if present
+    const QStringList catKeys = {
+        QStringLiteral("category"),
+        QStringLiteral("cat"),
+        QStringLiteral("type"),
+        QStringLiteral("group"),
+        QStringLiteral("section"),
+        QStringLiteral("path")
+    };
+    for (const auto &key : catKeys) {
+        const QString val = obj.value(key).toString().trimmed();
+        if (val.contains(QLatin1String("game"), Qt::CaseInsensitive) ||
+            val.contains(QLatin1String("software"), Qt::CaseInsensitive) ||
+            val.contains(QLatin1String("application"), Qt::CaseInsensitive)) {
+            return true;
+        }
+    }
+
+    // 2. Check release group / scene repack signatures and game-specific naming patterns
+    static const QRegularExpression gameRegex(
+        QStringLiteral(
+            R"((?:(?:^|[\s._-])(?:CODEX|FitGirl|GOG|DODI|SKIDROW|CPY|EMPRESS|PLAZA|FLT|RELOADED|PROPHET|RUNE|TENOKE|Razor1911|ElAmigos|KaOs|TinyRepack)\b|\b(?:PC[\s._-]?Games?|Repacks?|CrackFix|Trainer|ISO[._-]Release)\b))"),
+        QRegularExpression::CaseInsensitiveOption);
+
+    if (gameRegex.match(name).hasMatch()) {
+        return true;
+    }
+
+    // 3. Check for game/installer-specific file extensions
+    static const QRegularExpression extRegex(
+        QStringLiteral(R"(\.(?:iso|exe|rar|zip|7z|bin|cue|torrent)$)"),
+        QRegularExpression::CaseInsensitiveOption);
+    if (extRegex.match(name).hasMatch()) {
+        return true;
+    }
+
+    return false;
+}
+
+} // namespace
+
 bool FolderFilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const {
     if (!sourceModel()) return false;
     const QModelIndex idx = sourceModel()->index(sourceRow, 0, sourceParent);
@@ -299,6 +343,7 @@ void SearchManager::fetchTrending() {
             QString title = m.captured(4).trimmed();
 
             if (id.isEmpty() || title.isEmpty() || seenIds->contains(id)) continue;
+            if (isNonPlayableMediaOrGame(title)) continue;
             seenIds->insert(id);
 
             bool isFolder = seriesRegex.match(title).hasMatch();
@@ -717,6 +762,7 @@ void SearchManager::startIccSearch(quint64 searchId, const QString &query) {
             QString name = obj["name"].toString().trimmed();
             QString image = obj["image"].toString().trimmed();
             if (id.isEmpty() || name.isEmpty()) continue;
+            if (isNonPlayableMediaOrGame(name, obj)) continue;
 
             bool isFolder = seriesRegex.match(name).hasMatch();
 
