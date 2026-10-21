@@ -43,6 +43,7 @@ class TelepartySession : public QObject {
     Q_PROPERTY(QString errorText READ errorText NOTIFY errorChanged)
     Q_PROPERTY(QString customRoomCode READ customRoomCode WRITE setCustomRoomCode NOTIFY customRoomCodeChanged)
     Q_PROPERTY(QString latchedRoomCode READ latchedRoomCode NOTIFY latchedRoomCodeChanged)
+    Q_PROPERTY(QStringList latchedRooms READ latchedRooms NOTIFY latchedRoomsChanged)
 
 public:
     using TransportHook = std::function<bool(const QString &senderUsername, const QJsonObject &message)>;
@@ -62,6 +63,10 @@ public:
     QString latchedRoomCode() const { return m_latchedRoomCode; }
     Q_INVOKABLE void setLatchedRoomCode(const QString &code);
     Q_INVOKABLE void clearLatchedRoomCode();
+    QStringList latchedRooms() const { return m_latchedRooms; }
+    Q_INVOKABLE void addLatchedRoom(const QString &code);
+    Q_INVOKABLE void removeLatchedRoom(const QString &code);
+    Q_INVOKABLE void clearLatchedRooms();
 
     QString memberId() const { return m_memberId; }
     QString hostMemberId() const { return m_hostMemberId; }
@@ -98,6 +103,7 @@ signals:
     void errorChanged();
     void customRoomCodeChanged();
     void latchedRoomCodeChanged();
+    void latchedRoomsChanged();
 
     // The session was created / found and you are now in it
     void joinedSession();
@@ -158,6 +164,7 @@ private:
     QString m_memberId;
     QString m_customRoomCode;
     QString m_latchedRoomCode;
+    QStringList m_latchedRooms;
     QString m_hostMemberId;
     bool m_isHost = false;
     bool m_helloSent = false;

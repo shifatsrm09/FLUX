@@ -23,6 +23,12 @@
 
 namespace Flux {
 
+// ============================================================================
+// Developer Mode PIN Configuration
+// Change this PIN at any time to update the Developer Options unlock code.
+// ============================================================================
+static constexpr const char *kDeveloperPin = "6767";
+
 namespace {
 constexpr qint64 kMinResumeMs = 1000;
 constexpr double kWatchedFraction = 0.93;    // past 93% counts as watched
@@ -1565,44 +1571,6 @@ void UserStore::shutdown() {
     m_settings.sync();
 }
 
-static QString readDevPinFromEnv() {
-    // 1. Check environment variable first
-    const QString envVar = qEnvironmentVariable("DEV_PIN").trimmed();
-    if (!envVar.isEmpty()) return envVar;
-    const QString envVarLower = qEnvironmentVariable("dev_pin").trimmed();
-    if (!envVarLower.isEmpty()) return envVarLower;
-
-    // 2. Check .env file in multiple possible runtime directories
-    const QString appDir = QCoreApplication::applicationDirPath();
-    const QStringList candidatePaths = {
-        QDir(appDir).filePath(QStringLiteral(".env")),
-        QDir(appDir + QStringLiteral("/..")).filePath(QStringLiteral(".env")),
-        QDir(appDir + QStringLiteral("/../..")).filePath(QStringLiteral(".env")),
-        QDir::current().filePath(QStringLiteral(".env"))
-    };
-
-    for (const QString &path : candidatePaths) {
-        QFile file(path);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QTextStream in(&file);
-            while (!in.atEnd()) {
-                QString line = in.readLine().trimmed();
-                if (line.startsWith(QLatin1Char('#')) || line.isEmpty()) continue;
-                if (line.startsWith(QLatin1String("dev_pin="), Qt::CaseInsensitive)) {
-                    QString val = line.mid(8).trimmed();
-                    if ((val.startsWith(QLatin1Char('"')) && val.endsWith(QLatin1Char('"'))) ||
-                        (val.startsWith(QLatin1Char('\'')) && val.endsWith(QLatin1Char('\'')))) {
-                        val = val.mid(1, val.length() - 2);
-                    }
-                    if (!val.isEmpty()) return val;
-                }
-            }
-        }
-    }
-    // Default PIN 6767 for releases / friends where no .env file exists
-    return QStringLiteral("6767");
-}
-
 bool UserStore::devModeUnlocked() const {
     return m_devUnlocked;
 }
@@ -1619,7 +1587,7 @@ void UserStore::setDevModeUnlocked(bool unlocked) {
 }
 
 QString UserStore::devPin() const {
-    return readDevPinFromEnv();
+    return QString::fromLatin1(kDeveloperPin);
 }
 
 void UserStore::setDevPin(const QString &pin) {
@@ -1628,8 +1596,7 @@ void UserStore::setDevPin(const QString &pin) {
 
 bool UserStore::verifyDevPin(const QString &pin) {
     const QString trimmed = pin.trimmed();
-    const QString envPin = readDevPinFromEnv();
-    if ((!envPin.isEmpty() && trimmed == envPin) || trimmed == QStringLiteral("6767")) {
+    if (trimmed == QLatin1String(kDeveloperPin)) {
         setDevModeUnlocked(true);
         return true;
     }

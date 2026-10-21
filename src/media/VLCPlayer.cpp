@@ -1557,6 +1557,37 @@ void VLCPlayer::selectSubtitleTrack(int spuId) {
     learnSubtitleChoice(spuId);  // remember this choice for future streams
 }
 
+QString VLCPlayer::cycleSubtitleTrack() {
+    if (!m_mediaPlayer || m_subtitleTracks.isEmpty()) {
+        return QStringLiteral("None available");
+    }
+
+    if (m_subtitleTracks.size() == 1 && m_subtitleTracks.first().toMap().value(QStringLiteral("id")).toInt() < 0) {
+        return QStringLiteral("None available");
+    }
+
+    const int curId = selectedSubtitleTrack();
+    int curIdx = -1;
+    for (int i = 0; i < m_subtitleTracks.size(); ++i) {
+        if (m_subtitleTracks.at(i).toMap().value(QStringLiteral("id")).toInt() == curId) {
+            curIdx = i;
+            break;
+        }
+    }
+
+    const int nextIdx = (curIdx + 1) % m_subtitleTracks.size();
+    const QVariantMap nextTrack = m_subtitleTracks.at(nextIdx).toMap();
+    const int nextId = nextTrack.value(QStringLiteral("id")).toInt();
+    const QString name = nextTrack.value(QStringLiteral("name")).toString();
+
+    selectSubtitleTrack(nextId);
+
+    if (nextId < 0 || name.compare(QStringLiteral("Disable"), Qt::CaseInsensitive) == 0) {
+        return QStringLiteral("Disabled");
+    }
+    return name.isEmpty() ? QString("Track %1").arg(nextId) : name;
+}
+
 QString VLCPlayer::formattedTime() const {
     return formatMilliseconds(m_timeMs);
 }

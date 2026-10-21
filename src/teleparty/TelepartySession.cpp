@@ -59,7 +59,22 @@ TelepartySession::TelepartySession(QObject *parent)
     connect(m_client, &SyncplayClient::peerLeft, this, &TelepartySession::onPeerLeft);
 
     QSettings settings;
-    m_latchedRoomCode = settings.value(QStringLiteral("teleparty/latchedCode"), QString()).toString().trimmed().toUpper();
+    m_latchedRooms = settings.value(QStringLiteral("teleparty/latchedRooms")).toStringList();
+    if (m_latchedRooms.isEmpty()) {
+        const QString single = settings.value(QStringLiteral("teleparty/latchedCode")).toString().trimmed().toUpper();
+        if (!single.isEmpty()) {
+            m_latchedRooms.append(single);
+        }
+    }
+    QStringList cleanedRooms;
+    for (const QString &r : m_latchedRooms) {
+        const QString t = r.trimmed().toUpper();
+        if (!t.isEmpty() && !cleanedRooms.contains(t) && cleanedRooms.size() < 3) {
+            cleanedRooms.append(t);
+        }
+    }
+    m_latchedRooms = cleanedRooms;
+    m_latchedRoomCode = m_latchedRooms.isEmpty() ? QString() : m_latchedRooms.first();
     connect(m_client, &SyncplayClient::connectionFailed, this, [this](const QString &reason) {
         if (m_state == State::Connecting || m_state == State::Reconnecting) {
             if (reason.contains(QLatin1String("TLS"), Qt::CaseInsensitive) ||
@@ -149,24 +164,72 @@ void TelepartySession::setCustomRoomCode(const QString &code) {
     const QString trimmed = code.trimmed().toUpper();
     if (m_customRoomCode == trimmed) return;
     m_customRoomCode = trimmed;
+    if (!m_customRoomCode.isEmpty()) {
+        removeLatchedRoom(m_customRoomCode);
+    }
     emit customRoomCodeChanged();
 }
 
-void TelepartySession::setLatchedRoomCode(const QString &code) {
+void TelepartySession::addLatchedRoom(const QString &code) {
     const QString trimmed = code.trimmed().toUpper();
-    if (m_latchedRoomCode == trimmed) return;
-    m_latchedRoomCode = trimmed;
-    QSettings settings;
-    if (m_latchedRoomCode.isEmpty()) {
-        settings.remove(QStringLiteral("teleparty/latchedCode"));
-    } else {
-        settings.setValue(QStringLiteral("teleparty/latchedCode"), m_latchedRoomCode);
+    if (trimmed.isEmpty()) return;
+    if (!m_customRoomCode.isEmpty() && trimmed == m_customRoomCode) return;
+
+    m_latchedRooms.removeAll(trimmed);
+    m_latchedRooms.prepend(trimmed);
+    while (m_latchedRooms.size() > 3) {
+        m_latchedRooms.removeLast();
     }
+    m_latchedRoomCode = m_latchedRooms.isEmpty() ? QString() : m_latchedRooms.first();
+
+    QSettings settings;
+    settings.setValue(QStringLiteral("teleparty/latchedRooms"), m_latchedRooms);
+    if (!m_latchedRoomCode.isEmpty()) {
+        settings.setValue(QStringLiteral("teleparty/latchedCode"), m_latchedRoomCode);
+    } else {
+        settings.remove(QStringLiteral("teleparty/latchedCode"));
+    }
+    emit latchedRoomsChanged();
     emit latchedRoomCodeChanged();
 }
 
+void TelepartySession::removeLatchedRoom(const QString &code) {
+    const QString trimmed = code.trimmed().toUpper();
+    if (m_latchedRooms.removeAll(trimmed) > 0) {
+        m_latchedRoomCode = m_latchedRooms.isEmpty() ? QString() : m_latchedRooms.first();
+        QSettings settings;
+        settings.setValue(QStringLiteral("teleparty/latchedRooms"), m_latchedRooms);
+        if (!m_latchedRoomCode.isEmpty()) {
+            settings.setValue(QStringLiteral("teleparty/latchedCode"), m_latchedRoomCode);
+        } else {
+            settings.remove(QStringLiteral("teleparty/latchedCode"));
+        }
+        emit latchedRoomsChanged();
+        emit latchedRoomCodeChanged();
+    }
+}
+
+void TelepartySession::clearLatchedRooms() {
+    if (m_latchedRooms.isEmpty()) return;
+    m_latchedRooms.clear();
+    m_latchedRoomCode.clear();
+    QSettings settings;
+    settings.remove(QStringLiteral("teleparty/latchedRooms"));
+    settings.remove(QStringLiteral("teleparty/latchedCode"));
+    emit latchedRoomsChanged();
+    emit latchedRoomCodeChanged();
+}
+
+void TelepartySession::setLatchedRoomCode(const QString &code) {
+    if (code.trimmed().isEmpty()) {
+        clearLatchedRooms();
+    } else {
+        addLatchedRoom(code);
+    }
+}
+
 void TelepartySession::clearLatchedRoomCode() {
-    setLatchedRoomCode(QString());
+    clearLatchedRooms();
 }
 
 void TelepartySession::host() {
@@ -263,10 +326,11 @@ void TelepartySession::becomeJoined() {
     emit joinedSession();
     FLUX_LOG_INFO("Teleparty", QString("Joined session %1 (%2 members)").arg(m_code).arg(memberCount()));
 
-    // If a guest entered a room code that starts with a letter and connected successfully,
-    // latch it for future quick reconnects.
-    if (!m_isHost && !m_code.isEmpty() && m_code.at(0).isLetter()) {
-        setLatchedRoomCode(m_code);
+    // Latch room for quick reconnects (ONLY for guests joining someone else's room)
+    if (!m_isHost && !m_code.isEmpty() && m_code.length() >= 3) {
+        if (m_customRoomCode.isEmpty() || m_code != m_customRoomCode) {
+            addLatchedRoom(m_code);
+        }
     }
 }
 

@@ -114,6 +114,7 @@ public slots:
     Q_INVOKABLE void seekRelative(qint64 deltaMs);
     Q_INVOKABLE void selectAudioTrack(int trackId);
     Q_INVOKABLE void selectSubtitleTrack(int spuId);
+    Q_INVOKABLE QString cycleSubtitleTrack();
     Q_INVOKABLE void refreshTracks();
     Q_INVOKABLE void playFrom(const QString &url, qint64 startMs, qreal startPosition = -1.0);
     Q_INVOKABLE void setLanguagePreferences(const QStringList &audio, const QString &subtitle);

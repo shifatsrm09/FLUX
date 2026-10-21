@@ -832,6 +832,10 @@ ApplicationWindow {
                 playerView.adjustVolume(-5)
                 event.accepted = true
                 break
+            case Qt.Key_V:
+                if (!event.isAutoRepeat) playerView.cycleSubtitles()
+                event.accepted = true
+                break
             case Qt.Key_M:
                 if (!event.isAutoRepeat) playerView.toggleMute()
                 event.accepted = true
@@ -945,12 +949,18 @@ ApplicationWindow {
                                       || fluxSync.localVerificationState === "UnresolvedMetadata"
                                       || fluxSync.localVerificationState === "PlaybackError"))
                                   || window.partyServerMismatch
-            nowPlayingWarning: window.partyServerMismatch
-                               ? ("You don't support " + (window.partyMismatchServerName || "this server") + " on your current network.")
-                               : (fluxSync
-                                  ? "A participant is playing \"" + fluxSync.currentTitle
-                                    + "\". Add this file to your Library and open it to join."
-                                  : "Add the playing file to your Library to join playback.")
+            nowPlayingWarning: {
+                if (window.partyServerMismatch) {
+                    var sName = (window.partyMismatchServerName || "").toLowerCase()
+                    var sTag = "ICC/DHAKA FLIX"
+                    if (sName.indexOf("icc") !== -1) sTag = "ICC"
+                    else if (sName.indexOf("dhaka") !== -1) sTag = "DHAKA FLIX"
+                    return "Now Playing: " + sTag + " Content Unsupported on Your Network"
+                }
+                return fluxSync
+                    ? ("A participant is playing \"" + fluxSync.currentTitle + "\". Add this file to your Library and open it to join.")
+                    : "Add the playing file to your Library to join playback."
+            }
             showNowPlaying: ((fluxPlayer
                              && (fluxPlayer.isPlaying
                                  || (window.inTeleparty

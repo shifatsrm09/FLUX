@@ -67,7 +67,9 @@ Popup {
         if (!fluxTeleparty) return
         var code = codeField.text.trim()
         if (code.length < 3) return
-        fluxTeleparty.join(code)
+        Qt.callLater(function() {
+            fluxTeleparty.join(code)
+        })
     }
 
     background: Rectangle {
@@ -159,7 +161,13 @@ Popup {
                         Layout.fillWidth: true
                         implicitHeight: 40
                         text: "Host"
-                        onClicked: if (fluxTeleparty) fluxTeleparty.host()
+                        onClicked: {
+                            if (fluxTeleparty) {
+                                Qt.callLater(function() {
+                                    fluxTeleparty.host()
+                                })
+                            }
+                        }
                     }
 
                     FluxButton {
@@ -175,65 +183,87 @@ Popup {
                     }
                 }
 
-                // Saved latched room option (CFAT join cross(icon))
-                Rectangle {
+                // Saved latched rooms (up to last 3 entries with rejoin option)
+                ColumnLayout {
                     Layout.fillWidth: true
-                    implicitHeight: 46
-                    visible: !!fluxTeleparty && fluxTeleparty.latchedRoomCode.length > 0
-                    radius: 10
-                    color: "#18FFFFFF"
-                    border.width: 1
-                    border.color: Theme.border
+                    visible: !!fluxTeleparty && fluxTeleparty.latchedRooms.length > 0
+                    spacing: 6
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 12
-                        anchors.rightMargin: 8
-                        spacing: 8
+                    Text {
+                        text: "Recent Rooms"
+                        color: Theme.textMute
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        Layout.bottomMargin: 2
+                    }
 
-                        RowLayout {
+                    Repeater {
+                        model: fluxTeleparty ? fluxTeleparty.latchedRooms : []
+
+                        Rectangle {
+                            id: roomCard
+                            required property string modelData
+
                             Layout.fillWidth: true
-                            Layout.preferredWidth: 0
-                            spacing: 6
+                            implicitHeight: 40
+                            radius: 10
+                            color: "#18FFFFFF"
+                            border.width: 1
+                            border.color: Theme.border
 
-                            Rectangle {
-                                width: 6
-                                height: 6
-                                radius: 3
-                                color: Theme.success
-                            }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 8
+                                spacing: 8
 
-                            Text {
-                                text: fluxTeleparty ? fluxTeleparty.latchedRoomCode : ""
-                                color: Theme.text
-                                font.pixelSize: 13
-                                font.weight: Font.Bold
-                                font.letterSpacing: 1.5
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                        }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 0
+                                    spacing: 6
 
-                        FluxButton {
-                            implicitHeight: 30
-                            text: "Join"
-                            onClicked: {
-                                if (fluxTeleparty) {
-                                    fluxTeleparty.clearError()
-                                    fluxTeleparty.join(fluxTeleparty.latchedRoomCode)
+                                    Rectangle {
+                                        width: 6
+                                        height: 6
+                                        radius: 3
+                                        color: Theme.success
+                                    }
+
+                                    Text {
+                                        text: roomCard.modelData
+                                        color: Theme.text
+                                        font.pixelSize: 13
+                                        font.weight: Font.Bold
+                                        font.letterSpacing: 1.5
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
                                 }
-                            }
-                        }
 
-                        IconButton {
-                            iconName: "close"
-                            iconSize: 13
-                            implicitWidth: 28
-                            implicitHeight: 28
-                            tip: "Forget"
-                            tipAbove: true
-                            onClicked: {
-                                if (fluxTeleparty) fluxTeleparty.clearLatchedRoomCode()
+                                FluxButton {
+                                    implicitHeight: 28
+                                    text: "Rejoin"
+                                    onClicked: {
+                                        if (fluxTeleparty) {
+                                            fluxTeleparty.clearError()
+                                            Qt.callLater(function() {
+                                                fluxTeleparty.join(roomCard.modelData)
+                                            })
+                                        }
+                                    }
+                                }
+
+                                IconButton {
+                                    iconName: "close"
+                                    iconSize: 12
+                                    implicitWidth: 26
+                                    implicitHeight: 26
+                                    tip: "Forget"
+                                    tipAbove: true
+                                    onClicked: {
+                                        if (fluxTeleparty) fluxTeleparty.removeLatchedRoom(roomCard.modelData)
+                                    }
+                                }
                             }
                         }
                     }
@@ -330,37 +360,49 @@ Popup {
                 }
 
                 RowLayout {
-                    visible: !!fluxTeleparty && fluxTeleparty.latchedRoomCode.length > 0
+                    visible: !!fluxTeleparty && fluxTeleparty.latchedRooms.length > 0
                     Layout.fillWidth: true
                     spacing: 6
 
                     Text {
-                        text: "Saved party:"
+                        text: "Recent:"
                         color: Theme.textMute
                         font.pixelSize: 11
                     }
 
-                    Rectangle {
-                        radius: 6
-                        color: "#20FFFFFF"
-                        implicitHeight: 22
-                        implicitWidth: latchedChipTxt.implicitWidth + 14
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 6
 
-                        Text {
-                            id: latchedChipTxt
-                            anchors.centerIn: parent
-                            text: fluxTeleparty ? fluxTeleparty.latchedRoomCode : ""
-                            color: Theme.text
-                            font.pixelSize: 11
-                            font.weight: Font.Bold
-                            font.letterSpacing: 1
-                        }
+                        Repeater {
+                            model: fluxTeleparty ? fluxTeleparty.latchedRooms : []
 
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                codeField.text = fluxTeleparty.latchedRoomCode
+                            Rectangle {
+                                id: chipRec
+                                required property string modelData
+
+                                radius: 6
+                                color: "#20FFFFFF"
+                                implicitHeight: 22
+                                implicitWidth: chipTxt.implicitWidth + 14
+
+                                Text {
+                                    id: chipTxt
+                                    anchors.centerIn: parent
+                                    text: chipRec.modelData
+                                    color: Theme.text
+                                    font.pixelSize: 11
+                                    font.weight: Font.Bold
+                                    font.letterSpacing: 1
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        codeField.text = chipRec.modelData
+                                    }
+                                }
                             }
                         }
                     }
@@ -501,8 +543,11 @@ Popup {
                     variant: "secondary"
                     text: "Leave session"
                     onClicked: {
-                        if (fluxTeleparty) fluxTeleparty.leave()
-                        menu.close()
+                        if (fluxTeleparty) {
+                            Qt.callLater(function() {
+                                fluxTeleparty.leave()
+                            })
+                        }
                     }
                 }
             }

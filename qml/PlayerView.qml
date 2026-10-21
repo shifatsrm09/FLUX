@@ -235,6 +235,18 @@ Rectangle {
         }
     }
 
+    function cycleSubtitles() {
+        if (!root.player) return
+        var name = root.player.cycleSubtitleTrack()
+        if (name === "None available") {
+            root.showOsd("Subtitles: None available", -1)
+        } else if (name === "Disabled") {
+            root.showOsd("Subtitles: Disabled", -1)
+        } else {
+            root.showOsd("Subtitles: " + name, -1)
+        }
+    }
+
     function seekBy(ms) {
         if (!root.player) return
         root.player.seekRelative(ms)

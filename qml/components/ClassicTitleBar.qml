@@ -350,9 +350,16 @@ Item {
                 }
 
                 Text {
-                    text: (window && window.partyServerMismatch)
-                          ? "You don't support this server"
-                          : (root.nowPlayingNeedsMedia ? "Add local file" : "Now Playing")
+                    text: {
+                        if (window && window.partyServerMismatch) {
+                            var sName = (window.partyMismatchServerName || "").toLowerCase()
+                            var sTag = "ICC/DHAKA FLIX"
+                            if (sName.indexOf("icc") !== -1) sTag = "ICC"
+                            else if (sName.indexOf("dhaka") !== -1) sTag = "DHAKA FLIX"
+                            return "Now Playing: " + sTag + " Content Unsupported on Your Network"
+                        }
+                        return root.nowPlayingNeedsMedia ? "Add local file" : "Now Playing"
+                    }
                     color: (window && window.partyServerMismatch)
                            ? "#FFFDE68A"
                            : (root.nowPlayingNeedsMedia ? "#FFFF9AA2" : Theme.text)
@@ -452,8 +459,13 @@ Item {
             TelepartyMenu {
                 id: telepartyMenu
 
-                x: telepartyButton.width - width
+                property real targetX: telepartyButton.width - width
+                x: opened ? x : targetX
                 y: telepartyButton.height + 10
+
+                onAboutToShow: {
+                    x = telepartyButton.width - width
+                }
 
                 onClosed: telepartyButton.lastClosed = Date.now()
             }
