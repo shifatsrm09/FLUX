@@ -265,6 +265,7 @@ UserStore::UserStore(QObject *parent)
     m_posterNam = new QNetworkAccessManager(this);
     m_autoFetchPosters = m_settings.value(QStringLiteral("posters/autoFetch"), true).toBool();
     m_tmdbApiKey = m_settings.value(QStringLiteral("posters/tmdbApiKey"), QString()).toString();
+    m_devUnlocked = m_settings.value(QStringLiteral("developer/unlocked"), false).toBool();
 
     const QFileInfo settingsInfo(m_settings.fileName());
     QDir().mkpath(settingsInfo.absolutePath());
@@ -1589,6 +1590,7 @@ bool UserStore::devModeUnlocked() const {
 void UserStore::setDevModeUnlocked(bool unlocked) {
     if (m_devUnlocked == unlocked) return;
     m_devUnlocked = unlocked;
+    setValue(QStringLiteral("developer/unlocked"), unlocked);
     if (!unlocked) {
         setUseCustomTelepartyCode(false);
         setCustomTelepartyCode(QString());
