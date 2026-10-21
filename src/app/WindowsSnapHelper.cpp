@@ -25,31 +25,43 @@ public:
 
         // Re-apply styles if visibility changes (e.g. from hidden startup popup to normal window)
         QObject::connect(m_window, &QWindow::visibilityChanged, m_window, [this](QWindow::Visibility visibility) {
-            if (visibility != QWindow::Hidden) {
+            if (visibility != QWindow::Hidden && visibility != QWindow::Minimized) {
                 applyWin32Styles();
             }
         });
     }
 
     void applyWin32Styles() {
-        if (!m_hwnd) return;
+        if (!m_hwnd || !m_window) return;
+        if (IsIconic(m_hwnd)) return;
 
-        // Ensure window has caption, thickframe (resizing border), minimize/maximize boxes, and system menu.
-        // Windows 11 DWM strictly requires WS_THICKFRAME and WS_MAXIMIZEBOX to enable:
-        //  1) Snapping to screen edges (Aero Snap)
-        //  2) Dragging to top-of-monitor Snap Bar
-        //  3) Windows 11 Snap Layouts flyout on hover
+        bool isFullScreen = (m_window->visibility() == QWindow::FullScreen);
         LONG_PTR style = GetWindowLongPtr(m_hwnd, GWL_STYLE);
-        LONG_PTR required = WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU;
-        if ((style & required) != required) {
-            SetWindowLongPtr(m_hwnd, GWL_STYLE, style | required);
+
+        if (isFullScreen) {
+            // In fullscreen, remove framing and caption styles so DWM / OS doesn't render borders or margins
+            LONG_PTR frameStyles = WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU;
+            LONG_PTR targetStyle = (style & ~frameStyles) | WS_POPUP;
+            if (style != targetStyle) {
+                SetWindowLongPtr(m_hwnd, GWL_STYLE, targetStyle);
+            }
+            MARGINS margins = { 0, 0, 0, 0 };
+            DwmExtendFrameIntoClientArea(m_hwnd, &margins);
+            SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
+                         SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            return;
         }
 
-        // Extend DWM frame into client area so DWM handles drop shadows and modern rounded window corners
+        // Windowed / Maximized:
+        LONG_PTR required = WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU;
+        LONG_PTR targetStyle = (style | required) & ~WS_POPUP;
+        if (style != targetStyle) {
+            SetWindowLongPtr(m_hwnd, GWL_STYLE, targetStyle);
+        }
+
         MARGINS margins = { 0, 0, 0, 1 };
         DwmExtendFrameIntoClientArea(m_hwnd, &margins);
 
-        // Inform Windows that frame styles have changed
         SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
                      SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
@@ -67,10 +79,17 @@ public:
         switch (msg->message) {
         case WM_NCCALCSIZE: {
             if (msg->wParam == TRUE) {
-                if (IsZoomed(m_hwnd)) {
-                    // When maximized, Windows pushes borders outside the monitor work area.
-                    // Adjust rgrc[0] to fit exactly within rcWork so the window doesn't bleed into
-                    // adjacent monitors or overlap the Windows taskbar.
+                if (m_window && m_window->visibility() == QWindow::FullScreen) {
+                    HMONITOR hMonitor = MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST);
+                    if (hMonitor) {
+                        MONITORINFO mi;
+                        mi.cbSize = sizeof(MONITORINFO);
+                        if (GetMonitorInfo(hMonitor, &mi)) {
+                            NCCALCSIZE_PARAMS *params = reinterpret_cast<NCCALCSIZE_PARAMS *>(msg->lParam);
+                            params->rgrc[0] = mi.rcMonitor;
+                        }
+                    }
+                } else if (IsZoomed(m_hwnd)) {
                     HMONITOR hMonitor = MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST);
                     if (hMonitor) {
                         MONITORINFO mi;
@@ -97,14 +116,24 @@ public:
                 MONITORINFO mi;
                 mi.cbSize = sizeof(MONITORINFO);
                 if (GetMonitorInfo(hMonitor, &mi)) {
-                    RECT rcWork = mi.rcWork;
-                    RECT rcMonitor = mi.rcMonitor;
-                    mmi->ptMaxPosition.x = rcWork.left - rcMonitor.left;
-                    mmi->ptMaxPosition.y = rcWork.top - rcMonitor.top;
-                    mmi->ptMaxSize.x = rcWork.right - rcWork.left;
-                    mmi->ptMaxSize.y = rcWork.bottom - rcWork.top;
-                    mmi->ptMaxTrackSize.x = mmi->ptMaxSize.x;
-                    mmi->ptMaxTrackSize.y = mmi->ptMaxSize.y;
+                    if (m_window && m_window->visibility() == QWindow::FullScreen) {
+                        RECT rcMonitor = mi.rcMonitor;
+                        mmi->ptMaxPosition.x = 0;
+                        mmi->ptMaxPosition.y = 0;
+                        mmi->ptMaxSize.x = rcMonitor.right - rcMonitor.left;
+                        mmi->ptMaxSize.y = rcMonitor.bottom - rcMonitor.top;
+                        mmi->ptMaxTrackSize.x = mmi->ptMaxSize.x;
+                        mmi->ptMaxTrackSize.y = mmi->ptMaxSize.y;
+                    } else {
+                        RECT rcWork = mi.rcWork;
+                        RECT rcMonitor = mi.rcMonitor;
+                        mmi->ptMaxPosition.x = rcWork.left - rcMonitor.left;
+                        mmi->ptMaxPosition.y = rcWork.top - rcMonitor.top;
+                        mmi->ptMaxSize.x = rcWork.right - rcWork.left;
+                        mmi->ptMaxSize.y = rcWork.bottom - rcWork.top;
+                        mmi->ptMaxTrackSize.x = mmi->ptMaxSize.x;
+                        mmi->ptMaxTrackSize.y = mmi->ptMaxSize.y;
+                    }
                 }
             }
             *result = 0;
@@ -152,11 +181,6 @@ public:
 
             // 2. Title bar area (top 48 pixels)
             if (logicalY >= 0 && logicalY < 48) {
-                // Maximize button: enables Windows 11 Snap Layouts flyout on hover
-                if (logicalX >= (winWidth - 92) && logicalX < (winWidth - 46)) {
-                    *result = HTMAXBUTTON;
-                    return true;
-                }
 
                 // If cursor is in the empty caption areas:
                 // a) Left margin before logo (x >= 6 && x < 30)

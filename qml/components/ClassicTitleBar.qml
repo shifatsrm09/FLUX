@@ -111,13 +111,13 @@ Item {
     Binding {
         target: (typeof fluxSnap !== "undefined" && fluxSnap) ? fluxSnap : null
         property: "leftInteractiveWidth"
-        value: root.overlayMode ? 0 : (brandRow.x + brandRow.width + 12)
+        value: root.overlayMode ? 0 : (brandRow.x + (brandRow.width > 0 ? brandRow.width : brandRow.implicitWidth) + 12)
     }
 
     Binding {
         target: (typeof fluxSnap !== "undefined" && fluxSnap) ? fluxSnap : null
         property: "rightInteractiveWidth"
-        value: rightRow.width + 8
+        value: (rightRow.width > 0 ? rightRow.width : rightRow.implicitWidth) + 8
     }
     // ---- Backgrounds ---------------------------------------------------------
 
@@ -159,7 +159,7 @@ Item {
 
         onPressed: function(mouse) {
             if (mouse.button === Qt.LeftButton && root.window) {
-                if (Qt.platform.os !== "windows") root.window.startSystemMove()
+                root.window.startSystemMove()
             }
         }
 
@@ -173,6 +173,7 @@ Item {
     // ---- Left: brand + nav -------------------------------------------------------
     RowLayout {
         id: brandRow
+        width: implicitWidth
 
         anchors.left: parent.left
         anchors.leftMargin: 32
@@ -301,6 +302,7 @@ Item {
     // ---- Right: now playing, dev tools, window controls ----
     RowLayout {
         id: rightRow
+        width: implicitWidth
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.bottom: parent.bottom

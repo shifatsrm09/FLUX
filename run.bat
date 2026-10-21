@@ -1,5 +1,6 @@
 @echo off
 setlocal
+cd /d "%~dp0"
 
 echo =======================================================
 echo               FLUX - Native Desktop Player
@@ -44,6 +45,6 @@ if not exist "build\Release\Qt6Quick.dll" (
 
 :: 6. Launch FLUX
 echo [OK] Launching FLUX.exe...
-start "" "build\Release\FLUX.exe"
+start "" /d "%~dp0build\Release" "FLUX.exe"
 
 endlocal

@@ -22,6 +22,8 @@ ApplicationWindow {
 
     property bool startupComplete: false
     property bool isFullscreen: false
+    property bool wasMaximizedBeforeFullscreen: false
+
     property string currentPage: "search" // "search" | "library" | "player"
     property string pageBeforePlayer: "search" // where Back from the player returns to
     property string currentPlayingTitle: ""
@@ -135,11 +137,25 @@ ApplicationWindow {
     }
 
     function toggleFullscreen() {
-        isFullscreen = !isFullscreen
-        if (isFullscreen) {
+        if (!isFullscreen) {
+            wasMaximizedBeforeFullscreen = (window.visibility === Window.Maximized)
+            isFullscreen = true
             window.showFullScreen()
         } else {
-            window.showNormal()
+            isFullscreen = false
+            if (wasMaximizedBeforeFullscreen) {
+                window.showMaximized()
+            } else {
+                window.showNormal()
+            }
+        }
+    }
+
+    onVisibilityChanged: {
+        if (window.visibility === Window.FullScreen) {
+            isFullscreen = true
+        } else if (isFullscreen) {
+            isFullscreen = false
         }
     }
 
@@ -847,6 +863,9 @@ ApplicationWindow {
             case Qt.Key_Escape:
                 if (playerView.episodesPanelOpen) {
                     playerView.episodesPanelOpen = false
+                    event.accepted = true
+                } else if (window.isFullscreen) {
+                    window.toggleFullscreen()
                     event.accepted = true
                 }
                 break

@@ -9,7 +9,7 @@ Item {
 
     anchors.fill: parent
     z: 9999
-    visible: window && window.visibility !== Window.Maximized && window.visibility !== Window.FullScreen
+    visible: window && window.visibility !== Window.Maximized && window.visibility !== Window.FullScreen && !window.isFullscreen
 
     // Top edge
     MouseArea {

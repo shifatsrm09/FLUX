@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img alt="FLUX version 2.2.2" src="https://img.shields.io/badge/version-2.2.2-e50914">
+  <img alt="FLUX version 2.2.3" src="https://img.shields.io/badge/version-2.2.3-e50914">
   <img alt="C++20" src="https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white">
   <img alt="Qt 6" src="https://img.shields.io/badge/UI-Qt%206-41CD52?logo=qt&logoColor=white">
   <img alt="Windows desktop app" src="https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white">
