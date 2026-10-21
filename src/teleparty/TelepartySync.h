@@ -38,6 +38,7 @@ class TelepartySync : public QObject {
 
     // Set by the UI: true while the player page is on screen
     Q_PROPERTY(bool watching READ watching WRITE setWatching NOTIFY watchingChanged)
+    Q_PROPERTY(bool partyPlaying READ partyPlaying NOTIFY partyPlayingChanged)
     Q_PROPERTY(QString currentUrl READ currentUrl NOTIFY currentMediaChanged)
     Q_PROPERTY(QString currentTitle READ currentTitle NOTIFY currentMediaChanged)
     Q_PROPERTY(bool hasPartyMedia READ hasPartyMedia NOTIFY currentMediaChanged)
@@ -78,6 +79,7 @@ public:
 
     bool watching() const { return m_watching; }
     void setWatching(bool watching);
+    bool partyPlaying() const { return m_timeline.isValid() ? m_timeline.snapshot().playing : m_partyPlaying; }
 
     QString currentUrl() const { return m_currentUrl; }
     QString currentTitle() const { return m_currentTitle; }
@@ -195,6 +197,7 @@ public:
 
 signals:
     void watchingChanged();
+    void partyPlayingChanged();
     void currentMediaChanged();
     void diagnosticsChanged();
     void localVerificationChanged();

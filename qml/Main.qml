@@ -430,7 +430,15 @@ ApplicationWindow {
                 if (window.sameMediaUrl(fluxPlayer.url, finalUrl)
                         && (fluxPlayer.state === "Paused" || fluxPlayer.state === "Playing")) {
                     if (startMs > 0) fluxPlayer.remoteSeekTo(startMs)
-                    if (fluxPlayer.isPaused) fluxPlayer.remoteResume()
+                    if (window.inTeleparty && fluxSync) {
+                        if (fluxSync.partyPlaying && fluxPlayer.isPaused) {
+                            fluxPlayer.remoteResume()
+                        } else if (!fluxSync.partyPlaying && fluxPlayer.isPlaying) {
+                            fluxPlayer.remotePause()
+                        }
+                    } else {
+                        if (fluxPlayer.isPaused) fluxPlayer.remoteResume()
+                    }
                 } else if (startMs > 0) {
                     fluxPlayer.playFrom(finalUrl, startMs)
                 } else {
@@ -450,7 +458,7 @@ ApplicationWindow {
     }
 
     function returnToHome() {
-        if (fluxPlayer) {
+        if (fluxPlayer && !window.inTeleparty) {
             fluxPlayer.pause()
         }
         if (isFullscreen) {
@@ -494,7 +502,7 @@ ApplicationWindow {
 
     // Back from the player: to the page it was started from (browse or Library)
     function returnToSearch() {
-        if (fluxPlayer) {
+        if (fluxPlayer && !window.inTeleparty) {
             fluxPlayer.pause()
         }
         if (isFullscreen) {
@@ -876,7 +884,6 @@ ApplicationWindow {
                     return
                 }
                 currentPage = "player"
-                if (fluxPlayer && fluxPlayer.isPaused) fluxPlayer.resume()
             }
             onHomeClicked: window.returnToHome()
             onSearchClicked: window.showSearch()

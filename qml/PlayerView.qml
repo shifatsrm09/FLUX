@@ -424,7 +424,7 @@ Rectangle {
                 Layout.alignment: Qt.AlignTop
 
                 onClicked: {
-                    if (root.player) {
+                    if (root.player && (!window || !window.inTeleparty)) {
                         root.player.pause()
                     }
                     root.backRequested()

@@ -638,6 +638,12 @@ void TelepartySync::setWatching(bool watching) {
             }
             return;
         }
+        const qint64 targetPos = m_timeline.isValid()
+                                     ? m_timeline.expectedPositionMs(estimatedHostNowMs())
+                                     : partyTimeMs();
+        const bool shouldPlay = m_timeline.isValid() ? m_timeline.snapshot().playing : m_partyPlaying;
+        align(targetPos, shouldPlay, QString(), ActionOrigin::JoinSync);
+
         armNeedState();
         m_session->sendEvent(QStringLiteral("syncme"));
     }
@@ -792,6 +798,7 @@ void TelepartySync::onUserToggledPlay(bool playing, qint64 timeMs) {
     m_partyTimeMs = posMs;
     m_partyPlaying = playing;
     m_partyUpdatedLocalMs = localNow;
+    emit partyPlayingChanged();
 
     TimelineSnapshot snap = m_timeline.snapshot();
     snap.sessionId = m_session->code();
@@ -1218,6 +1225,7 @@ void TelepartySync::handleState(const QVariantMap &data, const QString &from) {
     if (dur > 0) m_partyDurationMs = dur;
     m_partyPlaying = playing;
     m_partyUpdatedLocalMs = localNowMs();
+    emit partyPlayingChanged();
 
     TimelineSnapshot snap;
     snap.sessionId = m_session ? m_session->code() : QString();
@@ -1383,6 +1391,7 @@ void TelepartySync::handlePlaybackTransition(const QString &type, const QVariant
     m_partyTimeMs = expectedNowPos;
     m_partyPlaying = action.playing;
     m_partyUpdatedLocalMs = localNowMs();
+    emit partyPlayingChanged();
 
     if (!m_currentUrl.isEmpty()) {
         emit partyMediaAvailable(m_currentUrl, m_currentTitle, expectedNowPos, m_partyDurationMs);
@@ -2539,9 +2548,18 @@ void TelepartySync::executeScheduledAction(const ScheduledAction &action) {
     if (m_mediaMode == TelepartyMediaMode::LocalFile && !isLocalParticipantSynchronized()) {
         return;
     }
-    // Not on the player page (or not loaded on the party video yet): keep tracking the
-    // party's timestamp so clicking Continue Watching / Now Playing starts right there.
-    if (!m_watching || m_currentUrl.isEmpty() || !m_player || !isSameOrMatchingMedia(m_player->url(), m_currentUrl)) {
+    const bool playerHasPartyMedia = m_player &&
+                                     !m_currentUrl.isEmpty() &&
+                                     isSameOrMatchingMedia(m_player->url(), m_currentUrl) &&
+                                     m_player->state() != QLatin1String("Idle") &&
+                                     m_player->state() != QLatin1String("Stopped");
+
+    // Not on the player page (and not currently playing the party video in the background):
+    // keep tracking the party's timestamp so clicking Continue Watching / Now Playing starts right there.
+    if (!m_watching && !playerHasPartyMedia) {
+        return;
+    }
+    if (m_currentUrl.isEmpty() || !m_player || !isSameOrMatchingMedia(m_player->url(), m_currentUrl)) {
         return;
     }
 
@@ -2935,6 +2953,7 @@ void TelepartySync::resetParty() {
     m_partyDurationMs = 0;
     m_partyPlaying = true;
     m_partyUpdatedLocalMs = 0;
+    emit partyPlayingChanged();
     m_lastOpenUrl.clear();
     m_lastOpenAt = 0;
     m_needState = false;

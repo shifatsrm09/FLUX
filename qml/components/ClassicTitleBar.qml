@@ -320,6 +320,7 @@ Item {
 
                 Equalizer {
                     running: root.showNowPlaying && !root.nowPlayingNeedsMedia && root.visible
+                             && (window && window.inTeleparty && fluxSync ? fluxSync.partyPlaying : (!!fluxPlayer && fluxPlayer.isPlaying))
                     Layout.alignment: Qt.AlignVCenter
                 }
 
