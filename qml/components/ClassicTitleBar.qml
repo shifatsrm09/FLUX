@@ -317,11 +317,15 @@ Item {
             implicitHeight: 24
             implicitWidth: nowPlayingRow.implicitWidth + 18
             radius: 12
-            color: root.nowPlayingNeedsMedia
-                   ? (nowPlayingMouse.containsMouse ? "#70A9212B" : "#55A9212B")
-                   : (nowPlayingMouse.containsMouse ? "#405865F2" : Theme.accentSoft)
+            color: (window && window.partyServerMismatch)
+                   ? (nowPlayingMouse.containsMouse ? "#70D97706" : "#55B45309")
+                   : (root.nowPlayingNeedsMedia
+                      ? (nowPlayingMouse.containsMouse ? "#70A9212B" : "#55A9212B")
+                      : (nowPlayingMouse.containsMouse ? "#405865F2" : Theme.accentSoft))
             border.width: 1
-            border.color: root.nowPlayingNeedsMedia ? "#FFFF6573" : Theme.accentRing
+            border.color: (window && window.partyServerMismatch)
+                          ? "#FFF59E0B"
+                          : (root.nowPlayingNeedsMedia ? "#FFFF6573" : Theme.accentRing)
 
             Behavior on color { ColorAnimation { duration: 120 } }
 
@@ -331,14 +335,18 @@ Item {
                 spacing: 6
 
                 Equalizer {
-                    running: root.showNowPlaying && !root.nowPlayingNeedsMedia && root.visible
+                    running: root.showNowPlaying && !root.nowPlayingNeedsMedia && !(window && window.partyServerMismatch) && root.visible
                              && (window && window.inTeleparty && fluxSync ? fluxSync.partyPlaying : (!!fluxPlayer && fluxPlayer.isPlaying))
                     Layout.alignment: Qt.AlignVCenter
                 }
 
                 Text {
-                    text: root.nowPlayingNeedsMedia ? "Add local file" : "Now Playing"
-                    color: root.nowPlayingNeedsMedia ? "#FFFF9AA2" : Theme.text
+                    text: (window && window.partyServerMismatch)
+                          ? "Server Mismatch"
+                          : (root.nowPlayingNeedsMedia ? "Add local file" : "Now Playing")
+                    color: (window && window.partyServerMismatch)
+                           ? "#FFFDE68A"
+                           : (root.nowPlayingNeedsMedia ? "#FFFF9AA2" : Theme.text)
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
                     Layout.alignment: Qt.AlignVCenter

@@ -34,6 +34,10 @@ ApplicationWindow {
     property string localMatchTitle: ""
     property bool localAutoMatchActive: false
     readonly property bool inTeleparty: !!fluxTeleparty && fluxTeleparty.active
+    property bool partyServerMismatch: false
+    property string partyMismatchServerName: ""
+    property string partyMismatchTitle: ""
+    property string partyMismatchUrl: ""
 
     // Round floating button for the bottom-right dock (optional badge = active downloads)
     component DockButton: Rectangle {
@@ -230,6 +234,7 @@ ApplicationWindow {
             return
         }
 
+        window.partyServerMismatch = false
         window.currentSourceUrl = sourceUrl
 
         var downloadedUrl = fluxDownloads ? fluxDownloads.downloadedFileForUrl(sourceUrl, title) : ""
@@ -302,6 +307,14 @@ ApplicationWindow {
 
     function playLibraryInTeleparty(url, title) {
         if (!inTeleparty || !fluxSync || !url || url.length === 0) return
+        if (window.partyServerMismatch) {
+            window.partyServerMismatch = false
+            if (fluxSync) {
+                fluxSync.setLocalPlaybackOverride(url)
+            }
+            window.playMedia(url, title || window.partyMismatchTitle)
+            return
+        }
         if (fluxSync.localMode && fluxSync.hasPartyMedia) {
             if (fluxSync.localVerificationState === "WaitingForLocalSelection"
                     || fluxSync.localVerificationState === "IncompatibleMedia"
@@ -370,11 +383,21 @@ ApplicationWindow {
         if (!localAutoMatchActive || !fluxSync) return
         while (localMatchCandidateIndex < localMatchCandidates.length) {
             var candidate = localMatchCandidates[localMatchCandidateIndex++]
+            if (window.partyServerMismatch) {
+                window.partyServerMismatch = false
+                if (fluxSync) fluxSync.setLocalPlaybackOverride(candidate.url)
+                window.playMedia(candidate.url, localMatchTitle)
+                localAutoMatchActive = false
+                return
+            }
             if (fluxSync.selectGuestLocalMedia(candidate.url, localMatchTitle, localMatchDurationMs, true)) {
                 return // Inspection runs asynchronously; failures trigger onLocalCandidateCheckFailed quietly.
             }
         }
         localAutoMatchActive = false // No match: leave the guest on the red missing-file pill.
+        if (window.partyServerMismatch) {
+            window.showLibrary()
+        }
     }
 
     Timer {
@@ -399,6 +422,32 @@ ApplicationWindow {
 
         window.currentSourceUrl = url
         currentPlayingTitle = title
+
+        // Check server reachability and local/cached copies
+        var s = fluxUser ? fluxUser.serverForUrl(url) : 0
+        var isServerSupported = (s === 0) || (fluxUser && fluxUser.isServerAvailableForUrl(url))
+        var downloadedUrl = fluxDownloads ? fluxDownloads.downloadedFileForUrl(url, title) : ""
+        var cachedUrl = (!downloadedUrl && fluxCache) ? fluxCache.cachedFileForUrl(url) : ""
+
+        if (!isServerSupported && !downloadedUrl && !cachedUrl) {
+            if (fluxPlayer) fluxPlayer.stop()
+            window.partyServerMismatch = true
+            window.partyMismatchServerName = fluxUser ? fluxUser.serverNameForUrl(url) : "Unknown Server"
+            window.partyMismatchTitle = title || "Party Stream"
+            window.partyMismatchUrl = url
+
+            if (currentPage !== "player") {
+                pageBeforePlayer = currentPage
+            }
+            currentPage = "player"
+
+            if (fluxSync) {
+                fluxSync.reportServerMismatch(window.partyMismatchServerName, window.partyMismatchTitle)
+            }
+            return
+        }
+
+        window.partyServerMismatch = false
         if (currentPage !== "player") {
             pageBeforePlayer = currentPage
         }
@@ -458,6 +507,7 @@ ApplicationWindow {
     }
 
     function returnToHome() {
+        window.partyServerMismatch = false
         if (fluxPlayer && !window.inTeleparty) {
             fluxPlayer.pause()
         }
@@ -476,6 +526,7 @@ ApplicationWindow {
     }
 
     function showSearch() {
+        window.partyServerMismatch = false
         if (isFullscreen) {
             toggleFullscreen()
         }
@@ -489,6 +540,7 @@ ApplicationWindow {
 
     // Bookmarks: the saved files / folders, shown with the same cards as search results
     function showBookmarks() {
+        window.partyServerMismatch = false
         if (isFullscreen) {
             toggleFullscreen()
         }
@@ -512,6 +564,7 @@ ApplicationWindow {
     }
 
     function showLibrary(rel) {
+        window.partyServerMismatch = false
         if (fluxPlayer && !window.inTeleparty) {
             fluxPlayer.pause()
         }
@@ -641,6 +694,14 @@ ApplicationWindow {
 
         function onServerAvailabilityChanged() {
             window.checkNetworkNotice()
+            if (window.partyServerMismatch && window.partyMismatchUrl) {
+                if (fluxUser && fluxUser.isServerAvailableForUrl(window.partyMismatchUrl)) {
+                    var recoveredUrl = window.partyMismatchUrl
+                    var recoveredTitle = window.partyMismatchTitle
+                    window.partyServerMismatch = false
+                    window.openFromParty(recoveredUrl, recoveredTitle, 0)
+                }
+            }
         }
     }
 
@@ -650,6 +711,7 @@ ApplicationWindow {
         function onStateChanged() {
             if (!fluxTeleparty.active) {
                 window.localAutoMatchActive = false
+                window.partyServerMismatch = false
                 if (fluxUser) fluxUser.clearPartyMedia()
             }
         }
@@ -852,25 +914,34 @@ ApplicationWindow {
             overlayMode: currentPage === "player"
             shown: !window.isFullscreen && (currentPage !== "player" || playerView.showControls || menuOpen)
             offlineLocked: false
-            nowPlayingNeedsMedia: window.inTeleparty && !!fluxSync && fluxSync.localMode
+            nowPlayingNeedsMedia: (window.inTeleparty && !!fluxSync && fluxSync.localMode
                                   && !window.localAutoMatchActive
                                   && (fluxSync.localVerificationState === "WaitingForLocalSelection"
                                       || fluxSync.localVerificationState === "IncompatibleMedia"
                                       || fluxSync.localVerificationState === "UnresolvedMetadata"
-                                      || fluxSync.localVerificationState === "PlaybackError")
-            nowPlayingWarning: fluxSync
-                               ? "A participant is playing \"" + fluxSync.currentTitle
-                                 + "\". Add this file to your Library and open it to join."
-                               : "Add the playing file to your Library to join playback."
-            showNowPlaying: !!fluxPlayer
-                            && (fluxPlayer.isPlaying
-                                || (window.inTeleparty
-                                    && ((fluxPlayer.url.length > 0
-                                         && fluxPlayer.state !== "Idle" && fluxPlayer.state !== "Stopped")
-                                        || (fluxSync && fluxSync.hasPartyMedia))))
+                                      || fluxSync.localVerificationState === "PlaybackError"))
+                                  || window.partyServerMismatch
+            nowPlayingWarning: window.partyServerMismatch
+                               ? ("Server Mismatch: " + window.partyMismatchServerName + " is not reachable on your network")
+                               : (fluxSync
+                                  ? "A participant is playing \"" + fluxSync.currentTitle
+                                    + "\". Add this file to your Library and open it to join."
+                                  : "Add the playing file to your Library to join playback.")
+            showNowPlaying: ((fluxPlayer
+                             && (fluxPlayer.isPlaying
+                                 || (window.inTeleparty
+                                     && ((fluxPlayer.url.length > 0
+                                          && fluxPlayer.state !== "Idle" && fluxPlayer.state !== "Stopped")
+                                         || (fluxSync && fluxSync.hasPartyMedia)))))
+                             || window.partyServerMismatch)
                             && currentPage !== "player"
 
             onNowPlayingClicked: {
+                if (window.partyServerMismatch) {
+                    if (currentPage !== "player") pageBeforePlayer = currentPage
+                    currentPage = "player"
+                    return
+                }
                 if (window.inTeleparty && fluxSync && fluxSync.localMode
                         && (fluxSync.localVerificationState === "WaitingForLocalSelection"
                             || fluxSync.localVerificationState === "IncompatibleMedia")) {

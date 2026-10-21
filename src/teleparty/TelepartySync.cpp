@@ -259,6 +259,18 @@ QString TelepartySync::iccftpHost() const {
 }
 
 bool TelepartySync::isSameOrMatchingMedia(const QString &playerUrl, const QString &currentUrl) const {
+    if (!m_localPlaybackOverrideUrl.isEmpty()) {
+        auto toClean = [](const QString &u) -> QString {
+            QString path = u.trimmed();
+            if (path.startsWith(QLatin1String("file:"), Qt::CaseInsensitive)) {
+                path = QUrl(path).toLocalFile();
+            }
+            return QFileInfo(path).absoluteFilePath();
+        };
+        if (toClean(playerUrl).compare(toClean(m_localPlaybackOverrideUrl), Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
     if (playerUrl.isEmpty() || currentUrl.isEmpty()) return false;
     if (playerUrl == currentUrl) return true;
 
@@ -654,6 +666,7 @@ bool TelepartySync::isStreamUrl(const QString &url) const {
 }
 
 void TelepartySync::broadcastOpen(const QString &url, const QString &title, qint64 startMs) {
+    clearLocalPlaybackOverride();
     if (!m_session || !m_session->active() || !isStreamUrl(url)) return;
 
     const QString movieId = encodeCatalogMovieId(url);
@@ -720,6 +733,25 @@ void TelepartySync::adoptCurrent(const QString &url, const QString &title) {
 
     emit currentMediaChanged();
     emit diagnosticsChanged();
+}
+
+
+void TelepartySync::reportServerMismatch(const QString &serverName, const QString &mediaTitle) {
+    if (!m_session || !m_session->active()) return;
+    QVariantMap d;
+    d.insert(QStringLiteral("s"), serverName);
+    if (!mediaTitle.isEmpty()) {
+        d.insert(QStringLiteral("t"), mediaTitle.left(40));
+    }
+    m_session->sendEvent(QStringLiteral("mismatch"), d);
+}
+
+void TelepartySync::setLocalPlaybackOverride(const QString &fileUrlOrPath) {
+    m_localPlaybackOverrideUrl = fileUrlOrPath;
+}
+
+void TelepartySync::clearLocalPlaybackOverride() {
+    m_localPlaybackOverrideUrl.clear();
 }
 
 void TelepartySync::joinPartyPlayback() {
@@ -1146,12 +1178,17 @@ void TelepartySync::onEvent(const QString &type, const QVariantMap &data, const 
         handleLocalVerifyReport(data, from);
     } else if (type == QLatin1String("lstart")) {
         handleLocalStartCommit(data, from);
+    } else if (type == QLatin1String("mismatch")) {
+        const QString s = data.value(QStringLiteral("s")).toString();
+        const QString serverStr = s.isEmpty() ? QStringLiteral("the requested server") : s;
+        emit activity(QStringLiteral("A member cannot stream: %1 is not reachable on their network").arg(serverStr));
     } else if (type == QLatin1String("play") || type == QLatin1String("pause") || type == QLatin1String("seek")) {
         handlePlaybackTransition(type, data, from);
     }
 }
 
 void TelepartySync::handleOpen(const QVariantMap &data, const QString &from) {
+    clearLocalPlaybackOverride();
     QString url;
     QString title;
     if (!resolveCatalogMovie(data, url, title)) {

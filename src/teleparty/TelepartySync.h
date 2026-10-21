@@ -125,6 +125,11 @@ public:
     // (without broadcasting "open" or resetting other members)
     Q_INVOKABLE void joinPartyPlayback();
 
+    // Server mismatch reporting & local playback override
+    Q_INVOKABLE void reportServerMismatch(const QString &serverName, const QString &mediaTitle = QString());
+    Q_INVOKABLE void setLocalPlaybackOverride(const QString &fileUrlOrPath);
+    Q_INVOKABLE void clearLocalPlaybackOverride();
+
     // Local Teleparty state & diagnostics getters
     TelepartyMediaMode mediaMode() const { return m_mediaMode; }
     bool isLocalSession() const { return m_mediaMode == TelepartyMediaMode::LocalFile; }
@@ -377,6 +382,7 @@ private:
     QTimer m_localReadinessTimeoutTimer;
 
     QString m_prevSessionState;
+    QString m_localPlaybackOverrideUrl;
 };
 
 } // namespace Flux

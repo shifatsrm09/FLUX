@@ -83,6 +83,10 @@ public:
     Q_INVOKABLE void mapSeriesFolder(const QString &mediaFolderUrl, const QString &webFolderUrl);
     Q_INVOKABLE QString seriesFolderFor(const QString &mediaFolderUrl) const;
 
+    // ---- Server reachability & URL detection ----
+    Q_INVOKABLE int serverForUrl(const QString &url) const;
+    Q_INVOKABLE QString serverNameForUrl(const QString &url) const;
+    Q_INVOKABLE bool isServerAvailableForUrl(const QString &url) const;
     // ---- Settings ----
     Q_INVOKABLE QVariant value(const QString &key, const QVariant &defaultValue = QVariant()) const;
     Q_INVOKABLE int intValue(const QString &key, int defaultValue) const;

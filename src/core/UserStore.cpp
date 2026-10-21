@@ -723,6 +723,42 @@ void UserStore::setIccftpSession(const QString &session) {
     emit serverChanged();
 }
 
+int UserStore::serverForUrl(const QString &url) const {
+    if (url.isEmpty()) return 0;
+    const QString lower = url.toLower();
+
+    // ICC FTP detection (IP 10.16.100.244, player.php, or configured iccftpUrl)
+    const QString iccUrl = iccftpUrl().toLower();
+    if (lower.contains(QLatin1String("10.16.100.244")) ||
+        lower.contains(QLatin1String("player.php")) ||
+        (!iccUrl.isEmpty() && lower.contains(iccUrl))) {
+        return 2;
+    }
+
+    // Dhaka Flix detection (172.16.x.x, DHAKA-FLIX)
+    if (lower.contains(QLatin1String("172.16.")) ||
+        lower.contains(QLatin1String("dhaka-flix")) ||
+        lower.contains(QLatin1String("dhakaflix"))) {
+        return 1;
+    }
+
+    return 0; // Other / local file / generic stream
+}
+
+QString UserStore::serverNameForUrl(const QString &url) const {
+    const int s = serverForUrl(url);
+    if (s == 2) return QStringLiteral("ICC FTP");
+    if (s == 1) return QStringLiteral("Dhaka Flix");
+    return QStringLiteral("Unknown Server");
+}
+
+bool UserStore::isServerAvailableForUrl(const QString &url) const {
+    const int s = serverForUrl(url);
+    if (s == 2) return m_server2Available;
+    if (s == 1) return m_server1Available;
+    return true; // Non-BDIX / generic URLs
+}
+
 bool UserStore::autoFetchPosters() const {
     return m_autoFetchPosters;
 }
