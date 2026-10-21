@@ -163,8 +163,7 @@ Rectangle {
 
     readonly property bool buffering: (!!root.player && root.player.isBuffering)
     readonly property bool showCenterPlay: (!!root.player && !root.buffering && !root.hasError
-                                            && !(window && window.partyServerMismatch)
-                                            && (root.player.state === "Paused"
+                                                                                        && (root.player.state === "Paused"
                                                 || root.player.state === "Stopped"
                                                 || root.player.state === "Ended"))
 
@@ -186,8 +185,7 @@ Rectangle {
     }
 
     readonly property bool canAutoHide: !!root.player
-                                        && !(window && window.partyServerMismatch)
-                                        && (root.player.isPlaying || root.player.isPaused || root.player.state === "Paused")
+                                                                                && (root.player.isPlaying || root.player.isPaused || root.player.state === "Paused")
                                         && !root.hasError
                                         && !controlsBar.isUserInteracting
                                         && !topHover.hovered
@@ -545,8 +543,7 @@ Rectangle {
     ColumnLayout {
         anchors.centerIn: parent
         spacing: 12
-        visible: root.showSpinner && root.buffering && !(window && window.partyServerMismatch)
-
+        visible: root.showSpinner && root.buffering 
         FluxSpinner {
             size: 64
             thickness: 4
@@ -715,165 +712,6 @@ Rectangle {
         }
     }
 
-
-    // =========================================================================
-    // Teleparty Server Mismatch Warning Overlay
-    // =========================================================================
-    Rectangle {
-        id: serverMismatchCard
-        anchors.centerIn: parent
-        visible: !!(window && window.partyServerMismatch)
-        width: Math.min(root.width - 64, 520)
-        implicitHeight: mismatchCol.implicitHeight + 48
-        height: implicitHeight
-        radius: 20
-        color: "#F212131A"
-        border.width: 1
-        border.color: "#66F59E0B"
-
-        ColumnLayout {
-            id: mismatchCol
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 28
-            anchors.rightMargin: 28
-            spacing: 12
-
-            Rectangle {
-                Layout.alignment: Qt.AlignHCenter
-                implicitWidth: 58
-                implicitHeight: 58
-                radius: 29
-                color: "#26F59E0B"
-                border.width: 1
-                border.color: "#55F59E0B"
-
-                FluxIcon {
-                    anchors.centerIn: parent
-                    name: "alert"
-                    size: 28
-                    color: "#F59E0B"
-                }
-            }
-
-            Rectangle {
-                Layout.alignment: Qt.AlignHCenter
-                implicitHeight: 22
-                implicitWidth: tagRow.implicitWidth + 16
-                radius: 11
-                color: "#33F59E0B"
-
-                RowLayout {
-                    id: tagRow
-                    anchors.centerIn: parent
-                    spacing: 5
-                    FluxIcon {
-                        name: "teleparty"
-                        size: 13
-                        color: "#FBBF24"
-                    }
-                    Text {
-                        text: "TELEPARTY SERVER MISMATCH"
-                        color: "#FDE68A"
-                        font.pixelSize: 10
-                        font.weight: Font.Bold
-                    }
-                }
-            }
-
-            Text {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 2
-                text: ((window && window.partyMismatchServerName) ? window.partyMismatchServerName : "Server") + " is not reachable on your network"
-                color: Theme.text
-                font.pixelSize: 18
-                font.weight: Font.Bold
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
-                Layout.fillWidth: true
-            }
-
-            Text {
-                Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
-                text: "Another party member started playing \""
-                      + (window && window.partyMismatchTitle ? window.partyMismatchTitle : "this media")
-                      + "\" from " + ((window && window.partyMismatchServerName) ? window.partyMismatchServerName : "their server")
-                      + ", but your current ISP / connection does not have access to this BDIX server.\n\nStreaming was paused to prevent infinite buffering. You can choose a matching local copy to sync playback, or switch to your available server."
-                color: Theme.textDim
-                font.pixelSize: 13
-                lineHeight: 1.25
-            }
-
-            Flow {
-                Layout.fillWidth: true
-                Layout.topMargin: 10
-                spacing: 10
-
-                FluxButton {
-                    text: "Select Local Copy to Sync"
-                    iconName: "folder"
-                    iconSize: 16
-                    onClicked: {
-                        if (window) {
-                            window.findLocalTelepartyCopy(window.partyMismatchTitle, 0)
-                        }
-                    }
-                }
-
-                FluxButton {
-                    visible: !!(window && window.partyMismatchServerName === "ICC FTP" && !!fluxUser && fluxUser.server1Available)
-                    text: "Search on Dhaka Flix"
-                    iconName: "search"
-                    iconSize: 16
-                    variant: "secondary"
-                    onClicked: {
-                        if (window && fluxUser) {
-                            window.partyServerMismatch = false
-                            fluxUser.activeServer = 1
-                            window.currentPage = "search"
-                            if (fluxSearch) fluxSearch.search(window.partyMismatchTitle)
-                        }
-                    }
-                }
-
-                FluxButton {
-                    visible: !!(window && window.partyMismatchServerName === "Dhaka Flix" && !!fluxUser && fluxUser.server2Available)
-                    text: "Search on ICC FTP"
-                    iconName: "search"
-                    iconSize: 16
-                    variant: "secondary"
-                    onClicked: {
-                        if (window && fluxUser) {
-                            window.partyServerMismatch = false
-                            fluxUser.activeServer = 2
-                            window.currentPage = "search"
-                            if (fluxSearch) fluxSearch.search(window.partyMismatchTitle)
-                        }
-                    }
-                }
-
-                FluxButton {
-                    text: "Re-check Network"
-                    iconName: "refresh"
-                    iconSize: 16
-                    variant: "secondary"
-                    onClicked: {
-                        if (fluxUser) fluxUser.autoDetectServer()
-                        root.showOsd("Re-checking server reachability...", 2500)
-                    }
-                }
-
-                FluxButton {
-                    text: "Back to Browse"
-                    variant: "secondary"
-                    onClicked: root.backRequested()
-                }
-            }
-        }
-    }
 
     // =========================================================================
     // Bottom: gradient + transport controls

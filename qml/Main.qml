@@ -436,10 +436,10 @@ ApplicationWindow {
             window.partyMismatchTitle = title || "Party Stream"
             window.partyMismatchUrl = url
 
-            if (currentPage !== "player") {
-                pageBeforePlayer = currentPage
+            // DO NOT open the player on server mismatch!
+            if (currentPage === "player") {
+                currentPage = (pageBeforePlayer && pageBeforePlayer !== "player") ? pageBeforePlayer : "search"
             }
-            currentPage = "player"
 
             if (fluxSync) {
                 fluxSync.reportServerMismatch(window.partyMismatchServerName, window.partyMismatchTitle)
@@ -738,6 +738,30 @@ ApplicationWindow {
     Connections {
         target: fluxSync
 
+        function onCurrentMediaChanged() {
+            if (fluxSync && fluxSync.hasPartyMedia) {
+                var url = fluxSync.currentUrl
+                var s = fluxUser ? fluxUser.serverForUrl(url) : 0
+                var supported = (s === 0) || (fluxUser && fluxUser.isServerAvailableForUrl(url))
+                if (!supported) {
+                    var downloadedUrl = fluxDownloads ? fluxDownloads.downloadedFileForUrl(url, fluxSync.currentTitle) : ""
+                    var cachedUrl = (!downloadedUrl && fluxCache) ? fluxCache.cachedFileForUrl(url) : ""
+                    if (!downloadedUrl && !cachedUrl) {
+                        window.partyServerMismatch = true
+                        window.partyMismatchServerName = fluxUser ? fluxUser.serverNameForUrl(url) : "Unknown Server"
+                        window.partyMismatchTitle = fluxSync.currentTitle
+                        window.partyMismatchUrl = url
+                        if (fluxPlayer) fluxPlayer.stop()
+                        if (currentPage === "player") {
+                            currentPage = (pageBeforePlayer && pageBeforePlayer !== "player") ? pageBeforePlayer : "search"
+                        }
+                        return
+                    }
+                }
+                window.partyServerMismatch = false
+            }
+        }
+
         function onRemoteOpenRequested(url, title, startMs) {
             window.openFromParty(url, title, startMs)
         }
@@ -922,7 +946,7 @@ ApplicationWindow {
                                       || fluxSync.localVerificationState === "PlaybackError"))
                                   || window.partyServerMismatch
             nowPlayingWarning: window.partyServerMismatch
-                               ? ("Server Mismatch: " + window.partyMismatchServerName + " is not reachable on your network")
+                               ? ("You don't support " + (window.partyMismatchServerName || "this server") + " on your current network.")
                                : (fluxSync
                                   ? "A participant is playing \"" + fluxSync.currentTitle
                                     + "\". Add this file to your Library and open it to join."
@@ -938,8 +962,6 @@ ApplicationWindow {
 
             onNowPlayingClicked: {
                 if (window.partyServerMismatch) {
-                    if (currentPage !== "player") pageBeforePlayer = currentPage
-                    currentPage = "player"
                     return
                 }
                 if (window.inTeleparty && fluxSync && fluxSync.localMode

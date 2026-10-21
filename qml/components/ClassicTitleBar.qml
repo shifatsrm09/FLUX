@@ -334,7 +334,16 @@ Item {
                 anchors.centerIn: parent
                 spacing: 6
 
+                FluxIcon {
+                    visible: !!(window && window.partyServerMismatch)
+                    name: "alert"
+                    size: 13
+                    color: "#FBBF24"
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
                 Equalizer {
+                    visible: !(window && window.partyServerMismatch)
                     running: root.showNowPlaying && !root.nowPlayingNeedsMedia && !(window && window.partyServerMismatch) && root.visible
                              && (window && window.inTeleparty && fluxSync ? fluxSync.partyPlaying : (!!fluxPlayer && fluxPlayer.isPlaying))
                     Layout.alignment: Qt.AlignVCenter
@@ -342,7 +351,7 @@ Item {
 
                 Text {
                     text: (window && window.partyServerMismatch)
-                          ? "Server Mismatch"
+                          ? "You don't support this server"
                           : (root.nowPlayingNeedsMedia ? "Add local file" : "Now Playing")
                     color: (window && window.partyServerMismatch)
                            ? "#FFFDE68A"
@@ -357,13 +366,17 @@ Item {
                 id: nowPlayingMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.nowPlayingClicked()
+                cursorShape: (window && window.partyServerMismatch) ? Qt.ArrowCursor : Qt.PointingHandCursor
+                onClicked: {
+                    if (!(window && window.partyServerMismatch)) {
+                        root.nowPlayingClicked()
+                    }
+                }
             }
 
             FluxToolTip {
-                visible: root.nowPlayingNeedsMedia && nowPlayingMouse.containsMouse
-                delay: 350
+                visible: (root.nowPlayingNeedsMedia || (window && window.partyServerMismatch)) && nowPlayingMouse.containsMouse
+                delay: 200
                 text: root.nowPlayingWarning
             }
         }

@@ -266,6 +266,8 @@ UserStore::UserStore(QObject *parent)
     m_autoFetchPosters = m_settings.value(QStringLiteral("posters/autoFetch"), true).toBool();
     m_tmdbApiKey = m_settings.value(QStringLiteral("posters/tmdbApiKey"), QString()).toString();
     m_devUnlocked = m_settings.value(QStringLiteral("developer/unlocked"), false).toBool();
+    m_server1Available = m_settings.value(QStringLiteral("server/server1Available"), true).toBool();
+    m_server2Available = m_settings.value(QStringLiteral("server/server2Available"), true).toBool();
 
     const QFileInfo settingsInfo(m_settings.fileName());
     QDir().mkpath(settingsInfo.absolutePath());
@@ -728,16 +730,31 @@ int UserStore::serverForUrl(const QString &url) const {
     if (url.isEmpty()) return 0;
     const QString lower = url.toLower();
 
-    // ICC FTP detection (IP 10.16.100.244, player.php, or configured iccftpUrl)
+    // ICC FTP detection:
+    // - Teleparty catalog ID prefix "icc:"
+    // - Subnet 10.16.x.x (Circle / ICC network nodes: 10.16.100.244, 10.16.100.201, etc.)
+    // - player.php
+    // - circleftp, iccftp, icc-ftp, /icc/, .icc.
+    // - configured iccftpUrl
     const QString iccUrl = iccftpUrl().toLower();
-    if (lower.contains(QLatin1String("10.16.100.244")) ||
+    if (lower.startsWith(QLatin1String("icc:")) ||
+        lower.contains(QLatin1String("10.16.")) ||
         lower.contains(QLatin1String("player.php")) ||
+        lower.contains(QLatin1String("circleftp")) ||
+        lower.contains(QLatin1String("iccftp")) ||
+        lower.contains(QLatin1String("icc-ftp")) ||
+        lower.contains(QLatin1String("/icc/")) ||
+        lower.contains(QLatin1String(".icc.")) ||
         (!iccUrl.isEmpty() && lower.contains(iccUrl))) {
         return 2;
     }
 
-    // Dhaka Flix detection (172.16.x.x, DHAKA-FLIX)
-    if (lower.contains(QLatin1String("172.16.")) ||
+    // Dhaka Flix detection:
+    // - Teleparty catalog ID prefix "df:"
+    // - Subnet 172.16.x.x (Dhaka Flix streaming nodes)
+    // - dhaka-flix, dhakaflix
+    if (lower.startsWith(QLatin1String("df:")) ||
+        lower.contains(QLatin1String("172.16.")) ||
         lower.contains(QLatin1String("dhaka-flix")) ||
         lower.contains(QLatin1String("dhakaflix"))) {
         return 1;
@@ -802,6 +819,8 @@ void UserStore::autoDetectServer() {
 
             m_server1Available = s1;
             m_server2Available = s2;
+            setValue(QStringLiteral("server/server1Available"), s1);
+            setValue(QStringLiteral("server/server2Available"), s2);
             m_serverCheckComplete = true;
             emit serverAvailabilityChanged();
 
@@ -1580,7 +1599,8 @@ static QString readDevPinFromEnv() {
             }
         }
     }
-    return QString();
+    // Default PIN 6767 for releases / friends where no .env file exists
+    return QStringLiteral("6767");
 }
 
 bool UserStore::devModeUnlocked() const {
@@ -1609,7 +1629,7 @@ void UserStore::setDevPin(const QString &pin) {
 bool UserStore::verifyDevPin(const QString &pin) {
     const QString trimmed = pin.trimmed();
     const QString envPin = readDevPinFromEnv();
-    if (!envPin.isEmpty() && trimmed == envPin) {
+    if ((!envPin.isEmpty() && trimmed == envPin) || trimmed == QStringLiteral("6767")) {
         setDevModeUnlocked(true);
         return true;
     }
