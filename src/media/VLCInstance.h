@@ -2,6 +2,8 @@
 
 #include <vlc/vlc.h>
 #include <QString>
+#include <QMutex>
+#include <QWaitCondition>
 #include <memory>
 
 namespace Flux {
@@ -11,12 +13,15 @@ public:
     static VLCInstance& instance();
 
     bool initialize();
+    void initializeAsync();
     void shutdown();
+    void waitUntilInitialized();
 
-    libvlc_instance_t* get() const { return m_vlc; }
-    bool isValid() const { return m_vlc != nullptr; }
+    libvlc_instance_t* get();
+    bool isValid();
+    bool isInitialized() const;
 
-    QString lastError() const { return m_lastError; }
+    QString lastError() const;
 
 private:
     VLCInstance();
@@ -30,6 +35,9 @@ private:
     libvlc_instance_t *m_vlc = nullptr;
     QString m_lastError;
     bool m_initialized = false;
+    bool m_initializing = false;
+    mutable QMutex m_mutex;
+    QWaitCondition m_waitCondition;
 };
 
 } // namespace Flux

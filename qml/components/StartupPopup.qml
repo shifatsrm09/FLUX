@@ -76,23 +76,10 @@ Window {
             popup.proceedToApp()
             return
         }
-        startCheckTimer.start()
+        popup.checkStarted = true
+        fluxUpdater.checkForUpdates(true)
+        popup.evaluateUpdaterState()
         safetyTimer.start()
-    }
-
-    Timer {
-        id: startCheckTimer
-        interval: 300
-        repeat: false
-        onTriggered: {
-            if (!fluxUpdater) {
-                popup.proceedToApp()
-                return
-            }
-            popup.checkStarted = true
-            fluxUpdater.checkForUpdates(true)
-            popup.evaluateUpdaterState()
-        }
     }
 
     Timer {
@@ -108,7 +95,7 @@ Window {
 
     Timer {
         id: launchTimer
-        interval: 300
+        interval: 180
         repeat: false
         onTriggered: {
             if (!popup.doneEmitted) {

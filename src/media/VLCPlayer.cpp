@@ -298,22 +298,42 @@ QVariantMap bestTrackFor(const QVariantList &tracks, const QString &pref) {
 
 } // namespace
 
-VLCPlayer::VLCPlayer(QObject *parent)
-    : QObject(parent) {
+libvlc_media_player_t* VLCPlayer::vlcMediaPlayer() {
+    ensureMediaPlayer();
+    return m_mediaPlayer;
+}
+
+bool VLCPlayer::ensureMediaPlayer() {
+    if (m_mediaPlayer) {
+        return true;
+    }
 
     auto *vlc = VLCInstance::instance().get();
     if (!vlc) {
-        FLUX_LOG_ERROR("VLCPlayer", "libVLC instance is not initialized!");
-        return;
+        return false;
     }
 
     m_mediaPlayer = libvlc_media_player_new(vlc);
     if (!m_mediaPlayer) {
         FLUX_LOG_ERROR("VLCPlayer", "Failed to create libVLC media player!");
-        return;
+        return false;
     }
 
     setupVlcEvents();
+
+    if (m_volume >= 0) {
+        libvlc_audio_set_volume(m_mediaPlayer, m_volume);
+    }
+    if (m_muted) {
+        libvlc_audio_set_mute(m_mediaPlayer, 1);
+    }
+
+    emit mediaPlayerRecreated();
+    return true;
+}
+
+VLCPlayer::VLCPlayer(QObject *parent)
+    : QObject(parent) {
 
     // Fallback polling timer (250ms) to ensure UI timeline stays smooth even if VLC event frequency varies
     m_pollTimer = new QTimer(this);
@@ -414,6 +434,10 @@ VLCPlayer::VLCPlayer(QObject *parent)
     m_seekMuteTimer->setSingleShot(true);
     m_seekMuteTimer->setInterval(6000);
     connect(m_seekMuteTimer, &QTimer::timeout, this, [this]() { endSeekMute(); });
+
+    if (VLCInstance::instance().isInitialized()) {
+        ensureMediaPlayer();
+    }
 
     FLUX_LOG_INFO("VLCPlayer", "VLCPlayer created successfully");
 }
@@ -656,6 +680,7 @@ void VLCPlayer::play(const QString &mediaUrl) {
         return;
     }
 
+    ensureMediaPlayer();
     auto *vlc = VLCInstance::instance().get();
     if (!vlc || !m_mediaPlayer) {
         FLUX_LOG_ERROR("VLCPlayer", "Cannot play: libVLC not initialized");

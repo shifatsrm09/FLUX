@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QThreadPool>
 #include <cstdio>
 #include <cstdarg>
 #include <vector>
@@ -43,8 +44,18 @@ void VLCInstance::vlcLogCallback(void *data, int level, const libvlc_log_t *ctx,
 }
 
 bool VLCInstance::initialize() {
-    if (m_initialized && m_vlc) {
-        return true;
+    {
+        QMutexLocker locker(&m_mutex);
+        if (m_initialized && m_vlc) {
+            return true;
+        }
+        if (m_initializing) {
+            while (m_initializing && !m_initialized) {
+                m_waitCondition.wait(&m_mutex);
+            }
+            return m_vlc != nullptr;
+        }
+        m_initializing = true;
     }
 
     FLUX_LOG_INFO("VLCInstance", "Initializing libVLC engine...");
@@ -82,26 +93,128 @@ bool VLCInstance::initialize() {
         "--quiet"
     };
 
-    m_vlc = libvlc_new(static_cast<int>(args.size()), args.data());
+    libvlc_instance_t *vlc = libvlc_new(static_cast<int>(args.size()), args.data());
 
-    if (!m_vlc) {
+    QString lastError;
+    if (!vlc) {
         const char *err = libvlc_errmsg();
-        m_lastError = err ? QString::fromUtf8(err) : "Unknown libvlc_new failure";
-        FLUX_LOG_ERROR("VLCInstance", QString("Failed to create libVLC instance: %1").arg(m_lastError));
-        return false;
+        lastError = err ? QString::fromUtf8(err) : "Unknown libvlc_new failure";
+        FLUX_LOG_ERROR("VLCInstance", QString("Failed to create libVLC instance: %1").arg(lastError));
+    } else {
+        // Set up libVLC log callback to forward internal VLC logs to our Logger
+        libvlc_log_set(vlc, vlcLogCallback, this);
+
+        const char *vlcVersion = libvlc_get_version();
+        FLUX_LOG_INFO("VLCInstance", QString("libVLC successfully initialized (version %1)").arg(vlcVersion ? vlcVersion : "unknown"));
     }
 
-    // Set up libVLC log callback to forward internal VLC logs to our Logger
-    libvlc_log_set(m_vlc, vlcLogCallback, this);
+    {
+        QMutexLocker locker(&m_mutex);
+        m_vlc = vlc;
+        m_lastError = lastError;
+        m_initialized = true;
+        m_initializing = false;
+        m_waitCondition.wakeAll();
+    }
 
-    const char *vlcVersion = libvlc_get_version();
-    FLUX_LOG_INFO("VLCInstance", QString("libVLC successfully initialized (version %1)").arg(vlcVersion ? vlcVersion : "unknown"));
+    return m_vlc != nullptr;
+}
 
-    m_initialized = true;
-    return true;
+void VLCInstance::initializeAsync() {
+    {
+        QMutexLocker locker(&m_mutex);
+        if (m_initialized || m_initializing) {
+            return;
+        }
+        m_initializing = true;
+    }
+
+    FLUX_LOG_INFO("VLCInstance", "Starting asynchronous libVLC initialization in background thread...");
+
+    QThreadPool::globalInstance()->start([this]() {
+        QString appDir = QCoreApplication::applicationDirPath();
+        QString localPluginDir = QDir(appDir).filePath("plugins");
+        QString systemVlcPluginDir = "C:/Program Files/VideoLAN/VLC/plugins";
+
+        QString pluginPath;
+        if (QDir(localPluginDir).exists()) {
+            pluginPath = localPluginDir;
+            FLUX_LOG_INFO("VLCInstance", QString("Using local plugins directory: %1").arg(pluginPath));
+        } else if (QDir(systemVlcPluginDir).exists()) {
+            pluginPath = systemVlcPluginDir;
+            FLUX_LOG_INFO("VLCInstance", QString("Using system VLC plugins directory: %1").arg(pluginPath));
+        }
+
+        if (!pluginPath.isEmpty()) {
+#ifdef Q_OS_WIN
+            qputenv("VLC_PLUGIN_PATH", pluginPath.toUtf8());
+#endif
+        }
+
+        std::vector<const char*> args = {
+            "--no-video-title-show",
+            "--network-caching=600",
+            "--http-reconnect",
+            "--no-snapshot-preview",
+            "--quiet"
+        };
+
+        libvlc_instance_t *vlc = libvlc_new(static_cast<int>(args.size()), args.data());
+
+        QString lastError;
+        if (!vlc) {
+            const char *err = libvlc_errmsg();
+            lastError = err ? QString::fromUtf8(err) : "Unknown libvlc_new failure";
+            FLUX_LOG_ERROR("VLCInstance", QString("Failed to create libVLC instance in background: %1").arg(lastError));
+        } else {
+            libvlc_log_set(vlc, vlcLogCallback, this);
+            const char *vlcVersion = libvlc_get_version();
+            FLUX_LOG_INFO("VLCInstance", QString("libVLC successfully initialized in background (version %1)").arg(vlcVersion ? vlcVersion : "unknown"));
+        }
+
+        {
+            QMutexLocker locker(&m_mutex);
+            m_vlc = vlc;
+            m_lastError = lastError;
+            m_initialized = true;
+            m_initializing = false;
+            m_waitCondition.wakeAll();
+        }
+    });
+}
+
+void VLCInstance::waitUntilInitialized() {
+    QMutexLocker locker(&m_mutex);
+    while (m_initializing && !m_initialized) {
+        m_waitCondition.wait(&m_mutex);
+    }
+}
+
+libvlc_instance_t* VLCInstance::get() {
+    waitUntilInitialized();
+    QMutexLocker locker(&m_mutex);
+    return m_vlc;
+}
+
+bool VLCInstance::isValid() {
+    waitUntilInitialized();
+    QMutexLocker locker(&m_mutex);
+    return m_vlc != nullptr;
+}
+
+bool VLCInstance::isInitialized() const {
+    QMutexLocker locker(&m_mutex);
+    return m_initialized;
+}
+
+QString VLCInstance::lastError() const {
+    QMutexLocker locker(&m_mutex);
+    return m_lastError;
 }
 
 void VLCInstance::shutdown() {
+    waitUntilInitialized();
+    QMutexLocker locker(&m_mutex);
     if (m_vlc) {
         FLUX_LOG_INFO("VLCInstance", "Releasing libVLC instance...");
         libvlc_log_unset(m_vlc);

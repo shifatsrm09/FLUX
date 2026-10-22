@@ -9,6 +9,7 @@
 #include <QCoreApplication>
 #include <QQmlContext>
 #include <QTimer>
+#include <QThreadPool>
 
 namespace Flux {
 
@@ -36,14 +37,18 @@ Application::~Application() {
 bool Application::initialize(QQmlApplicationEngine &engine) {
     FLUX_LOG_INFO("Application", QString("Starting FLUX Media Player v%1...").arg(QString::fromLatin1(FLUX_VERSION)));
 
-    // 1. Initialize libVLC instance once
-    if (!VLCInstance::instance().initialize()) {
-        FLUX_LOG_ERROR("Application", "VLCInstance failed to initialize: " + VLCInstance::instance().lastError());
-        return false;
-    }
+    // 1. Initialize libVLC instance asynchronously in background so splash and UI appear instantly
+    VLCInstance::instance().initializeAsync();
 
     // 2. Instantiate core media player, test catalog, and search manager
     m_player = std::make_unique<VLCPlayer>(this);
+
+    // Wire up player as soon as background VLC initialization completes
+    QThreadPool::globalInstance()->start([this]() {
+        if (VLCInstance::instance().get()) {
+            QMetaObject::invokeMethod(m_player.get(), &VLCPlayer::ensureMediaPlayer, Qt::QueuedConnection);
+        }
+    });
     m_testMedia = std::make_unique<TestMediaModel>(this);
     m_searchManager = std::make_unique<SearchManager>(this);
     m_folderBrowser = std::make_unique<FolderBrowser>(this);
@@ -52,6 +57,8 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     m_userStore = std::make_unique<UserStore>(this);
     m_bookmarks = std::make_unique<BookmarkManager>(this);
     m_updater = std::make_unique<Updater>(this);
+    // Pre-warm update check immediately so the splash popup has data without waiting
+    m_updater->checkForUpdates(true);
 
     // Teleparty: watch together through a public MQTT broker (no server of ours)
     m_teleparty = std::make_unique<TelepartySession>(this);

@@ -49,7 +49,7 @@ public:
     explicit VLCPlayer(QObject *parent = nullptr);
     ~VLCPlayer() override;
 
-    libvlc_media_player_t* vlcMediaPlayer() const { return m_mediaPlayer; }
+    libvlc_media_player_t* vlcMediaPlayer();
 
     QString url() const { return m_url; }
     void setUrl(const QString &url);
@@ -105,6 +105,7 @@ public:
     void simulateUserSeek(qint64 targetMs);
 
 public slots:
+    bool ensureMediaPlayer();
     Q_INVOKABLE void play(const QString &mediaUrl = QString());
     Q_INVOKABLE void pause();
     Q_INVOKABLE void resume();
