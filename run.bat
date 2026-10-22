@@ -6,8 +6,14 @@ echo =======================================================
 echo               FLUX - Native Desktop Player
 echo =======================================================
 
-:: 1. Close any running FLUX instance to release file locks on FLUX.exe
-taskkill /f /im FLUX.exe >nul 2>&1
+:: 1. Clean up old temporary binaries from previous runs that have closed
+del /q /f "build\Release\FLUX_old_*.exe" >nul 2>&1
+
+
+:: If an existing FLUX instance is running from build\Release, move it aside so building can link without closing it
+if exist "build\Release\FLUX.exe" (
+    powershell -NoProfile -Command "try { [IO.File]::OpenWrite('build\Release\FLUX.exe').Close() } catch { Rename-Item -Path 'build\Release\FLUX.exe' -NewName ('FLUX_old_' + (Get-Random) + '.exe') }" >nul 2>&1
+)
 
 :: 2. Initialize MSVC 64-bit environment
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" >nul 2>&1
