@@ -560,7 +560,7 @@ Item {
         sourceComponent: CardMenu {
             isFolder: root.isFolder
             bookmarked: root.bookmarked
-            canBookmark: root.effectiveLocalPath.length === 0 || !root.isFolder
+            canBookmark: true
             canDownload: !root.isLocal && root.playUrl.length > 0
             canShowInFolder: root.effectiveLocalPath.length > 0
 

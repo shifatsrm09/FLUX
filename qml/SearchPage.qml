@@ -1709,7 +1709,11 @@ Item {
                 }
 
                 onFolderRequested: function(url, libName) {
-                    if (fluxBrowser) fluxBrowser.open(url, libName, "")
+                    if (model.isLocal && window && window.showLibrary) {
+                        window.showLibrary(url)
+                    } else if (fluxBrowser) {
+                        fluxBrowser.open(url, libName, "")
+                    }
                 }
             }
         }
