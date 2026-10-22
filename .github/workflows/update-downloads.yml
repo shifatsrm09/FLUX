@@ -37,7 +37,7 @@ jobs:
 
           repo = os.environ.get("GITHUB_REPOSITORY", "shifatsrm09/FLUX")
           token = os.environ.get("GITHUB_TOKEN", "")
-          url = f"https://api.github.com/repos/{repo}/releases"
+          url = f"https://api.github.com/repos/{repo}/releases?per_page=100"
 
           headers = {
               "User-Agent": "FLUX-Updater-Action",
@@ -54,18 +54,34 @@ jobs:
               print(f"Error querying GitHub API: {e}")
               exit(0)
 
-          total_downloads = sum(
+          if not isinstance(releases, list):
+              print(f"Unexpected API response type: {type(releases)}")
+              exit(0)
+
+          # External source download offset
+          DOWNLOAD_OFFSET = 2000
+
+          github_downloads = sum(
               asset.get("download_count", 0)
               for release in releases
               for asset in release.get("assets", [])
           )
+          total_downloads = DOWNLOAD_OFFSET + github_downloads
 
-          print(f"Total downloads across all releases: {total_downloads}")
+          print(f"GitHub downloads: {github_downloads}, Offset: {DOWNLOAD_OFFSET}, Total: {total_downloads}")
 
           svg_path = "resources/download-button.svg"
           if os.path.exists(svg_path):
               with open(svg_path, "r", encoding="utf-8") as f:
                   content = f.read()
+
+              # Safeguard: Do not overwrite with a lower number if API returned partial data
+              match = re.search(r'TOTAL DOWNLOADS:\s*(\d+)', content)
+              if match:
+                  current_count = int(match.group(1))
+                  if total_downloads < current_count:
+                      print(f"Computed count ({total_downloads}) < current count ({current_count}); skipping update.")
+                      exit(0)
 
               new_content = re.sub(
                   r'(TOTAL DOWNLOADS:\s*)\d+',
