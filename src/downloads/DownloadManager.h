@@ -117,6 +117,7 @@ public:
     Q_INVOKABLE bool hasClipboardPath() const;
     Q_INVOKABLE QString clipboardPath() const;
     Q_INVOKABLE QString resolveDiskPath(const QString &pathOrRel) const;
+    Q_INVOKABLE QString localPathSize(const QString &path) const;
 
     // ---- Downloads ----
     // Both return the job id (0 if nothing was started). Re-requesting something that is

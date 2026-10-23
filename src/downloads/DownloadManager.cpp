@@ -1825,6 +1825,26 @@ QString DownloadManager::resolveDiskPath(const QString &pathOrRel) const {
     return QDir::cleanPath(m_root + QLatin1Char('/') + p);
 }
 
+QString DownloadManager::localPathSize(const QString &path) const {
+    const QString p = resolveDiskPath(path);
+    if (p.isEmpty()) return QString();
+    const QFileInfo fi(p);
+    if (!fi.exists()) return QString();
+    if (fi.isFile()) {
+        return SearchResult::formatBytes(fi.size());
+    }
+    if (fi.isDir()) {
+        qint64 total = 0;
+        QDirIterator it(p, QDir::Files, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            it.next();
+            total += it.fileInfo().size();
+        }
+        return SearchResult::formatBytes(total);
+    }
+    return QString();
+}
+
 bool DownloadManager::deleteLocalPath(const QString &path) {
     const QString p = resolveDiskPath(path);
     if (p.isEmpty()) return false;

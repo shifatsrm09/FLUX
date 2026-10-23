@@ -15,6 +15,7 @@ Menu {
     property bool canShowInFolder: false
     property bool isLibraryItem: false
     property bool canPaste: false
+    property string sizeText: ""
 
     signal openRequested()
     signal bookmarkToggled()
@@ -135,5 +136,15 @@ Menu {
         text: menu.isFolder ? "Download folder" : "Download"
         enabled: menu.canDownload
         onTriggered: menu.downloadRequested()
+    }
+
+    Sep {
+        visible: menu.sizeText.length > 0
+    }
+
+    Entry {
+        visible: menu.sizeText.length > 0
+        text: "Size: " + menu.sizeText
+        enabled: false
     }
 }

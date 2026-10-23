@@ -39,6 +39,7 @@ Item {
     signal removeRequested(string url)
     signal downloadRequested(string url, string title, bool isPack)
     property bool isLibraryItem: false
+    property string itemSize: ""
 
     signal copyRequested(string path)
     signal pasteRequested(string path)
@@ -554,6 +555,14 @@ Item {
 
     function openContextMenu(x, y) {
         if (root.playUrl.length === 0 && root.localPath.length === 0 && root.parentPath.length === 0) return
+        var p = root.effectiveLocalPath.length > 0 ? root.effectiveLocalPath : root.parentPath
+        if (fluxDownloads && p.length > 0) {
+            root.itemSize = fluxDownloads.localPathSize(p)
+        } else if (root.formattedSize.length > 0 && root.formattedSize.indexOf("B") > 0) {
+            root.itemSize = root.formattedSize
+        } else {
+            root.itemSize = ""
+        }
         ctxLoader.active = true
         if (ctxLoader.item) {
             ctxLoader.item.popup(rowMouse, x, y)
@@ -577,6 +586,7 @@ Item {
             canShowInFolder: root.effectiveLocalPath.length > 0
             isLibraryItem: root.isLibraryItem
             canPaste: fluxDownloads ? fluxDownloads.hasClipboardPath : false
+            sizeText: root.itemSize
 
             onOpenRequested: root.activate()
             onBookmarkToggled: root.toggleBookmark()
