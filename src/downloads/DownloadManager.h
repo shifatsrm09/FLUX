@@ -44,6 +44,7 @@ class DownloadManager : public QAbstractListModel {
     // Extra folders (anywhere on the PC) scanned for playable media. Completely separate from
     // the download location: nothing is ever downloaded into them or moved out of them.
     Q_PROPERTY(QStringList targets READ targets NOTIFY targetsChanged)
+    Q_PROPERTY(bool hasClipboardPath READ hasClipboardPath NOTIFY clipboardChanged)
 
 public:
     enum Roles {
@@ -107,6 +108,16 @@ public:
     Q_INVOKABLE QString offlineRelForPath(const QString &path) const;
     Q_INVOKABLE void openPath(const QString &path);   // folder, or the folder holding a file
 
+    // ---- File operations (Library context menu) ----
+    Q_INVOKABLE bool deleteLocalPath(const QString &path);
+    Q_INVOKABLE bool renameLocalPath(const QString &oldPath, const QString &newName);
+    Q_INVOKABLE bool createLocalFolder(const QString &parentDirOrRel, const QString &folderName);
+    Q_INVOKABLE void copyLocalPath(const QString &path);
+    Q_INVOKABLE bool pasteToLocalPath(const QString &targetDirOrRel);
+    Q_INVOKABLE bool hasClipboardPath() const;
+    Q_INVOKABLE QString clipboardPath() const;
+    Q_INVOKABLE QString resolveDiskPath(const QString &pathOrRel) const;
+
     // ---- Downloads ----
     // Both return the job id (0 if nothing was started). Re-requesting something that is
     // already queued/downloading returns the existing job instead of duplicating it.
@@ -134,6 +145,7 @@ signals:
     void historyChanged();
     void targetError(const QString &message);
     void locationError(const QString &message);
+    void clipboardChanged();
 
 private:
     enum class Status { Scanning, Queued, Running, Paused, Done, Failed, Cancelled };
@@ -233,6 +245,7 @@ private:
     bool m_pumpAgain = false;
     bool m_shuttingDown = false;
     QVariantList m_history;
+    QString m_clipboardPath;
 };
 
 } // namespace Flux

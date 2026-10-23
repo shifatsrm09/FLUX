@@ -30,6 +30,10 @@ Button {
                 return control.down ? Theme.accentPressed
                                     : (control.hovered ? Theme.accentHover : Theme.accent)
             }
+            if (control.variant === "danger") {
+                return control.down ? "#C73034"
+                                    : (control.hovered ? "#D83A3E" : Theme.danger)
+            }
             if (control.variant === "secondary") {
                 return control.down ? "#40FFFFFF" : (control.hovered ? "#33FFFFFF" : "#24FFFFFF")
             }

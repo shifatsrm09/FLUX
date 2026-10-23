@@ -3,7 +3,10 @@
 #include "../search/SearchResult.h"
 #include "../core/Logger.h"
 
+#include <QClipboard>
 #include <QCollator>
+#include <QGuiApplication>
+#include <QMimeData>
 #include <QCryptographicHash>
 #include <QDesktopServices>
 #include <QDir>
@@ -207,6 +210,9 @@ DownloadManager::DownloadManager(FolderBrowser *browser, QObject *parent)
     QSettings settings;
     m_history = settings.value(QStringLiteral("downloads/history")).toList();
     ensureFolders();
+    if (QClipboard *cb = QGuiApplication::clipboard()) {
+        connect(cb, &QClipboard::dataChanged, this, &DownloadManager::clipboardChanged);
+    }
     FLUX_LOG_INFO("Downloads", QString("Download location: %1").arg(native(m_root)));
 }
 
@@ -658,9 +664,9 @@ QVariantList DownloadManager::offlineList(const QString &relPath) const {
                 continue;
             }
             const int n = countVideos(fi.absoluteFilePath());
-            if (n == 0) continue;
             QVariantMap m = folderEntry(fi, m_root, n);
             m["section"] = QStringLiteral("Folders");
+            if (n == 0) m["detail"] = QStringLiteral("Empty folder");
             out.append(m);
         }
 
@@ -719,14 +725,13 @@ QVariantList DownloadManager::offlineList(const QString &relPath) const {
     std::sort(dirs.begin(), dirs.end(), byName);
     for (const QFileInfo &fi : dirs) {
         const int n = countVideos(fi.absoluteFilePath());
-        if (n == 0) continue;   // empty / non-video folders aren't worth showing
         QVariantMap m;
         m["name"] = fi.fileName();
         m["kind"] = QStringLiteral("folder");
         m["rel"] = rel + QLatin1Char('/') + fi.fileName();
         m["path"] = native(fi.absoluteFilePath());
         m["count"] = n;
-        m["detail"] = videoCountText(n);
+        m["detail"] = n > 0 ? videoCountText(n) : QStringLiteral("Empty folder");
         out.append(m);
     }
 
@@ -1803,6 +1808,254 @@ bool DownloadManager::resumeHistory(const QString &key) {
         return true;
     }
     return false;
+}
+
+
+// ============================================================================
+// File operations (Library context menu)
+// ============================================================================
+
+QString DownloadManager::resolveDiskPath(const QString &pathOrRel) const {
+    QString p = pathOrRel.trimmed();
+    if (p.isEmpty()) return m_root;
+    if (p.startsWith('@')) return QDir::cleanPath(p.mid(1));
+    if (p.startsWith(QLatin1String("file:///"))) return QDir::cleanPath(QUrl(p).toLocalFile());
+    if (p.startsWith(QLatin1String("file://"))) return QDir::cleanPath(QUrl(p).toLocalFile());
+    if (QDir::isAbsolutePath(p)) return QDir::cleanPath(p);
+    return QDir::cleanPath(m_root + QLatin1Char('/') + p);
+}
+
+bool DownloadManager::deleteLocalPath(const QString &path) {
+    const QString p = resolveDiskPath(path);
+    if (p.isEmpty()) return false;
+
+    if (samePath(p, m_root) ||
+        samePath(p, m_root + QStringLiteral("/Series")) ||
+        samePath(p, m_root + QStringLiteral("/Individuals"))) {
+        return false;
+    }
+    for (const QString &t : m_targets) {
+        if (samePath(p, t)) return false;
+    }
+    const QFileInfo fi(p);
+    if (fi.isRoot() || !fi.exists()) return false;
+
+    bool ok = QFile::moveToTrash(p);
+    if (!ok) {
+        if (fi.isDir()) {
+            ok = QDir(p).removeRecursively();
+        } else {
+            ok = QFile::remove(p);
+        }
+    }
+
+    if (ok) {
+        FLUX_LOG_INFO("Downloads", QString("Deleted local path: %1").arg(p));
+        if (samePath(m_clipboardPath, p)) {
+            m_clipboardPath.clear();
+            emit clipboardChanged();
+        }
+        m_offlineRevision++;
+        emit offlineChanged();
+    }
+    return ok;
+}
+
+bool DownloadManager::renameLocalPath(const QString &oldPath, const QString &newName) {
+    const QString p = resolveDiskPath(oldPath);
+    if (p.isEmpty()) return false;
+
+    if (samePath(p, m_root) ||
+        samePath(p, m_root + QStringLiteral("/Series")) ||
+        samePath(p, m_root + QStringLiteral("/Individuals"))) {
+        return false;
+    }
+    for (const QString &t : m_targets) {
+        if (samePath(p, t)) return false;
+    }
+    const QFileInfo fi(p);
+    if (fi.isRoot() || !fi.exists()) return false;
+
+    QString cleanNew = sanitizeSegment(newName.trimmed());
+    if (cleanNew.isEmpty()) return false;
+
+    if (fi.isFile() && !fi.suffix().isEmpty()) {
+        const QFileInfo newFi(cleanNew);
+        if (newFi.suffix().isEmpty()) {
+            cleanNew += QLatin1Char('.') + fi.suffix();
+        }
+    }
+
+    const QString newPath = fi.dir().filePath(cleanNew);
+    if (samePath(p, newPath)) return true;
+    if (QFileInfo::exists(newPath)) return false;
+
+    bool ok = false;
+    if (fi.isDir()) {
+        ok = QDir().rename(p, newPath);
+    } else {
+        ok = QFile::rename(p, newPath);
+    }
+
+    if (ok) {
+        FLUX_LOG_INFO("Downloads", QString("Renamed %1 to %2").arg(p, newPath));
+        if (samePath(m_clipboardPath, p)) {
+            m_clipboardPath = newPath;
+            emit clipboardChanged();
+        }
+        m_offlineRevision++;
+        emit offlineChanged();
+    }
+    return ok;
+}
+
+bool DownloadManager::createLocalFolder(const QString &parentDirOrRel, const QString &folderName) {
+    const QString parent = resolveDiskPath(parentDirOrRel);
+    QString name = sanitizeSegment(folderName.trimmed());
+    if (name.isEmpty()) name = QStringLiteral("New folder");
+
+    QDir pDir(parent);
+    if (!pDir.exists()) {
+        if (!pDir.mkpath(parent)) return false;
+    }
+
+    QString targetName = name;
+    int counter = 2;
+    while (pDir.exists(targetName)) {
+        targetName = QStringLiteral("%1 %2").arg(name).arg(counter++);
+    }
+
+    if (pDir.mkdir(targetName)) {
+        FLUX_LOG_INFO("Downloads", QString("Created folder: %1 in %2").arg(targetName, parent));
+        m_offlineRevision++;
+        emit offlineChanged();
+        return true;
+    }
+    return false;
+}
+
+void DownloadManager::copyLocalPath(const QString &path) {
+    const QString p = resolveDiskPath(path);
+    if (p.isEmpty() || !QFileInfo::exists(p)) return;
+
+    m_clipboardPath = p;
+    QClipboard *cb = QGuiApplication::clipboard();
+    if (cb) {
+        QMimeData *mime = new QMimeData();
+        mime->setText(p);
+        mime->setUrls({QUrl::fromLocalFile(p)});
+        cb->setMimeData(mime);
+    }
+    emit clipboardChanged();
+}
+
+bool DownloadManager::hasClipboardPath() const {
+    const QString p = clipboardPath();
+    return !p.isEmpty() && (QFileInfo::exists(p) || QDir(p).exists());
+}
+
+QString DownloadManager::clipboardPath() const {
+    if (!m_clipboardPath.isEmpty() && (QFileInfo::exists(m_clipboardPath) || QDir(m_clipboardPath).exists())) {
+        return m_clipboardPath;
+    }
+    const QClipboard *cb = QGuiApplication::clipboard();
+    if (cb) {
+        const QMimeData *md = cb->mimeData();
+        if (md && md->hasUrls()) {
+            const QList<QUrl> urls = md->urls();
+            for (const QUrl &u : urls) {
+                if (u.isLocalFile()) {
+                    const QString lp = u.toLocalFile();
+                    if (QFileInfo::exists(lp) || QDir(lp).exists()) return lp;
+                }
+            }
+        }
+        if (md && md->hasText()) {
+            const QString txt = md->text().trimmed();
+            if ((txt.startsWith(QLatin1String("file:///")) || txt.contains(QLatin1String(":\\"))) &&
+                (QFileInfo::exists(txt) || QDir(txt).exists())) {
+                return QDir::cleanPath(txt.startsWith(QLatin1String("file:///")) ? QUrl(txt).toLocalFile() : txt);
+            }
+        }
+    }
+    return QString();
+}
+
+static bool copyDirRecursively(const QString &srcPath, const QString &dstPath) {
+    QDir srcDir(srcPath);
+    if (!srcDir.exists()) return false;
+    QDir dstDir(dstPath);
+    if (!dstDir.exists()) {
+        if (!dstDir.mkpath(dstPath)) return false;
+    }
+    const auto entries = srcDir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot);
+    for (const QFileInfo &entry : entries) {
+        const QString srcItem = entry.absoluteFilePath();
+        const QString dstItem = dstPath + QLatin1Char('/') + entry.fileName();
+        if (entry.isDir()) {
+            if (!copyDirRecursively(srcItem, dstItem)) return false;
+        } else {
+            if (QFile::exists(dstItem)) QFile::remove(dstItem);
+            if (!QFile::copy(srcItem, dstItem)) return false;
+        }
+    }
+    return true;
+}
+
+bool DownloadManager::pasteToLocalPath(const QString &targetDirOrRel) {
+    const QString src = clipboardPath();
+    if (src.isEmpty() || !QFileInfo::exists(src)) return false;
+
+    QString dstDir = resolveDiskPath(targetDirOrRel);
+    QFileInfo dstInfo(dstDir);
+    if (dstInfo.isFile()) {
+        dstDir = dstInfo.dir().absolutePath();
+    }
+    QDir targetDir(dstDir);
+    if (!targetDir.exists()) {
+        if (!targetDir.mkpath(dstDir)) return false;
+    }
+
+    if (isInside(dstDir, src) || samePath(dstDir, src)) {
+        return false;
+    }
+
+    const QFileInfo srcInfo(src);
+    const QString baseName = srcInfo.completeBaseName();
+    const QString suffix = srcInfo.suffix();
+    const bool isDir = srcInfo.isDir();
+
+    QString destFileName = srcInfo.fileName();
+    QString destFilePath = targetDir.filePath(destFileName);
+
+    if (QFileInfo::exists(destFilePath)) {
+        int copyIndex = 1;
+        while (QFileInfo::exists(destFilePath)) {
+            QString copyTag = (copyIndex == 1) ? QStringLiteral(" - Copy")
+                                               : QStringLiteral(" - Copy (%1)").arg(copyIndex);
+            if (isDir) {
+                destFileName = srcInfo.fileName() + copyTag;
+            } else {
+                destFileName = baseName + copyTag + (suffix.isEmpty() ? QString() : QLatin1Char('.') + suffix);
+            }
+            destFilePath = targetDir.filePath(destFileName);
+            copyIndex++;
+        }
+    }
+
+    bool ok = false;
+    if (isDir) {
+        ok = copyDirRecursively(src, destFilePath);
+    } else {
+        ok = QFile::copy(src, destFilePath);
+    }
+
+    if (ok) {
+        FLUX_LOG_INFO("Downloads", QString("Pasted %1 to %2").arg(src, destFilePath));
+        m_offlineRevision++;
+        emit offlineChanged();
+    }
+    return ok;
 }
 
 } // namespace Flux

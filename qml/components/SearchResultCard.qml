@@ -38,6 +38,12 @@ Item {
     signal folderRequested(string url, string libraryName)
     signal removeRequested(string url)
     signal downloadRequested(string url, string title, bool isPack)
+    property bool isLibraryItem: false
+
+    signal copyRequested(string path)
+    signal pasteRequested(string path)
+    signal renameRequested(string path, string currentName, bool isFolder)
+    signal deleteRequested(string path, string name, bool isFolder)
 
     // Bookmark state (reading `revision` makes this re-evaluate whenever bookmarks change)
     readonly property bool bookmarked: {
@@ -547,9 +553,15 @@ Item {
     }
 
     function openContextMenu(x, y) {
-        if (root.playUrl.length === 0) return
+        if (root.playUrl.length === 0 && root.localPath.length === 0 && root.parentPath.length === 0) return
         ctxLoader.active = true
-        if (ctxLoader.item) ctxLoader.item.popup(rowMouse, x, y)
+        if (ctxLoader.item) {
+            ctxLoader.item.popup(rowMouse, x, y)
+        } else {
+            Qt.callLater(function() {
+                if (ctxLoader.item) ctxLoader.item.popup(rowMouse, x, y)
+            })
+        }
     }
 
     // Created on first right-click, so cards that are never right-clicked carry no extra cost
@@ -563,6 +575,8 @@ Item {
             canBookmark: true
             canDownload: !root.isLocal && root.playUrl.length > 0
             canShowInFolder: root.effectiveLocalPath.length > 0
+            isLibraryItem: root.isLibraryItem
+            canPaste: fluxDownloads ? fluxDownloads.hasClipboardPath : false
 
             onOpenRequested: root.activate()
             onBookmarkToggled: root.toggleBookmark()
@@ -571,6 +585,22 @@ Item {
                 if (fluxDownloads && root.effectiveLocalPath.length > 0) {
                     fluxDownloads.openPath(root.effectiveLocalPath)
                 }
+            }
+            onCopyRequested: {
+                var p = root.effectiveLocalPath.length > 0 ? root.effectiveLocalPath : root.parentPath
+                root.copyRequested(p)
+            }
+            onPasteRequested: {
+                var p = root.effectiveLocalPath.length > 0 ? root.effectiveLocalPath : root.parentPath
+                root.pasteRequested(p)
+            }
+            onRenameRequested: {
+                var p = root.effectiveLocalPath.length > 0 ? root.effectiveLocalPath : root.parentPath
+                root.renameRequested(p, root.title, root.isFolder)
+            }
+            onDeleteRequested: {
+                var p = root.effectiveLocalPath.length > 0 ? root.effectiveLocalPath : root.parentPath
+                root.deleteRequested(p, root.title, root.isFolder)
             }
         }
     }

@@ -126,6 +126,17 @@ Item {
         return fluxDownloads ? fluxDownloads.offlineParent(path) : ""
     }
 
+    function currentDiskFolder() {
+        if (!fluxDownloads) return ""
+        if (root.rel.length === 0 || root.searching) {
+            return fluxDownloads.downloadLocation
+        } else if (root.rel.charAt(0) === "@") {
+            return root.rel.substring(1)
+        } else {
+            return fluxDownloads.downloadLocation + "\\" + root.rel.split("/").join("\\")
+        }
+    }
+
     function crumbText(path) {
         if (path.length === 0) return "Library"
         // Inside an added target: show the last few folders of its path
@@ -168,6 +179,15 @@ Item {
         id: searchDebounce
         interval: 200
         onTriggered: root.query = searchField.text
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        z: -1
+        onClicked: function(mouse) {
+            bgMenu.popup(root, mouse.x, mouse.y)
+        }
     }
 
     ColumnLayout {
@@ -389,6 +409,16 @@ Item {
             boundsBehavior: Flickable.StopAtBounds
             cacheBuffer: 800
 
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.RightButton
+                z: -1
+                onClicked: function(mouse) {
+                    var p = mapToItem(root, mouse.x, mouse.y)
+                    bgMenu.popup(root, p.x, p.y)
+                }
+            }
+
             ScrollBar.vertical: FluxScrollBar { }
 
             model: root.getSectionedRows(libraryListView.columns)
@@ -487,6 +517,8 @@ Item {
                             watched: (prog.watched === true)
                             introDelay: (index % 4) * 40
 
+                            isLibraryItem: true
+
                             onPlayRequested: function(url, itemTitle) {
                                 root.playRequested(modelData.url, itemTitle)
                             }
@@ -496,10 +528,489 @@ Item {
                                 root.clearSearch()
                                 root.rel = target
                             }
+
+                            onCopyRequested: function(path) {
+                                if (!fluxDownloads) return
+                                fluxDownloads.copyLocalPath(path)
+                                root.showToast("Copied to clipboard")
+                            }
+
+                            onPasteRequested: function(targetFolder) {
+                                if (!fluxDownloads) return
+                                if (fluxDownloads.pasteToLocalPath(targetFolder)) {
+                                    root.refreshTick++
+                                    root.showToast("Pasted item")
+                                }
+                            }
+
+                            onRenameRequested: function(path, name, isFolder) {
+                                renameDialog.openFor(path, name, isFolder)
+                            }
+
+                            onDeleteRequested: function(path, name, isFolder) {
+                                deleteDialog.openFor(path, name, isFolder)
+                            }
+
                         }
                     }
                 }
             }
         }
+    }
+
+    // ---- Background Context Menu ----
+    Menu {
+        id: bgMenu
+
+        padding: 6
+        modal: false
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            implicitWidth: 224
+            radius: 12
+            color: "#F2121216"
+            border.width: 1
+            border.color: Theme.borderHi
+        }
+
+        component BgEntry: MenuItem {
+            id: bEntry
+            property color tint: Theme.text
+            implicitWidth: 212
+            implicitHeight: visible ? 40 : 0
+            height: visible ? 40 : 0
+            leftPadding: 12
+            rightPadding: 12
+
+            contentItem: Text {
+                text: bEntry.text
+                color: bEntry.enabled ? bEntry.tint : Theme.textMute
+                font.pixelSize: 13
+                font.weight: Font.Medium
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+
+            background: Rectangle {
+                radius: 8
+                color: bEntry.highlighted ? "#26FFFFFF" : "transparent"
+            }
+        }
+
+        BgEntry {
+            text: "New folder"
+            onTriggered: {
+                newFolderDialog.openFor(root.currentDiskFolder())
+            }
+        }
+
+        BgEntry {
+            text: "Paste"
+            enabled: fluxDownloads ? fluxDownloads.hasClipboardPath : false
+            onTriggered: {
+                if (!fluxDownloads) return
+                if (fluxDownloads.pasteToLocalPath(root.currentDiskFolder())) {
+                    root.refreshTick++
+                    root.showToast("Pasted item")
+                }
+            }
+        }
+
+        Rectangle {
+            implicitWidth: 212
+            implicitHeight: 1
+            color: Theme.border
+        }
+
+        BgEntry {
+            text: "Refresh"
+            onTriggered: root.refreshTick++
+        }
+
+        BgEntry {
+            text: "Open in Explorer"
+            onTriggered: {
+                if (!fluxDownloads) return
+                var p = root.currentDiskFolder()
+                if (p.length > 0) fluxDownloads.openPath(p)
+            }
+        }
+    }
+
+    // ---- New Folder Dialog ----
+    Popup {
+        id: newFolderDialog
+
+        property string parentPath: ""
+
+        function openFor(parentDir) {
+            parentPath = parentDir
+            folderInput.text = "New folder"
+            open()
+            folderInput.selectAll()
+            folderInput.forceActiveFocus()
+        }
+
+        parent: Overlay.overlay
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(420, (Overlay.overlay ? Overlay.overlay.width : 420) - 32)
+        modal: true
+        focus: true
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        Overlay.modal: Rectangle { color: "#CC000000" }
+
+        background: Rectangle {
+            radius: 18
+            color: Theme.bgRaised
+            border.width: 1
+            border.color: Theme.borderHi
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.margins: 24
+                spacing: 16
+
+                Text {
+                    text: "New Folder"
+                    color: Theme.text
+                    font.pixelSize: 20
+                    font.weight: Font.Bold
+                }
+
+                Text {
+                    text: "Create a new folder in this library directory:"
+                    color: Theme.textDim
+                    font.pixelSize: 13
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 42
+                    radius: 10
+                    color: folderInput.activeFocus ? "#26FFFFFF" : "#1AFFFFFF"
+                    border.width: 1
+                    border.color: folderInput.activeFocus ? Theme.accentRing : Theme.border
+
+                    TextField {
+                        id: folderInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        placeholderText: "Folder name"
+                        placeholderTextColor: Theme.textMute
+                        color: Theme.text
+                        font.pixelSize: 14
+                        selectByMouse: true
+                        background: null
+                        onAccepted: newFolderDialog.confirmCreate()
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 8
+                    spacing: 10
+
+                    Item { Layout.fillWidth: true }
+
+                    FluxButton {
+                        text: "Cancel"
+                        variant: "ghost"
+                        implicitHeight: 38
+                        implicitWidth: 90
+                        onClicked: newFolderDialog.close()
+                    }
+
+                    FluxButton {
+                        text: "Create"
+                        variant: "primary"
+                        implicitHeight: 38
+                        implicitWidth: 100
+                        enabled: folderInput.text.trim().length > 0
+                        onClicked: newFolderDialog.confirmCreate()
+                    }
+                }
+            }
+        }
+
+        function confirmCreate() {
+            var name = folderInput.text.trim()
+            if (name.length === 0 || !fluxDownloads) return
+            if (fluxDownloads.createLocalFolder(parentPath, name)) {
+                root.refreshTick++
+                root.showToast("Folder created")
+                newFolderDialog.close()
+            }
+        }
+    }
+
+    // ---- Rename Dialog ----
+    Popup {
+        id: renameDialog
+
+        property string targetPath: ""
+        property string initialName: ""
+        property bool isFolder: false
+
+        function openFor(path, name, folder) {
+            targetPath = path
+            initialName = name
+            isFolder = folder
+            renameInput.text = name
+            open()
+            if (!folder && name.lastIndexOf(".") > 0) {
+                renameInput.select(0, name.lastIndexOf("."))
+            } else {
+                renameInput.selectAll()
+            }
+            renameInput.forceActiveFocus()
+        }
+
+        parent: Overlay.overlay
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(420, (Overlay.overlay ? Overlay.overlay.width : 420) - 32)
+        modal: true
+        focus: true
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        Overlay.modal: Rectangle { color: "#CC000000" }
+
+        background: Rectangle {
+            radius: 18
+            color: Theme.bgRaised
+            border.width: 1
+            border.color: Theme.borderHi
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.margins: 24
+                spacing: 16
+
+                Text {
+                    text: renameDialog.isFolder ? "Rename Folder" : "Rename File"
+                    color: Theme.text
+                    font.pixelSize: 20
+                    font.weight: Font.Bold
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 42
+                    radius: 10
+                    color: renameInput.activeFocus ? "#26FFFFFF" : "#1AFFFFFF"
+                    border.width: 1
+                    border.color: renameInput.activeFocus ? Theme.accentRing : Theme.border
+
+                    TextField {
+                        id: renameInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        placeholderText: "New name"
+                        placeholderTextColor: Theme.textMute
+                        color: Theme.text
+                        font.pixelSize: 14
+                        selectByMouse: true
+                        background: null
+                        onAccepted: renameDialog.confirmRename()
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 8
+                    spacing: 10
+
+                    Item { Layout.fillWidth: true }
+
+                    FluxButton {
+                        text: "Cancel"
+                        variant: "ghost"
+                        implicitHeight: 38
+                        implicitWidth: 90
+                        onClicked: renameDialog.close()
+                    }
+
+                    FluxButton {
+                        text: "Rename"
+                        variant: "primary"
+                        implicitHeight: 38
+                        implicitWidth: 100
+                        enabled: renameInput.text.trim().length > 0 && renameInput.text.trim() !== renameDialog.initialName
+                        onClicked: renameDialog.confirmRename()
+                    }
+                }
+            }
+        }
+
+        function confirmRename() {
+            var n = renameInput.text.trim()
+            if (n.length === 0 || !fluxDownloads) return
+            if (fluxDownloads.renameLocalPath(targetPath, n)) {
+                root.refreshTick++
+                root.showToast("Renamed successfully")
+                renameDialog.close()
+            }
+        }
+    }
+
+    // ---- Delete Confirmation Dialog ----
+    Popup {
+        id: deleteDialog
+
+        property string targetPath: ""
+        property string targetName: ""
+        property bool isFolder: false
+
+        function openFor(path, name, folder) {
+            targetPath = path
+            targetName = name
+            isFolder = folder
+            open()
+        }
+
+        parent: Overlay.overlay
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(420, (Overlay.overlay ? Overlay.overlay.width : 420) - 32)
+        modal: true
+        focus: true
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        Overlay.modal: Rectangle { color: "#CC000000" }
+
+        background: Rectangle {
+            radius: 18
+            color: Theme.bgRaised
+            border.width: 1
+            border.color: Theme.borderHi
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.margins: 24
+                spacing: 16
+
+                Rectangle {
+                    implicitWidth: 52
+                    implicitHeight: 52
+                    radius: 26
+                    color: "#26F23F43"
+                    border.width: 1
+                    border.color: "#66F23F43"
+
+                    FluxIcon {
+                        anchors.centerIn: parent
+                        name: "alert"
+                        size: 26
+                        color: Theme.danger
+                    }
+                }
+
+                Text {
+                    text: deleteDialog.isFolder ? "Delete Folder?" : "Delete File?"
+                    color: Theme.text
+                    font.pixelSize: 20
+                    font.weight: Font.Bold
+                }
+
+                Text {
+                    text: "Are you sure you want to delete \"" + deleteDialog.targetName + "\"? It will be moved to the Recycle Bin."
+                    color: Theme.textDim
+                    font.pixelSize: 14
+                    lineHeight: 1.4
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 8
+                    spacing: 10
+
+                    Item { Layout.fillWidth: true }
+
+                    FluxButton {
+                        text: "Cancel"
+                        variant: "ghost"
+                        implicitHeight: 38
+                        implicitWidth: 90
+                        onClicked: deleteDialog.close()
+                    }
+
+                    FluxButton {
+                        text: "Delete"
+                        variant: "danger"
+                        implicitHeight: 38
+                        implicitWidth: 100
+                        onClicked: deleteDialog.confirmDelete()
+                    }
+                }
+            }
+        }
+
+        function confirmDelete() {
+            if (!fluxDownloads) return
+            if (fluxDownloads.deleteLocalPath(targetPath)) {
+                root.refreshTick++
+                root.showToast("Deleted " + (deleteDialog.isFolder ? "folder" : "file"))
+                deleteDialog.close()
+            }
+        }
+    }
+
+    // ---- Feedback Toast ----
+    Rectangle {
+        id: toast
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 32
+        implicitHeight: 38
+        implicitWidth: toastText.implicitWidth + 32
+        radius: 19
+        color: "#F01E1F22"
+        border.width: 1
+        border.color: Theme.borderHi
+        z: 100
+        opacity: 0
+
+        Behavior on opacity { NumberAnimation { duration: 160 } }
+
+        Text {
+            id: toastText
+            anchors.centerIn: parent
+            color: Theme.text
+            font.pixelSize: 13
+            font.weight: Font.DemiBold
+        }
+
+        Timer {
+            id: toastTimer
+            interval: 2200
+            onTriggered: toast.opacity = 0
+        }
+    }
+
+    function showToast(msg) {
+        toastText.text = msg
+        toast.opacity = 1
+        toastTimer.restart()
     }
 }

@@ -2,7 +2,9 @@ import QtQuick
 import QtQuick.Controls
 import "Theme.js" as Theme
 
-// Right-click menu for a file / folder card:  Open  |  Bookmark / Remove bookmark  |  Download
+// Right-click menu for a file / folder card:
+// In Library: Open | Bookmark | Copy | Paste (if folder) | Rename | Delete | Show in folder
+// Outside Library (Search/Online): Open | Bookmark | Download
 Menu {
     id: menu
 
@@ -11,11 +13,17 @@ Menu {
     property bool canBookmark: true
     property bool canDownload: true
     property bool canShowInFolder: false
+    property bool isLibraryItem: false
+    property bool canPaste: false
 
     signal openRequested()
     signal bookmarkToggled()
     signal downloadRequested()
     signal showInFolderRequested()
+    signal copyRequested()
+    signal pasteRequested()
+    signal renameRequested()
+    signal deleteRequested()
 
     padding: 6
     modal: false
@@ -55,6 +63,13 @@ Menu {
         }
     }
 
+    component Sep: Rectangle {
+        implicitWidth: 224
+        implicitHeight: visible ? 1 : 0
+        height: visible ? 1 : 0
+        color: Theme.border
+    }
+
     background: Rectangle {
         implicitWidth: 236
         radius: 12
@@ -68,12 +83,45 @@ Menu {
         onTriggered: menu.openRequested()
     }
 
-
     Entry {
         visible: menu.canBookmark
         text: menu.bookmarked ? "Remove bookmark" : "Bookmark"
         tint: menu.bookmarked ? Theme.danger : Theme.text
         onTriggered: menu.bookmarkToggled()
+    }
+
+    Sep {
+        visible: menu.isLibraryItem
+    }
+
+    Entry {
+        visible: menu.isLibraryItem
+        text: "Copy"
+        onTriggered: menu.copyRequested()
+    }
+
+    Entry {
+        visible: menu.isLibraryItem && menu.isFolder
+        text: "Paste"
+        enabled: menu.canPaste
+        onTriggered: menu.pasteRequested()
+    }
+
+    Entry {
+        visible: menu.isLibraryItem
+        text: "Rename"
+        onTriggered: menu.renameRequested()
+    }
+
+    Entry {
+        visible: menu.isLibraryItem
+        text: "Delete"
+        tint: Theme.danger
+        onTriggered: menu.deleteRequested()
+    }
+
+    Sep {
+        visible: menu.canShowInFolder || menu.canDownload
     }
 
     Entry {
