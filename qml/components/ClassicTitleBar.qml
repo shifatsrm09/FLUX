@@ -28,6 +28,7 @@ Item {
     signal searchClicked()
     signal bookmarksClicked()
     signal libraryClicked()
+    signal torrentClicked()
     signal nowPlayingClicked()
 
     // Text link in the nav (Home / Library) with an underline on the current one
@@ -295,6 +296,12 @@ Item {
                 locked: root.offlineLocked
                 lockedTip: "Leave Teleparty to access library"
                 onClicked: root.libraryClicked()
+            }
+
+            NavLink {
+                label: "Torrent"
+                current: root.section === "torrent"
+                onClicked: root.torrentClicked()
             }
         }
     }

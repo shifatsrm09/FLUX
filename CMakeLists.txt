@@ -80,6 +80,8 @@ qt_add_executable(FLUX WIN32
     src/core/Updater.h
     src/core/Updater.cpp
     src/core/Version.h
+    src/torrent/TorrentManager.h
+    src/torrent/TorrentManager.cpp
     resources/flux.rc
 )
 
@@ -102,6 +104,7 @@ qt_add_qml_module(FLUX
         qml/Main.qml
         qml/SearchPage.qml
         qml/LibraryPage.qml
+        qml/TorrentPage.qml
         qml/PlayerView.qml
         qml/components/MediaCard.qml
         qml/components/PlaybackControls.qml

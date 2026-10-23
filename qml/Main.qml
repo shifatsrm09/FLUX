@@ -24,7 +24,7 @@ ApplicationWindow {
     property bool isFullscreen: false
     property bool wasMaximizedBeforeFullscreen: false
 
-    property string currentPage: "search" // "search" | "library" | "player"
+    property string currentPage: "search" // "search" | "library" | "torrent" | "player"
     property string pageBeforePlayer: "search" // where Back from the player returns to
     property string currentPlayingTitle: ""
     property string currentSourceUrl: ""
@@ -576,7 +576,18 @@ ApplicationWindow {
         if (isFullscreen) {
             toggleFullscreen()
         }
-        currentPage = (pageBeforePlayer === "library") ? "library" : "search"
+        currentPage = (pageBeforePlayer === "library") ? "library" : ((pageBeforePlayer === "torrent") ? "torrent" : "search")
+    }
+
+    function showTorrent() {
+        window.partyServerMismatch = false
+        if (fluxPlayer && !window.inTeleparty) {
+            fluxPlayer.pause()
+        }
+        if (isFullscreen) {
+            toggleFullscreen()
+        }
+        currentPage = "torrent"
     }
 
     function showLibrary(rel) {
@@ -918,6 +929,23 @@ ApplicationWindow {
             }
         }
 
+        // Torrent: stream from magnet links or .torrent files
+        TorrentPage {
+            id: torrentPage
+
+            anchors.fill: parent
+            topInset: customTitleBar.height
+            active: currentPage === "torrent"
+            opacity: currentPage === "torrent" ? 1.0 : 0.0
+            visible: opacity > 0.0
+
+            Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+
+            onPlayRequested: function(url, title) {
+                window.playMedia(url, title)
+            }
+        }
+
         // Cinematic full-viewport player
         PlayerView {
             id: playerView
@@ -955,9 +983,10 @@ ApplicationWindow {
             anchors.right: parent.right
             z: 100
             window: window
-            solid: searchPage.navSolid || currentPage === "library"
+            solid: searchPage.navSolid || currentPage === "library" || currentPage === "torrent"
             section: currentPage === "library" ? "library"
-                                                : (currentPage === "search" ? (searchPage.bookmarksOpen ? "bookmarks" : (searchPage.showSearch ? "search" : "home")) : "")
+                                                : (currentPage === "torrent" ? "torrent"
+                                                : (currentPage === "search" ? (searchPage.bookmarksOpen ? "bookmarks" : (searchPage.showSearch ? "search" : "home")) : ""))
             overlayMode: currentPage === "player"
             shown: !window.isFullscreen && (currentPage !== "player" || playerView.showControls || menuOpen)
             offlineLocked: false
@@ -1011,6 +1040,8 @@ ApplicationWindow {
             onSearchClicked: window.showSearch()
             onBookmarksClicked: window.showBookmarks()
             onLibraryClicked: window.showLibrary()
+
+            onTorrentClicked: window.showTorrent()
         }
 
         // Bottom-right dock: downloads + settings (browsing pages only)
@@ -1023,7 +1054,7 @@ ApplicationWindow {
             anchors.bottomMargin: 22
             spacing: 10
             z: 90
-            visible: (currentPage === "search" || currentPage === "library") && !window.isFullscreen
+            visible: (currentPage === "search" || currentPage === "library" || currentPage === "torrent") && !window.isFullscreen
 
             DockButton {
                 iconName: "download"

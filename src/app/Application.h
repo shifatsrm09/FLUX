@@ -15,6 +15,7 @@
 #include "../downloads/MediaCache.h"
 #include "../teleparty/TelepartySession.h"
 #include "../teleparty/TelepartySync.h"
+#include "../torrent/TorrentManager.h"
 
 namespace Flux {
 
@@ -46,6 +47,7 @@ private:
     std::unique_ptr<UserStore> m_userStore;
     std::unique_ptr<BookmarkManager> m_bookmarks;
     std::unique_ptr<Updater> m_updater;
+    std::unique_ptr<TorrentManager> m_torrentManager;
 };
 
 } // namespace Flux

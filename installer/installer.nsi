@@ -108,7 +108,8 @@ Section "FLUX" SecMain
     !insertmacro WriteProgress "20|INSTALLING UPDATE 1 OF 1"
 
     ; Close any running FLUX instance so files are unlocked
-    nsExec::ExecToStack 'taskkill /F /IM FLUX.exe'
+    nsExec::ExecToStack 'taskkill /F /IM FLUX.exe'
+    nsExec::ExecToStack 'taskkill /F /IM torrserver.exe'
 
     !insertmacro WriteProgress "35|INSTALLING UPDATE 1 OF 1"
     SetOutPath "$INSTDIR"
@@ -150,7 +151,8 @@ Section "FLUX" SecMain
 SectionEnd
 
 Section "Uninstall"
-    nsExec::ExecToStack 'taskkill /F /IM FLUX.exe'
+    nsExec::ExecToStack 'taskkill /F /IM FLUX.exe'
+    nsExec::ExecToStack 'taskkill /F /IM torrserver.exe'
 
     ; Remove Shortcuts
     Delete "$DESKTOP\FLUX.lnk"

@@ -57,6 +57,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     m_userStore = std::make_unique<UserStore>(this);
     m_bookmarks = std::make_unique<BookmarkManager>(this);
     m_updater = std::make_unique<Updater>(this);
+    m_torrentManager = std::make_unique<TorrentManager>(this);
     // Pre-warm update check immediately so the splash popup has data without waiting
     m_updater->checkForUpdates(true);
 
@@ -231,6 +232,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     rootContext->setContextProperty("fluxLibrary", m_searchManager->libraryModel());
     rootContext->setContextProperty("fluxLogger", &Logger::instance());
     rootContext->setContextProperty("fluxSnap", WindowsSnapHelper::instance());
+    rootContext->setContextProperty("fluxTorrent", m_torrentManager.get());
 
     // 5. Startup update check is driven immediately by the Discord-style StartupPopup window
 
