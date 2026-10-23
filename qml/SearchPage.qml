@@ -518,7 +518,7 @@ Item {
                 readonly property real picksCardW: homeColumn.cardW
                 readonly property real picksCardH: homeColumn.cardH
 
-                readonly property var topPicksList: [
+                readonly property var rawTopPicks: [
                     {
                         "title": "The Shawshank Redemption (1994) 1080p BluRay x265",
                         "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/The%20Shawshank%20Redemption%20%281994%29%201080p/The%20Shawshank%20Redemption%20%281994%29%20RM4K%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-afm72.mkv",
@@ -695,6 +695,17 @@ Item {
                         "extraInfo": "Top Pick"
                     }
                 ]
+
+                property var topPicksList: {
+                    var arr = rawTopPicks.slice()
+                    for (var i = arr.length - 1; i > 0; i--) {
+                        var j = Math.floor(Math.random() * (i + 1))
+                        var temp = arr[i]
+                        arr[i] = arr[j]
+                        arr[j] = temp
+                    }
+                    return arr
+                }
 
                 Component.onCompleted: {
                     if (fluxUser) {
