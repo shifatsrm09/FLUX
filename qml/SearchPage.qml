@@ -548,8 +548,8 @@ Item {
                         "extraInfo": "Top Pick"
                     },
                     {
-                        "title": "Shutter Island (2010) 720p BluRay x264 Dual Audio",
-                        "url": "http://172.16.50.7/DHAKA-FLIX-7/English%20Movies/%282010%29/Shutter%20Island%20%282010%29%20720p%20%5BDual%20Audio%5D/Shutter%20Island%20%282010%29%20720p%20BluRay%20x264%20ESub%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-%20mkvC.mkv",
+                        "title": "Shutter Island (2010) 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-afm72",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282010%29%201080p/Shutter%20Island%20%282010%29%201080p/Shutter%20Island%20%282010%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-afm72.mkv",
                         "altUrl": "http://10.16.100.244/player.php?play=2670",
                         "posterUrl": "https://image.tmdb.org/t/p/w500/nrmXQ0zcZUL8jFLrakWc90IR8z9.jpg",
                         "extraInfo": "Top Pick"
@@ -653,8 +653,8 @@ Item {
                         "extraInfo": "Top Pick"
                     },
                     {
-                        "title": "Memento (2000) 720p BluRay x264 Dual Audio",
-                        "url": "http://172.16.50.7/DHAKA-FLIX-7/English%20Movies/%282000%29/Memento%20%282000%29%20720p%20%5BDual%20Audio%5D/Memento%20%282000%29%20RM%20720p%20BluRay%20x264%20ESub%20%5BDual%20Audio%5D%5BHindi%202.0%2BEnglish%205.1%5D%20-mkvC.mkv",
+                        "title": "Memento (2000) 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-afm72",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282000%29%201080p/Memento%20%282000%29%201080p/Memento%20%282000%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-afm72.mkv",
                         "altUrl": "http://10.16.100.244/player.php?play=6534",
                         "posterUrl": "https://image.tmdb.org/t/p/w500/yuNs09hvpHVU1cBTCAk9zxsL2oW.jpg",
                         "extraInfo": "Top Pick"
@@ -692,6 +692,195 @@ Item {
                         "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282002%29%201080p/Catch%20Me%20If%20You%20Can%20%282002%29%201080p/Catch%20Me%20If%20You%20Can%20%282002%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-pav69.mkv",
                         "altUrl": "http://10.16.100.244/player.php?play=6",
                         "posterUrl": "https://image.tmdb.org/t/p/w500/ggC3Brchf4RqPitEh7cROFoeAWn.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "The Good the Bad and the Ugly (1966) EXTENDED 1080p BluRay x265 HEVC 10bit 5.1 MSubs-LordVako",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/The%20Good%2C%20the%20Bad%20and%20the%20Ugly%20%281966%29%201080p/The%20Good%20the%20Bad%20and%20the%20Ugly%20%281966%29%20EXTENDED%201080p%20BluRay%20x265%20HEVC%2010bit%205.1%20MSubs-LordVako.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=4808",
+                        "posterUrl": "http://10.16.100.244/files/the_good__the_bad_and_the_ugly.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Goodfellas (1990) RM 1080p BluRay x265 HEVC 10bit AC3 5.1 ESub-MeGUiL",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/Goodfellas%20%281990%29%201080p/Goodfellas%20%281990%29%20RM%201080p%20BluRay%20x265%20HEVC%2010bit%20AC3%205.1%20ESub-MeGUiL.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=9227",
+                        "posterUrl": "http://10.16.100.244/files/goodfellas.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Se7en.1995.REMASTERED.1080p.BluRay.10bit.HEVC.6CH.MkvCage.ws",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/Se7en%20%281995%29%201080p/Se7en.1995.REMASTERED.1080p.BluRay.10bit.HEVC.6CH.MkvCage.ws.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=9360",
+                        "posterUrl": "http://10.16.100.244/files/se7en__seven_.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "The Green Mile (1999) 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-afm72",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281999%29%201080p/The%20Green%20Mile%20%281999%29%201080p/The%20Green%20Mile%20%281999%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-afm72.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=88",
+                        "posterUrl": "http://10.16.100.244/files/the_green_mile.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "The Pianist (2002) 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-MkvCage",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282002%29%201080p/The%20Pianist%20%282002%29%201080p/The%20Pianist%20%282002%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-MkvCage.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=5854",
+                        "posterUrl": "http://10.16.100.244/files/the_pianist.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "The Departed (2006) 1080p BluRay x265 HEVC 10bit AAC 5.1 MSubs-Tigole",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282006%29%201080p/The%20Departed%20%282006%29%201080p/The%20Departed%20%282006%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20MSubs-Tigole.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=9394",
+                        "posterUrl": "http://10.16.100.244/files/the_departed.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "The.Silence.of.the.Lambs.1991.REMASTERED.1080p.BluRay.10bit.HEVC.6CH.MkvCage.ws",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/The%20Silence%20of%20The%20Lambs%20%281991%29%201080p/The.Silence.of.the.Lambs.1991.REMASTERED.1080p.BluRay.10bit.HEVC.6CH.MkvCage.ws.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=92",
+                        "posterUrl": "http://10.16.100.244/files/the_silence_of_the_lambs.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "City of God (2002) Portuguese 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-HazMatt",
+                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/Brazilian%20Movie/City%20of%20God%20%282002%29%201080p%20%28Brazil%29/City%20of%20God%20%282002%29%20Portuguese%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-HazMatt.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=9470",
+                        "posterUrl": "http://10.16.100.244/files/city_of_god.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Parasite (2019) 1080p BluRay x265 HEVC MSubs [Dual Audio][Hindi DD5.1+Korean DD5.1] -imSamir",
+                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/Korean%20Language/Parasite%20%282019%29%201080p%20%5BDual%20Audio%5D/Parasite%20%282019%29%201080p%20BluRay%20x265%20HEVC%20MSubs%20%5BDual%20Audio%5D%5BHindi%20DD5.1%2BKorean%20DD5.1%5D%20-imSamir.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=17834",
+                        "posterUrl": "http://10.16.100.244/files/parasite__gisaengchung_.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "The Intouchables (2011) 1080p NF-WEB x264 AAC 5.1 ESub-mkvC",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282011%29%201080p/The%20Intouchables%20%282011%29%201080p%20NF/The%20Intouchables%20%282011%29%201080p%20NF-WEB%20x264%20AAC%205.1%20ESub-mkvC.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=5754",
+                        "posterUrl": "http://10.16.100.244/files/the_intouchables__intouchables_.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Oldboy (2003) REM 1080p BluRay x265 HEVC ESub [Dual Audio][Hindi 5.1+Korean 5.1] -mkvC",
+                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/Korean%20Language/Oldboy%20%282003%29%201080p%20%5BDual%20Audio%5D/Oldboy%20%282003%29%20REM%201080p%20BluRay%20x265%20HEVC%20ESub%20%5BDual%20Audio%5D%5BHindi%205.1%2BKorean%205.1%5D%20-mkvC.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=9581",
+                        "posterUrl": "http://10.16.100.244/files/oldboy.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Koe no katachi aka A Silent Voice 2016 (Dual Audio_10bit_BD_1080p_x265)",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/A%20Silent%20Voice-The%20Movie%20%282016%29%201080p%20%5BDual%20Audio%5D/Koe%20no%20katachi%20aka%20A%20Silent%20Voice%202016%20%28Dual%20Audio_10bit_BD_1080p_x265%29.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=12275",
+                        "posterUrl": "http://10.16.100.244/files/a_silent_voice__koe_no_katachi_.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Princess Mononoke (1997) 1080p BluRay x265 HEVC 10bit MSubs [Dual Audio]",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/Princess%20Mononoke%20%281997%29%201080p%20%5BDual%20Audio%5D/Princess%20Mononoke%20%281997%29%201080p%20BluRay%20x265%20HEVC%2010bit%20MSubs%20%5BDual%20Audio%5D.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=3908",
+                        "posterUrl": "http://10.16.100.244/files/princess_mononoke__mononoke_hime___hindi___japanese_.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "WALL-E (2008) 1080p BluRay x265 HEVC MSubs [Dual Audio][Hindi 5.1+English 5.1] -OlaM",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/WALL%C2%B7E%20%282008%29%201080p%20%5BDual%20Audio%5D/WALL-E%20%282008%29%201080p%20BluRay%20x265%20HEVC%20MSubs%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-OlaM.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=9735",
+                        "posterUrl": "http://10.16.100.244/files/wall_e.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Coco (2017) 1080p BluRay x264 ESub [Dual Audio][Hindi 5.1+English 5.1] -HDHub",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/Coco%20%282017%29%201080p%20%5BDual%20Audio%5D/Coco%20%282017%29%201080p%20BluRay%20x264%20ESub%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-HDHub.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=9163",
+                        "posterUrl": "http://10.16.100.244/files/coco.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Howl's Moving Castle (2004) 1080p BluRay x265 HEVC 10bit MSubs [Multi Audio]",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/Howl%27s%20Moving%20Castle%20%282004%29%201080p%20%5BMulti%20Audio%5D/Howl%27s%20Moving%20Castle%20%282004%29%201080p%20BluRay%20x265%20HEVC%2010bit%20MSubs%20%5BMulti%20Audio%5D.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=14231",
+                        "posterUrl": "http://10.16.100.244/files/howls_moving_castle__hauru_no_ugoku_shiro_.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "The Wild Robot (2024) 1080p BluRay x265 HEVC MSubs [Dual Audio][Hindi 5.1+English 5.1] -mkvC",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/The%20Wild%20Robot%20%282024%29%201080p%20%5BDual%20Audio%5D/The%20Wild%20Robot%20%282024%29%201080p%20BluRay%20x265%20HEVC%20MSubs%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-mkvC.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=36467",
+                        "posterUrl": "http://10.16.100.244/files/the_wild_robot.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "The Truman Show (1998) 1080p BluRay x265 HEVC 10bit AAC 5.1 MSubs-Tigole",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281998%29%201080p/The%20Truman%20Show%20%281998%29%201080p/The%20Truman%20Show%20%281998%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20MSubs-Tigole.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=9151",
+                        "posterUrl": "http://10.16.100.244/files/the_truman_show.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Star.Wars.Episode.V.The.Empire.Strikes.Back.1980.1080p.BluRay.x264.DD5.1.ESub-GalaxyRG",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/Star%20Wars-Episode%20V%20-%20The%20Empire%20Strikes%20Back%20%281980%29%201080p/Star.Wars.Episode.V.The.Empire.Strikes.Back.1980.1080p.BluRay.x264.DD5.1.ESub-GalaxyRG.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=1970",
+                        "posterUrl": "http://10.16.100.244/files/star_wars_episode_v_the_empire_strikes_back__full_hd_.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Terminator 2 Judgment Day (1991) DC EXTENDED 1080p BluRay x265 HEVC MSubs [Dual Audio][Hindi 5.1+English 5.1] -OlaM",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/Terminator%202-Judgment%20Day%20%281991%29%201080p%20%5BDual%20Audio%5D/Terminator%202%20Judgment%20Day%20%281991%29%20DC%20EXTENDED%201080p%20BluRay%20x265%20HEVC%20MSubs%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-OlaM.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=144",
+                        "posterUrl": "http://10.16.100.244/files/terminator_2_judgment_day__4k_.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Django Unchained (2012) 1080p BluRay x265 HEVC ESub [Dual Audio][Hindi 2.0+English 5.1] -MsMod",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282012%29%201080p/Django%20Unchained%20%282012%29%201080p%20%5BDual%20Audio%5D/Django%20Unchained%20%282012%29%201080p%20BluRay%20x265%20HEVC%20ESub%20%5BDual%20Audio%5D%5BHindi%202.0%2BEnglish%205.1%5D%20-MsMod.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=5675",
+                        "posterUrl": "http://10.16.100.244/files/speed_Django%20Unchained%202012.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "The Shining (1980) DC RM 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-PSA",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/The%20Shining%20%281980%29%201080p/The%20Shining%20%281980%29%20DC%20RM%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-PSA.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=9133",
+                        "posterUrl": "http://10.16.100.244/files/the_shining.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Apocalypse Now (1979) Redux 1080p BluRay x265 HEVC 10bit AAC 5.1 MSubs-Joy",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/Apocalypse%20Now%20%281979%29%201080p/Apocalypse%20Now%20%281979%29%20Redux%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20MSubs-Joy.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=15794",
+                        "posterUrl": "http://10.16.100.244/files/apocalypse_now.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "The Hunt (2012) Danish 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-afm72",
+                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/Danish%20Language/The%20Hunt%20%282012%29%201080p%20%28Denmark%29/The%20Hunt%20%282012%29%20Danish%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-afm72.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=15005",
+                        "posterUrl": "http://10.16.100.244/files/the_hunt.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Incendies (2010) French 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-mkvC",
+                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/French%20Language/Incendies%20%282010%29%201080p%20%28France%29/Incendies%20%282010%29%20French%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-mkvC.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=10642",
+                        "posterUrl": "http://10.16.100.244/files/incendies.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "The Secret in Their Eyes (2009) Spanish 1080p BluRay x265 HEVC 10bit AAC 5.1 MSubs-Tigole",
+                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/Spanish%20Language/The%20Secret%20in%20Their%20Eyes%20%282009%29%201080p%20%28Argentina%29/The%20Secret%20in%20Their%20Eyes%20%282009%29%20Spanish%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20MSubs-Tigole.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=6550",
+                        "posterUrl": "http://10.16.100.244/files/speed_secret-in-their-eyes-the-2009-poster.jpg",
+                        "extraInfo": "Top Pick"
+                    },
+                    {
+                        "title": "Five Feet Apart (2019) 1080p BRRip x264-MkvCage.ws",
+                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282019%29%201080p/Five%20Feet%20Apart%20%282019%29%201080p/Five.Feet.Apart.2019.1080p.BRRip.x264-MkvCage.ws.mkv",
+                        "altUrl": "http://10.16.100.244/player.php?play=15135",
+                        "posterUrl": "http://10.16.100.244/files/five_feet_apart.jpg",
                         "extraInfo": "Top Pick"
                     }
                 ]
