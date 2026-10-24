@@ -233,6 +233,20 @@ target_link_libraries(flux_test_searchquery PRIVATE
     Qt6::Core
 )
 
+# Standalone CLI test for 1337x torrent search
+add_executable(flux_test_torrent_search
+    tests/test_torrent_search.cpp
+    src/torrent/TorrentManager.h
+    src/torrent/TorrentManager.cpp
+    src/core/Logger.h
+    src/core/Logger.cpp
+)
+target_link_libraries(flux_test_torrent_search PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Network
+)
+
 # Standalone CLI test for libVLC playback pipeline
 add_executable(flux_test_playback
     tests/test_playback.cpp

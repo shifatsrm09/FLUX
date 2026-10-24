@@ -50,6 +50,14 @@ class TorrentManager : public QObject {
     Q_PROPERTY(QString selectedFileName READ selectedFileName NOTIFY selectedFileIndexChanged)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorChanged)
 
+    // 1337x Search & Stream
+    Q_PROPERTY(bool isSearching1337x READ isSearching1337x NOTIFY searching1337xChanged)
+    Q_PROPERTY(QVariantList searchResults READ searchResults NOTIFY searchResultsChanged)
+    Q_PROPERTY(QString searchError READ searchError NOTIFY searchErrorChanged)
+    Q_PROPERTY(bool isResolvingMagnet READ isResolvingMagnet NOTIFY resolvingMagnetChanged)
+    Q_PROPERTY(QString resolvingTorrentName READ resolvingTorrentName NOTIFY resolvingMagnetChanged)
+    Q_PROPERTY(int resolvingIndex READ resolvingIndex NOTIFY resolvingMagnetChanged)
+
 public:
     explicit TorrentManager(QObject *parent = nullptr);
     ~TorrentManager() override;
@@ -86,11 +94,26 @@ public:
     QString selectedFileName() const { return m_selectedFileName; }
     QString errorMessage() const { return m_errorMessage; }
 
+    // 1337x Search getters
+    bool isSearching1337x() const { return m_isSearching1337x; }
+    QVariantList searchResults() const { return m_searchResults; }
+    QString searchError() const { return m_searchError; }
+    bool isResolvingMagnet() const { return m_isResolvingMagnet; }
+    QString resolvingTorrentName() const { return m_resolvingTorrentName; }
+    int resolvingIndex() const { return m_resolvingIndex; }
+
     Q_INVOKABLE void startTorrent(const QString &magnetOrPath);
     Q_INVOKABLE void selectFile(int fileIndex);
     Q_INVOKABLE void stopTorrent();
     Q_INVOKABLE void checkEngine();
     Q_INVOKABLE QString browseTorrentFile();
+
+    // 1337x Search invokables
+    Q_INVOKABLE void search1337x(const QString &query, const QString &category = QString());
+    Q_INVOKABLE void cancelSearch1337x();
+    Q_INVOKABLE void clearSearchResults();
+    Q_INVOKABLE void streamSearchResult(int index);
+    Q_INVOKABLE void copyMagnet(int index);
 
 signals:
     void engineReadyChanged();
@@ -106,6 +129,13 @@ signals:
     void bufferingChanged();
     void torrentReadyToPlay(const QString &url, const QString &title);
 
+    // 1337x Signals
+    void searching1337xChanged();
+    void searchResultsChanged();
+    void searchErrorChanged();
+    void resolvingMagnetChanged();
+    void magnetCopied(const QString &magnet);
+
 private slots:
     void onPollTimer();
 
@@ -120,6 +150,10 @@ private:
     void parseStatusResponse(const QByteArray &data);
     void updateStreamUrl();
     QString findEngineExecutable() const;
+
+    // 1337x Private helpers
+    void parse1337xSearchHtml(const QString &html, const QString &baseUrl);
+    static QString decodeHtmlEntities(const QString &raw);
 
     static QString formatBytes(qint64 bytes);
     static bool isVideoFile(const QString &path);
@@ -150,6 +184,17 @@ private:
     QString m_selectedFileName;
     QString m_errorMessage;
     bool m_isReadyToPlay{false};
+
+    // 1337x Search state
+    bool m_isSearching1337x{false};
+    QVariantList m_searchResults;
+    QString m_searchError;
+    bool m_isResolvingMagnet{false};
+    QString m_resolvingTorrentName;
+    int m_resolvingIndex{-1};
+    QPointer<QNetworkReply> m_searchReply;
+    QPointer<QNetworkReply> m_detailReply;
+    QString m_currentBaseUrl{QStringLiteral("https://1337x.la")};
 
     QProcess *m_process{nullptr};
     QNetworkAccessManager *m_nam{nullptr};

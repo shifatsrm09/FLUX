@@ -14,6 +14,10 @@
 #include <QStandardPaths>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QClipboard>
+#include <QGuiApplication>
+#include <QRegularExpression>
+
 
 #ifdef Q_OS_WIN
 #ifndef WIN32_LEAN_AND_MEAN
@@ -44,6 +48,14 @@ TorrentManager::TorrentManager(QObject *parent)
 TorrentManager::~TorrentManager() {
     if (m_pollTimer) m_pollTimer->stop();
     if (m_engineCheckTimer) m_engineCheckTimer->stop();
+    if (m_searchReply) {
+        m_searchReply->abort();
+        m_searchReply->deleteLater();
+    }
+    if (m_detailReply) {
+        m_detailReply->abort();
+        m_detailReply->deleteLater();
+    }
 
     if (m_process && m_process->state() != QProcess::NotRunning) {
         FLUX_LOG_INFO("TorrentManager", "Terminating background torrent engine");
@@ -671,6 +683,353 @@ void TorrentManager::stopTorrent() {
     emit filesChanged();
     emit selectedFileIndexChanged();
     emit streamUrlChanged();
+}
+
+
+void TorrentManager::search1337x(const QString &query, const QString &category) {
+    const QString trimmed = query.trimmed();
+    if (trimmed.isEmpty()) {
+        m_searchError = QStringLiteral("Please enter a search query.");
+        emit searchErrorChanged();
+        return;
+    }
+
+    if (m_searchReply) {
+        m_searchReply->abort();
+        m_searchReply->deleteLater();
+        m_searchReply = nullptr;
+    }
+
+    m_isSearching1337x = true;
+    m_searchError.clear();
+    m_searchResults.clear();
+    emit searching1337xChanged();
+    emit searchErrorChanged();
+    emit searchResultsChanged();
+
+    QByteArray encodedQuery = QUrl::toPercentEncoding(trimmed);
+    encodedQuery.replace("%20", "+");
+
+    QString cat = category.trimmed();
+    QString path;
+    if (cat.isEmpty() || cat.compare(QStringLiteral("all"), Qt::CaseInsensitive) == 0) {
+        path = QStringLiteral("/sort-search/%1/seeders/desc/1/").arg(QString::fromUtf8(encodedQuery));
+    } else {
+        path = QStringLiteral("/sort-category-search/%1/%2/seeders/desc/1/").arg(QString::fromUtf8(encodedQuery), cat);
+    }
+
+    const QUrl searchUrl(m_currentBaseUrl + path);
+    FLUX_LOG_INFO("TorrentManager", "Searching 1337x: " + searchUrl.toString());
+
+    QNetworkRequest req(searchUrl);
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"));
+    req.setRawHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+    req.setRawHeader("Accept-Language", "en-US,en;q=0.9");
+    req.setTransferTimeout(15000);
+
+    m_searchReply = m_nam->get(req);
+    connect(m_searchReply, &QNetworkReply::finished, this, [this, searchUrl]() {
+        if (!m_searchReply) return;
+        m_isSearching1337x = false;
+
+        if (m_searchReply->error() == QNetworkReply::NoError) {
+            const QString html = QString::fromUtf8(m_searchReply->readAll());
+            parse1337xSearchHtml(html, m_currentBaseUrl);
+        } else if (m_searchReply->error() != QNetworkReply::OperationCanceledError) {
+            m_searchError = QStringLiteral("Search failed: %1").arg(m_searchReply->errorString());
+            FLUX_LOG_WARN("TorrentManager", "1337x search error: " + m_searchReply->errorString());
+        }
+
+        m_searchReply->deleteLater();
+        m_searchReply = nullptr;
+
+        emit searching1337xChanged();
+        emit searchErrorChanged();
+        emit searchResultsChanged();
+    });
+}
+
+void TorrentManager::cancelSearch1337x() {
+    if (m_searchReply) {
+        m_searchReply->abort();
+        m_searchReply->deleteLater();
+        m_searchReply = nullptr;
+    }
+    if (m_isSearching1337x) {
+        m_isSearching1337x = false;
+        emit searching1337xChanged();
+    }
+}
+
+void TorrentManager::clearSearchResults() {
+    cancelSearch1337x();
+    m_searchResults.clear();
+    m_searchError.clear();
+    emit searchResultsChanged();
+    emit searchErrorChanged();
+}
+
+QString TorrentManager::decodeHtmlEntities(const QString &raw) {
+    QString res = raw;
+    res.replace(QStringLiteral("&amp;"), QStringLiteral("&"));
+    res.replace(QStringLiteral("&quot;"), QStringLiteral("\""));
+    res.replace(QStringLiteral("&#039;"), QStringLiteral("'"));
+    res.replace(QStringLiteral("&#39;"), QStringLiteral("'"));
+    res.replace(QStringLiteral("&lt;"), QStringLiteral("<"));
+    res.replace(QStringLiteral("&gt;"), QStringLiteral(">"));
+    res.replace(QStringLiteral("&nbsp;"), QStringLiteral(" "));
+    return res.trimmed();
+}
+
+void TorrentManager::parse1337xSearchHtml(const QString &html, const QString &baseUrl) {
+    m_searchResults.clear();
+
+    const static QRegularExpression tbodyRegex(QStringLiteral("<tbody>(.*?)</tbody>"), QRegularExpression::DotMatchesEverythingOption);
+    const QRegularExpressionMatch tbodyMatch = tbodyRegex.match(html);
+    if (!tbodyMatch.hasMatch()) {
+        m_searchError = QStringLiteral("No results found on 1337x.");
+        return;
+    }
+
+    const QString tbody = tbodyMatch.captured(1);
+    const static QRegularExpression rowRegex(QStringLiteral("<tr>(.*?)</tr>"), QRegularExpression::DotMatchesEverythingOption);
+    QRegularExpressionMatchIterator rowIt = rowRegex.globalMatch(tbody);
+
+    const static QRegularExpression nameRegex(QStringLiteral("<td[^>]*class=\"[^\"]*name[^\"]*\"[^>]*>.*?<a[^>]*href=\"(/torrent/\\d+/[^\"]+)\"[^>]*>(.*?)</a>"), QRegularExpression::DotMatchesEverythingOption);
+    const static QRegularExpression seedsRegex(QStringLiteral("<td[^>]*class=\"[^\"]*seeds[^\"]*\"[^>]*>(\\d+)</td>"));
+    const static QRegularExpression leechesRegex(QStringLiteral("<td[^>]*class=\"[^\"]*leeches[^\"]*\"[^>]*>(\\d+)</td>"));
+    const static QRegularExpression dateRegex(QStringLiteral("<td[^>]*class=\"[^\"]*coll-date[^\"]*\"[^>]*>(.*?)</td>"));
+    const static QRegularExpression sizeRegex(QStringLiteral("<td[^>]*class=\"[^\"]*size[^\"]*\"[^>]*>([0-9.]+\\s*[A-Za-z]+)"));
+    const static QRegularExpression uploaderRegex(QStringLiteral("<td[^>]*class=\"[^\"]*uploader[^\"]*\"[^>]*>.*?<a[^>]*>([^<]+)</a>"));
+
+    int index = 0;
+    while (rowIt.hasNext()) {
+        const QString rowHtml = rowIt.next().captured(1);
+        const QRegularExpressionMatch nameMatch = nameRegex.match(rowHtml);
+        if (!nameMatch.hasMatch()) continue;
+
+        const QString path = nameMatch.captured(1);
+        const QString name = decodeHtmlEntities(nameMatch.captured(2));
+
+        int seeds = 0;
+        const QRegularExpressionMatch seedsMatch = seedsRegex.match(rowHtml);
+        if (seedsMatch.hasMatch()) {
+            seeds = seedsMatch.captured(1).toInt();
+        }
+
+        int leeches = 0;
+        const QRegularExpressionMatch leechesMatch = leechesRegex.match(rowHtml);
+        if (leechesMatch.hasMatch()) {
+            leeches = leechesMatch.captured(1).toInt();
+        }
+
+        QString date;
+        const QRegularExpressionMatch dateMatch = dateRegex.match(rowHtml);
+        if (dateMatch.hasMatch()) {
+            date = decodeHtmlEntities(dateMatch.captured(1));
+        }
+
+        QString size;
+        const QRegularExpressionMatch sizeMatch = sizeRegex.match(rowHtml);
+        if (sizeMatch.hasMatch()) {
+            size = decodeHtmlEntities(sizeMatch.captured(1));
+        }
+
+        QString uploader;
+        const QRegularExpressionMatch uploaderMatch = uploaderRegex.match(rowHtml);
+        if (uploaderMatch.hasMatch()) {
+            uploader = decodeHtmlEntities(uploaderMatch.captured(1));
+        }
+
+        QVariantMap item;
+        item[QStringLiteral("index")] = index++;
+        item[QStringLiteral("name")] = name;
+        item[QStringLiteral("detailPath")] = path;
+        item[QStringLiteral("fullDetailUrl")] = baseUrl + path;
+        item[QStringLiteral("seeds")] = seeds;
+        item[QStringLiteral("leeches")] = leeches;
+        item[QStringLiteral("date")] = date;
+        item[QStringLiteral("size")] = size;
+        item[QStringLiteral("uploader")] = uploader;
+        item[QStringLiteral("magnet")] = QString();
+        item[QStringLiteral("isResolving")] = false;
+
+        m_searchResults.append(item);
+    }
+
+    if (m_searchResults.isEmpty()) {
+        m_searchError = QStringLiteral("No matching torrents found.");
+    } else {
+        FLUX_LOG_INFO("TorrentManager", QString("Parsed %1 torrents from 1337x").arg(m_searchResults.size()));
+    }
+}
+
+void TorrentManager::streamSearchResult(int index) {
+    if (index < 0 || index >= m_searchResults.size()) {
+        return;
+    }
+
+    QVariantMap item = m_searchResults[index].toMap();
+    const QString existingMagnet = item.value(QStringLiteral("magnet")).toString();
+    if (!existingMagnet.isEmpty() && existingMagnet.startsWith(QLatin1String("magnet:"), Qt::CaseInsensitive)) {
+        FLUX_LOG_INFO("TorrentManager", "Using cached magnet link for item " + QString::number(index));
+        startTorrent(existingMagnet);
+        return;
+    }
+
+    const QString fullUrl = item.value(QStringLiteral("fullDetailUrl")).toString();
+    if (fullUrl.isEmpty()) {
+        return;
+    }
+
+    if (m_detailReply) {
+        m_detailReply->abort();
+        m_detailReply->deleteLater();
+        m_detailReply = nullptr;
+    }
+
+    m_isResolvingMagnet = true;
+    m_resolvingIndex = index;
+    m_resolvingTorrentName = item.value(QStringLiteral("name")).toString();
+
+    item[QStringLiteral("isResolving")] = true;
+    m_searchResults[index] = item;
+    emit resolvingMagnetChanged();
+    emit searchResultsChanged();
+
+    FLUX_LOG_INFO("TorrentManager", "Resolving magnet link from: " + fullUrl);
+
+    QNetworkRequest req;
+    req.setUrl(QUrl(fullUrl));
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"));
+    req.setTransferTimeout(15000);
+
+    m_detailReply = m_nam->get(req);
+    connect(m_detailReply, &QNetworkReply::finished, this, [this, index]() {
+        if (!m_detailReply) return;
+
+        m_isResolvingMagnet = false;
+        m_resolvingIndex = -1;
+        m_resolvingTorrentName.clear();
+
+        if (index >= 0 && index < m_searchResults.size()) {
+            QVariantMap curItem = m_searchResults[index].toMap();
+            curItem[QStringLiteral("isResolving")] = false;
+
+            if (m_detailReply->error() == QNetworkReply::NoError) {
+                const QString html = QString::fromUtf8(m_detailReply->readAll());
+                const static QRegularExpression magnetRegex(QStringLiteral("href=\"(magnet:\\?[^\"]+)\""));
+                const QRegularExpressionMatch magnetMatch = magnetRegex.match(html);
+
+                if (magnetMatch.hasMatch()) {
+                    QString magnet = magnetMatch.captured(1);
+                    magnet.replace(QStringLiteral("&amp;"), QStringLiteral("&"));
+                    curItem[QStringLiteral("magnet")] = magnet;
+                    m_searchResults[index] = curItem;
+
+                    FLUX_LOG_INFO("TorrentManager", "Magnet resolved successfully! Starting stream...");
+                    startTorrent(magnet);
+                } else {
+                    m_searchError = QStringLiteral("Could not find magnet link on detail page.");
+                    emit searchErrorChanged();
+                }
+            } else if (m_detailReply->error() != QNetworkReply::OperationCanceledError) {
+                m_searchError = QStringLiteral("Failed to fetch torrent details: %1").arg(m_detailReply->errorString());
+                emit searchErrorChanged();
+            }
+
+            m_searchResults[index] = curItem;
+        }
+
+        m_detailReply->deleteLater();
+        m_detailReply = nullptr;
+
+        emit resolvingMagnetChanged();
+        emit searchResultsChanged();
+    });
+}
+
+void TorrentManager::copyMagnet(int index) {
+    if (index < 0 || index >= m_searchResults.size()) {
+        return;
+    }
+
+    QVariantMap item = m_searchResults[index].toMap();
+    const QString existingMagnet = item.value(QStringLiteral("magnet")).toString();
+    if (!existingMagnet.isEmpty() && existingMagnet.startsWith(QLatin1String("magnet:"), Qt::CaseInsensitive)) {
+        QGuiApplication::clipboard()->setText(existingMagnet);
+        emit magnetCopied(existingMagnet);
+        return;
+    }
+
+    const QString fullUrl = item.value(QStringLiteral("fullDetailUrl")).toString();
+    if (fullUrl.isEmpty()) {
+        return;
+    }
+
+    if (m_detailReply) {
+        m_detailReply->abort();
+        m_detailReply->deleteLater();
+        m_detailReply = nullptr;
+    }
+
+    m_isResolvingMagnet = true;
+    m_resolvingIndex = index;
+    m_resolvingTorrentName = item.value(QStringLiteral("name")).toString();
+
+    item[QStringLiteral("isResolving")] = true;
+    m_searchResults[index] = item;
+    emit resolvingMagnetChanged();
+    emit searchResultsChanged();
+
+    QNetworkRequest req;
+    req.setUrl(QUrl(fullUrl));
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"));
+    req.setTransferTimeout(15000);
+
+    m_detailReply = m_nam->get(req);
+    connect(m_detailReply, &QNetworkReply::finished, this, [this, index]() {
+        if (!m_detailReply) return;
+
+        m_isResolvingMagnet = false;
+        m_resolvingIndex = -1;
+        m_resolvingTorrentName.clear();
+
+        if (index >= 0 && index < m_searchResults.size()) {
+            QVariantMap curItem = m_searchResults[index].toMap();
+            curItem[QStringLiteral("isResolving")] = false;
+
+            if (m_detailReply->error() == QNetworkReply::NoError) {
+                const QString html = QString::fromUtf8(m_detailReply->readAll());
+                const static QRegularExpression magnetRegex(QStringLiteral("href=\"(magnet:\\?[^\"]+)\""));
+                const QRegularExpressionMatch magnetMatch = magnetRegex.match(html);
+
+                if (magnetMatch.hasMatch()) {
+                    QString magnet = magnetMatch.captured(1);
+                    magnet.replace(QStringLiteral("&amp;"), QStringLiteral("&"));
+                    curItem[QStringLiteral("magnet")] = magnet;
+                    m_searchResults[index] = curItem;
+
+                    QGuiApplication::clipboard()->setText(magnet);
+                    emit magnetCopied(magnet);
+                } else {
+                    m_searchError = QStringLiteral("Could not find magnet link on detail page.");
+                    emit searchErrorChanged();
+                }
+            } else if (m_detailReply->error() != QNetworkReply::OperationCanceledError) {
+                m_searchError = QStringLiteral("Failed to fetch torrent details: %1").arg(m_detailReply->errorString());
+                emit searchErrorChanged();
+            }
+
+            m_searchResults[index] = curItem;
+        }
+
+        m_detailReply->deleteLater();
+        m_detailReply = nullptr;
+
+        emit resolvingMagnetChanged();
+        emit searchResultsChanged();
+    });
 }
 
 } // namespace Flux
