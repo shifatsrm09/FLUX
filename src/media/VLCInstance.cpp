@@ -4,6 +4,8 @@
 #include <QDir>
 #include <QFile>
 #include <QThreadPool>
+#include <QSettings>
+#include <string>
 #include <cstdio>
 #include <cstdarg>
 #include <vector>
@@ -43,7 +45,7 @@ void VLCInstance::vlcLogCallback(void *data, int level, const libvlc_log_t *ctx,
     Logger::instance().log(lvl, "libVLC", msg);
 }
 
-bool VLCInstance::initialize() {
+bool VLCInstance::initialize(int subtitleScale) {
     {
         QMutexLocker locker(&m_mutex);
         if (m_initialized && m_vlc) {
@@ -85,12 +87,18 @@ bool VLCInstance::initialize() {
     // NOTE: --clock-jitter=0 / --clock-synchro=0 were removed. They disable libVLC's tolerance
     // for timing wobble and its A/V clock sync, which makes network playback drop frames and
     // stutter. libVLC's defaults are far smoother.
+    QSettings settings(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("FLUX"), QStringLiteral("FLUX"));
+    int currentScale = (subtitleScale > 0) ? subtitleScale : settings.value("subtitles/scale", 100).toInt();
+    if (currentScale < 10 || currentScale > 500) currentScale = 100;
+    std::string subScaleArg = "--sub-text-scale=" + std::to_string(currentScale);
+
     std::vector<const char*> args = {
         "--no-video-title-show",
         "--network-caching=600",      // short pre-roll: fast starts/seeks and a shallow audio queue (volume changes are heard sooner)
         "--http-reconnect",            // Auto reconnect HTTP byte ranges
         "--no-snapshot-preview",
-        "--quiet"
+        "--quiet",
+        subScaleArg.c_str()
     };
 
     libvlc_instance_t *vlc = libvlc_new(static_cast<int>(args.size()), args.data());
@@ -120,7 +128,7 @@ bool VLCInstance::initialize() {
     return m_vlc != nullptr;
 }
 
-void VLCInstance::initializeAsync() {
+void VLCInstance::initializeAsync(int subtitleScale) {
     {
         QMutexLocker locker(&m_mutex);
         if (m_initialized || m_initializing) {
@@ -131,7 +139,7 @@ void VLCInstance::initializeAsync() {
 
     FLUX_LOG_INFO("VLCInstance", "Starting asynchronous libVLC initialization in background thread...");
 
-    QThreadPool::globalInstance()->start([this]() {
+    QThreadPool::globalInstance()->start([this, subtitleScale]() {
         QString appDir = QCoreApplication::applicationDirPath();
         QString localPluginDir = QDir(appDir).filePath("plugins");
         QString systemVlcPluginDir = "C:/Program Files/VideoLAN/VLC/plugins";
@@ -151,12 +159,18 @@ void VLCInstance::initializeAsync() {
 #endif
         }
 
+        QSettings settings(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("FLUX"), QStringLiteral("FLUX"));
+        int currentScale = (subtitleScale > 0) ? subtitleScale : settings.value("subtitles/scale", 100).toInt();
+        if (currentScale < 10 || currentScale > 500) currentScale = 100;
+        std::string subScaleArg = "--sub-text-scale=" + std::to_string(currentScale);
+
         std::vector<const char*> args = {
             "--no-video-title-show",
             "--network-caching=600",
             "--http-reconnect",
             "--no-snapshot-preview",
-            "--quiet"
+            "--quiet",
+            subScaleArg.c_str()
         };
 
         libvlc_instance_t *vlc = libvlc_new(static_cast<int>(args.size()), args.data());
@@ -210,6 +224,11 @@ bool VLCInstance::isInitialized() const {
 QString VLCInstance::lastError() const {
     QMutexLocker locker(&m_mutex);
     return m_lastError;
+}
+
+bool VLCInstance::reinitialize(int subtitleScale) {
+    shutdown();
+    return initialize(subtitleScale);
 }
 
 void VLCInstance::shutdown() {

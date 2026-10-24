@@ -108,6 +108,9 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
         const bool latchedDisabled = store->value("subtitles/latchedDisabled", false).toBool();
         player->setLatchedSubtitle(latchedName, latchedLang, latchedIndex, latchedDisabled);
 
+        const int savedSubScale = store->value("subtitles/scale", 100).toInt();
+        player->setSubtitleScale(savedSubScale > 0 ? savedSubScale : 100);
+
         auto updateTelepartyCustomCode = [this, store]() {
             if (!m_teleparty) return;
             if (store->devModeUnlocked() && store->useCustomTelepartyCode()) {
@@ -159,6 +162,9 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
             store->setValue("subtitles/latchedLang", player->latchedSubtitleLang());
             store->setValue("subtitles/latchedIndex", player->latchedSubtitleIndex());
             store->setValue("subtitles/latchedDisabled", player->latchedSubtitleDisabled());
+        });
+        connect(player, &VLCPlayer::subtitleScaleChanged, store, [store, player]() {
+            store->setValue("subtitles/scale", player->subtitleScale());
         });
         connect(search, &SearchManager::selectedLibrariesChanged, store, [store, search]() {
             store->setValue(QStringLiteral("categories/selected_s%1").arg(search->activeServer()),

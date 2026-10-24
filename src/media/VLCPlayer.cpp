@@ -1,4 +1,5 @@
 #include "VLCPlayer.h"
+#include <QSettings>
 #include "VLCInstance.h"
 #include "../core/Logger.h"
 #include <QVariantMap>
@@ -18,6 +19,23 @@
 #undef min
 #undef max
 #endif
+
+
+extern "C" {
+    typedef union {
+        int64_t i_int;
+        bool b_bool;
+        float f_float;
+        char *psz_string;
+        void *p_address;
+    } vlc_value_t;
+
+    __declspec(dllimport) void config_PutInt(void *p_this, const char *psz_name, int64_t i_val);
+    __declspec(dllimport) int var_Create(void *p_this, const char *psz_name, int i_type);
+    __declspec(dllimport) int var_SetChecked(void *p_this, const char *psz_name, int expected_type, vlc_value_t val);
+    __declspec(dllimport) void *libvlc_get_input_thread(libvlc_media_player_t *p_mi);
+    __declspec(dllimport) void vlc_object_release(void *p_obj);
+}
 
 namespace Flux {
 
@@ -717,6 +735,10 @@ void VLCPlayer::play(const QString &mediaUrl) {
     libvlc_media_add_option(m_currentMedia, ":http-reconnect");
     libvlc_media_add_option(m_currentMedia, ":prefetch-buffer-size=131072");
     libvlc_media_add_option(m_currentMedia, ":prefetch-read-size=262144");
+
+    const QByteArray subScaleOpt = QString(":sub-text-scale=%1").arg(m_subtitleScale).toUtf8();
+
+    libvlc_media_add_option(m_currentMedia, subScaleOpt.constData());
 
     // Resume: begin directly at the saved position instead of starting at 0 and seeking
     // (avoids a wasted buffer at the start of the file). One-shot.
@@ -1637,6 +1659,67 @@ QString VLCPlayer::formatMilliseconds(qint64 ms) {
     return QString("%1:%2")
         .arg(minutes, 2, 10, QChar('0'))
         .arg(seconds, 2, 10, QChar('0'));
+}
+
+void VLCPlayer::setSubtitleScale(int scale) {
+    scale = std::clamp(scale, 50, 200);
+    if (m_subtitleScale == scale) return;
+
+    m_subtitleScale = scale;
+    emit subtitleScaleChanged();
+    FLUX_LOG_INFO("VLCPlayer", QString("Subtitle scale set to %1%").arg(m_subtitleScale));
+
+    applySubtitleScaleLive();
+}
+
+void VLCPlayer::increaseSubtitleScale() {
+
+    setSubtitleScale(std::min(200, m_subtitleScale + 10));
+
+}
+
+
+
+void VLCPlayer::decreaseSubtitleScale() {
+
+    setSubtitleScale(std::max(50, m_subtitleScale - 10));
+
+}
+
+
+
+void VLCPlayer::applySubtitleScaleLive() {
+    // 1. Save scale to persistent user settings
+    QSettings settings(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("FLUX"), QStringLiteral("FLUX"));
+    settings.setValue("subtitles/scale", m_subtitleScale);
+
+    if (!m_mediaPlayer) return;
+
+    // 2. Update global libVLC configuration and root instance variable
+    libvlc_instance_t *vlc = VLCInstance::instance().get();
+    void *coreObj = vlc ? *(void**)vlc : nullptr;
+    vlc_value_t val;
+    val.i_int = m_subtitleScale;
+
+    if (coreObj) {
+        config_PutInt(coreObj, "sub-text-scale", m_subtitleScale);
+        var_Create(coreObj, "sub-text-scale", 0x0020 | 0x8000 /* VLC_VAR_INTEGER | VLC_VAR_DOINHERIT */);
+        var_SetChecked(coreObj, "sub-text-scale", 0x0020, val);
+    }
+
+    // 3. Update active media player object variable
+    var_Create(m_mediaPlayer, "sub-text-scale", 0x0020 | 0x8000);
+    var_SetChecked(m_mediaPlayer, "sub-text-scale", 0x0020, val);
+
+    // 4. Update active input thread variable if streaming
+    void *input = libvlc_get_input_thread(m_mediaPlayer);
+    if (input) {
+        var_Create(input, "sub-text-scale", 0x0020 | 0x8000);
+        var_SetChecked(input, "sub-text-scale", 0x0020, val);
+        vlc_object_release(input);
+    }
+
+    FLUX_LOG_INFO("VLCPlayer", QString("Applied subtitle scale %1% dynamically without interrupting playback").arg(m_subtitleScale));
 }
 
 void VLCPlayer::updateSleepInhibition(bool force) {

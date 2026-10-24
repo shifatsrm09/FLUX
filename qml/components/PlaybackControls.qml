@@ -751,15 +751,88 @@ Item {
 
             // Subtitles
             ColumnLayout {
-                Layout.preferredWidth: 200
+                Layout.preferredWidth: 215
                 Layout.alignment: Qt.AlignTop
                 spacing: 10
 
-                Text {
-                    text: "Subtitles"
-                    color: Theme.text
-                    font.pixelSize: 15
-                    font.weight: Font.Bold
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Text {
+                        text: "Subtitles"
+                        color: Theme.text
+                        font.pixelSize: 15
+                        font.weight: Font.Bold
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // Real-time subtitle scale stepper: [ ▼ ]  100%  [ ▲ ]
+                    RowLayout {
+                        spacing: 3
+
+                        Rectangle {
+                            width: 22
+                            height: 22
+                            radius: 4
+                            color: downMouse.containsMouse ? "#33FFFFFF" : "#1AFFFFFF"
+                            border.width: 1
+                            border.color: "#25FFFFFF"
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "▼"
+                                color: (root.player && root.player.subtitleScale > 50) ? Theme.text : Theme.textMute
+                                font.pixelSize: 8
+                            }
+
+                            MouseArea {
+                                id: downMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (root.player) root.player.decreaseSubtitleScale()
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: (root.player ? root.player.subtitleScale : 100) + "%"
+                            color: Theme.textDim
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                            Layout.preferredWidth: 32
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Rectangle {
+                            width: 22
+                            height: 22
+                            radius: 4
+                            color: upMouse.containsMouse ? "#33FFFFFF" : "#1AFFFFFF"
+                            border.width: 1
+                            border.color: "#25FFFFFF"
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "▲"
+                                color: (root.player && root.player.subtitleScale < 200) ? Theme.text : Theme.textMute
+                                font.pixelSize: 8
+                            }
+
+                            MouseArea {
+                                id: upMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (root.player) root.player.increaseSubtitleScale()
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Text {

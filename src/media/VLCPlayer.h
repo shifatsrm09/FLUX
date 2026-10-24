@@ -37,6 +37,7 @@ class VLCPlayer : public QObject {
 
     Q_PROPERTY(QVariantList subtitleTracks READ subtitleTracks NOTIFY subtitleTracksChanged)
     Q_PROPERTY(int selectedSubtitleTrack READ selectedSubtitleTrack WRITE selectSubtitleTrack NOTIFY selectedSubtitleTrackChanged)
+    Q_PROPERTY(int subtitleScale READ subtitleScale WRITE setSubtitleScale NOTIFY subtitleScaleChanged)
 
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorOccurred)
     Q_PROPERTY(double playbackRate READ playbackRate NOTIFY playbackRateChanged)
@@ -119,6 +120,10 @@ public slots:
     Q_INVOKABLE void refreshTracks();
     Q_INVOKABLE void playFrom(const QString &url, qint64 startMs, qreal startPosition = -1.0);
     Q_INVOKABLE void setLanguagePreferences(const QStringList &audio, const QString &subtitle);
+    int subtitleScale() const { return m_subtitleScale; }
+    Q_INVOKABLE void setSubtitleScale(int scale);
+    Q_INVOKABLE void increaseSubtitleScale();
+    Q_INVOKABLE void decreaseSubtitleScale();
 
     // Teleparty: apply another member's action. These never emit userToggledPlay /
     // userSeeked, so an applied action is not broadcast back to the session.
@@ -152,6 +157,7 @@ signals:
     void selectedAudioTrackChanged();
     void subtitleTracksChanged();
     void selectedSubtitleTrackChanged();
+    void subtitleScaleChanged();
     void errorOccurred(const QString &message);
     void mediaPlayerRecreated();
     void languagePreferencesChanged();
@@ -246,6 +252,9 @@ private:
 
     // Playback rate (1.0 = normal speed; adaptive Teleparty drift control uses 0.96..1.04)
     double m_playbackRate = 1.0;
+    int m_subtitleScale = 100;
+    QTimer *m_subScaleTimer = nullptr;
+    void applySubtitleScaleLive();
 
     // Display sleep prevention state
     bool m_displaySleepInhibited = false;
