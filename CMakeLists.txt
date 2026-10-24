@@ -114,6 +114,7 @@ qt_add_qml_module(FLUX
         qml/components/CategoryFilterSection.qml
         qml/components/MediaFormatter.js
         qml/components/Theme.js
+        qml/components/TopPicksData.js
         qml/components/FluxIcon.qml
         qml/components/FluxButton.qml
         qml/components/IconButton.qml

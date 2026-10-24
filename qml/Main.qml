@@ -5,6 +5,7 @@ import QtQuick.Window
 import "components"
 import "components/Theme.js" as Theme
 import "components/MediaFormatter.js" as Formatter
+import "components/TopPicksData.js" as TopPicksData
 
 ApplicationWindow {
     id: window
@@ -218,13 +219,68 @@ ApplicationWindow {
     }
 
     property string currentAltUrl: ""
+    property bool currentIsTopPick: false
+    property var currentTopPickItem: null
+    property string currentServerName: {
+        if (!currentIsTopPick) return ""
+        var src = currentSourceUrl || ""
+        if (src.indexOf("10.16.100.244") !== -1 || src.indexOf("player.php") !== -1) {
+            return "ICC FTP"
+        }
+        return "Dhaka Flix"
+    }
+    property string targetServerName: {
+        if (!currentIsTopPick) return ""
+        return currentServerName === "Dhaka Flix" ? "ICC FTP" : "Dhaka Flix"
+    }
 
-    function playMedia(url, title, altUrl) {
+    function switchTopPickServer() {
+        if (!currentIsTopPick || !currentAltUrl || currentAltUrl.length === 0) return
+        var currentTimeMs = (fluxPlayer && fluxPlayer.timeMs > 0) ? fluxPlayer.timeMs : 0
+        var currentDurationMs = (fluxPlayer && fluxPlayer.durationMs > 0) ? fluxPlayer.durationMs : 0
+        var currentFraction = currentDurationMs > 0 ? (currentTimeMs / currentDurationMs) : -1
+
+        var targetUrl = currentAltUrl
+        var currentUrl = currentSourceUrl
+        var title = currentPlayingTitle
+
+        var newServer = targetServerName
+        if (playerView) {
+            playerView.pendingSwitchMs = currentTimeMs
+            if (playerView.showOsd) {
+                playerView.showOsd("Switching to " + newServer + "...", -1)
+            }
+            if (playerView.armTimeoutWatchdog) {
+                playerView.armTimeoutWatchdog()
+            }
+        }
+
+        playMedia(targetUrl, title, currentUrl, currentTimeMs, currentFraction)
+    }
+
+    function playMedia(url, title, altUrl, targetStartTimeMs, targetStartFraction) {
         currentAltUrl = (altUrl && altUrl.length > 0) ? altUrl : ""
+
+        var topPick = TopPicksData.findTopPick(url, title)
+        if (topPick) {
+            currentIsTopPick = true
+            currentTopPickItem = topPick
+            if (currentAltUrl.length === 0) {
+                if (url === topPick.url) {
+                    currentAltUrl = topPick.altUrl || ""
+                } else if (url === topPick.altUrl) {
+                    currentAltUrl = topPick.url || ""
+                }
+            }
+        } else {
+            currentIsTopPick = false
+            currentTopPickItem = null
+        }
+
         if (url && url.indexOf("player.php") !== -1 && fluxSearch) {
             fluxSearch.resolvePlayUrl(url, function(directUrl) {
                 if (directUrl && directUrl.length > 0) {
-                    playResolvedMedia(url, directUrl, title)
+                    playResolvedMedia(url, directUrl, title, targetStartTimeMs, targetStartFraction)
                 } else if (currentAltUrl.length > 0) {
                     var alt = currentAltUrl
                     currentAltUrl = ""
@@ -232,17 +288,17 @@ ApplicationWindow {
                     if (playerView && playerView.showOsd) {
                         playerView.showOsd("Primary server unavailable. Auto-switching...", -1)
                     }
-                    playMedia(alt, title, "")
+                    playMedia(alt, title, "", targetStartTimeMs, targetStartFraction)
                 } else {
-                    playResolvedMedia(url, url, title)
+                    playResolvedMedia(url, url, title, targetStartTimeMs, targetStartFraction)
                 }
             })
             return
         }
-        playResolvedMedia(url, url, title)
+        playResolvedMedia(url, url, title, targetStartTimeMs, targetStartFraction)
     }
 
-    function playResolvedMedia(sourceUrl, directUrl, title) {
+    function playResolvedMedia(sourceUrl, directUrl, title, targetStartTimeMs, targetStartFraction) {
         var playbackUrl = directUrl
         // Teleparty: if attempting to play local media while in a room, route to local teleparty playback
         if (window.inTeleparty && fluxSync && !fluxSync.isStreamUrl(sourceUrl) && !fluxSync.isStreamUrl(directUrl)) {
@@ -284,22 +340,32 @@ ApplicationWindow {
         if (currentPage !== "player") pageBeforePlayer = currentPage
         currentPage = "player"
 
-        // Read the saved position BEFORE noteStart() touches the history entry.
-        var resumeMs = fluxUser ? fluxUser.resumePositionFor(sourceUrl) : 0
-        if (resumeMs <= 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
-            resumeMs = fluxUser.resumePositionFor(directUrl)
+        var isSwitching = (targetStartTimeMs !== undefined && targetStartTimeMs !== null && targetStartTimeMs > 0)
+        var resumeMs = isSwitching
+            ? targetStartTimeMs
+            : (fluxUser ? fluxUser.resumePositionFor(sourceUrl) : 0)
+
+        if (!isSwitching) {
+            if (resumeMs <= 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
+                resumeMs = fluxUser.resumePositionFor(directUrl)
+            }
+            var resumeProgress = (resumeMs > 0 && fluxUser) ? fluxUser.progressFor(sourceUrl) : ({})
+            if ((!resumeProgress || !resumeProgress.fraction) && resumeMs > 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
+                resumeProgress = fluxUser.progressFor(directUrl)
+            }
+            var resumeFraction = (resumeProgress && resumeProgress.fraction > 0) ? resumeProgress.fraction : -1
+        } else {
+            var resumeFraction = (targetStartFraction !== undefined && targetStartFraction >= 0) ? targetStartFraction : -1
         }
-        var resumeProgress = (resumeMs > 0 && fluxUser) ? fluxUser.progressFor(sourceUrl) : ({})
-        if ((!resumeProgress || !resumeProgress.fraction) && resumeMs > 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
-            resumeProgress = fluxUser.progressFor(directUrl)
-        }
-        var resumeFraction = (resumeProgress && resumeProgress.fraction > 0) ? resumeProgress.fraction : -1
+
         if (fluxUser) fluxUser.noteStart(sourceUrl, title, playbackUrl)
 
         // Look up the next episode in the background (for the "Up next" card)
         if (fluxBrowser) fluxBrowser.findNext(sourceUrl)
 
-        playerView.offerResume(resumeMs)
+        if (!isSwitching) {
+            playerView.offerResume(resumeMs)
+        }
 
         if (playerView && playerView.armTimeoutWatchdog) {
             playerView.armTimeoutWatchdog()

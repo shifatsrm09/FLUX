@@ -111,7 +111,7 @@ Item {
     Binding {
         target: (typeof fluxSnap !== "undefined" && fluxSnap) ? fluxSnap : null
         property: "leftInteractiveWidth"
-        value: root.overlayMode ? 0 : (brandRow.x + (brandRow.width > 0 ? brandRow.width : brandRow.implicitWidth) + 12)
+        value: root.overlayMode ? 120 : (brandRow.x + (brandRow.width > 0 ? brandRow.width : brandRow.implicitWidth) + 12)
     }
 
     Binding {
@@ -154,6 +154,7 @@ Item {
     // ---- Drag / double-click maximize area -------------------------------------
     MouseArea {
         anchors.fill: parent
+        anchors.leftMargin: root.overlayMode ? 120 : 0
         acceptedButtons: Qt.LeftButton
         z: 0
 

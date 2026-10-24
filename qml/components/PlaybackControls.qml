@@ -13,11 +13,12 @@ Item {
     property bool hasEpisodes: false
     property bool episodesOpen: false
 
-    readonly property bool menuOpen: tracksPopup.visible || root.episodesOpen
-    property bool isUserInteracting: (seekSlider.pressed || seekGraceArea.pressed || volumeSlider.pressed || tracksPopup.visible || controlsHover.hovered || root.episodesOpen)
+    readonly property bool menuOpen: tracksPopup.visible || root.episodesOpen || serverPopup.visible
+    property bool isUserInteracting: (seekSlider.pressed || seekGraceArea.pressed || volumeSlider.pressed || tracksPopup.visible || controlsHover.hovered || root.episodesOpen || serverPopup.visible)
 
     // Used to stop the "press outside closes popup" + "click toggles popup" double-fire
     property double popupClosedAt: 0
+    property double serverPopupClosedAt: 0
 
     signal toggleFullscreenRequested()
     signal nextRequested()
@@ -25,6 +26,7 @@ Item {
 
     function closeMenus() {
         tracksPopup.close()
+        serverPopup.close()
     }
 
     implicitHeight: controlsColumn.implicitHeight
@@ -403,6 +405,63 @@ Item {
 
             Item { Layout.fillWidth: true }
 
+            // Server toggle button with animated arrow (Top Picks only)
+            Item {
+                id: serverBtn
+                visible: !!(window && window.currentIsTopPick && window.currentAltUrl && window.currentAltUrl.length > 0)
+                Layout.alignment: Qt.AlignVCenter
+                implicitWidth: 38
+                implicitHeight: 38
+
+                readonly property bool isDhakaFlix: !window || window.currentServerName !== "ICC FTP"
+                readonly property bool isOpen: serverPopup.visible
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: serverBtnMouse.pressed ? "#40FFFFFF"
+                         : (serverBtnMouse.containsMouse || serverBtn.isOpen ? "#26FFFFFF" : "transparent")
+
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                }
+
+                FluxIcon {
+                    id: serverArrowIcon
+                    anchors.centerIn: parent
+                    name: "chevronUp"
+                    size: 20
+                    color: serverBtn.isOpen ? Theme.accentHover : (serverBtnMouse.containsMouse ? "#FFFFFF" : "#D0FFFFFF")
+                    rotation: serverBtn.isOpen ? 180 : 0
+
+                    Behavior on rotation {
+                        NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+                    }
+                    Behavior on color {
+                        ColorAnimation { duration: 120 }
+                    }
+                }
+
+                MouseArea {
+                    id: serverBtnMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (serverPopup.visible) {
+                            serverPopup.close()
+                        } else if (Date.now() - root.serverPopupClosedAt > 250) {
+                            serverPopup.open()
+                        }
+                    }
+                }
+
+                FluxToolTip {
+                    visible: serverBtnMouse.containsMouse && !serverPopup.visible
+                    text: "Server (" + (serverBtn.isDhakaFlix ? "Dhaka Flix" : "ICC") + ")"
+                    above: true
+                }
+            }
+
             // Episode list
             IconButton {
                 id: episodesBtn
@@ -436,6 +495,153 @@ Item {
                 tip: root.isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"
 
                 onClicked: root.toggleFullscreenRequested()
+            }
+        }
+    }
+
+    // ---- Server selection popup -----------------------------------------------------------
+    Popup {
+        id: serverPopup
+
+        parent: serverBtn
+        x: (serverBtn.width - width) / 2
+        y: -height - 12
+        width: 170
+        padding: 10
+        modal: false
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        readonly property bool isDhakaFlix: !window || window.currentServerName !== "ICC FTP"
+
+        onClosed: root.serverPopupClosedAt = Date.now()
+
+        enter: Transition {
+            NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 140 }
+            NumberAnimation { property: "scale"; from: 0.95; to: 1.0; duration: 140; easing.type: Easing.OutCubic }
+        }
+        exit: Transition {
+            NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 100 }
+            NumberAnimation { property: "scale"; from: 1.0; to: 0.95; duration: 100; easing.type: Easing.InCubic }
+        }
+
+        background: Rectangle {
+            radius: 14
+            color: "#F2101015"
+            border.width: 1
+            border.color: "#33FFFFFF"
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 4
+
+            Text {
+                text: "SERVER"
+                color: Theme.textDim
+                font.pixelSize: 10
+                font.weight: Font.Bold
+                font.letterSpacing: 1.2
+                Layout.leftMargin: 8
+                Layout.topMargin: 2
+                Layout.bottomMargin: 2
+            }
+
+            // Option 1: Dhaka Flix
+            Rectangle {
+                Layout.fillWidth: true
+                height: 36
+                radius: 8
+                color: dhakaOptionMouse.containsMouse ? "#20FFFFFF" : (serverPopup.isDhakaFlix ? "#18FFFFFF" : "transparent")
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 8
+
+                    Text {
+                        text: "\u2713"
+                        color: Theme.accentHover
+                        font.pixelSize: 14
+                        font.weight: Font.Bold
+                        visible: serverPopup.isDhakaFlix
+                        Layout.preferredWidth: 14
+                    }
+                    Item {
+                        visible: !serverPopup.isDhakaFlix
+                        Layout.preferredWidth: 14
+                    }
+
+                    Text {
+                        text: "Dhaka Flix"
+                        color: serverPopup.isDhakaFlix ? "#FFFFFF" : Theme.textDim
+                        font.pixelSize: 13
+                        font.weight: serverPopup.isDhakaFlix ? Font.DemiBold : Font.Normal
+                        Layout.fillWidth: true
+                    }
+                }
+
+                MouseArea {
+                    id: dhakaOptionMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        serverPopup.close()
+                        if (!serverPopup.isDhakaFlix && window && window.switchTopPickServer) {
+                            window.switchTopPickServer()
+                        }
+                    }
+                }
+            }
+
+            // Option 2: ICC
+            Rectangle {
+                Layout.fillWidth: true
+                height: 36
+                radius: 8
+                color: iccOptionMouse.containsMouse ? "#20FFFFFF" : (!serverPopup.isDhakaFlix ? "#18FFFFFF" : "transparent")
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 8
+
+                    Text {
+                        text: "\u2713"
+                        color: Theme.accentHover
+                        font.pixelSize: 14
+                        font.weight: Font.Bold
+                        visible: !serverPopup.isDhakaFlix
+                        Layout.preferredWidth: 14
+                    }
+                    Item {
+                        visible: serverPopup.isDhakaFlix
+                        Layout.preferredWidth: 14
+                    }
+
+                    Text {
+                        text: "ICC"
+                        color: !serverPopup.isDhakaFlix ? "#FFFFFF" : Theme.textDim
+                        font.pixelSize: 13
+                        font.weight: !serverPopup.isDhakaFlix ? Font.DemiBold : Font.Normal
+                        Layout.fillWidth: true
+                    }
+                }
+
+                MouseArea {
+                    id: iccOptionMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        serverPopup.close()
+                        if (serverPopup.isDhakaFlix && window && window.switchTopPickServer) {
+                            window.switchTopPickServer()
+                        }
+                    }
+                }
             }
         }
     }

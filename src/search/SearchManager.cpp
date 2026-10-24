@@ -282,9 +282,22 @@ void SearchManager::resolvePlayUrl(const QString &url, const QJSValue &callback)
             static const QRegularExpression sourceRx(
                 QStringLiteral("<source\\s+[^>]*src=['\"]([^'\"]+)['\"]"),
                 QRegularExpression::CaseInsensitiveOption);
-            QRegularExpressionMatch match = sourceRx.match(html);
-            if (match.hasMatch()) {
-                directUrl = match.captured(1);
+            auto it = sourceRx.globalMatch(html);
+            QString chosenUrl;
+            while (it.hasNext()) {
+                QString candidate = it.next().captured(1);
+                if (chosenUrl.isEmpty()) {
+                    chosenUrl = candidate;
+                }
+                const QString lower = candidate.toLower();
+                if ((lower.contains(QLatin1String("1080")) || lower.contains(QLatin1String("2160")) || lower.contains(QLatin1String("4k")))
+                        && !lower.contains(QLatin1String("720"))) {
+                    chosenUrl = candidate;
+                    break;
+                }
+            }
+            if (!chosenUrl.isEmpty()) {
+                directUrl = chosenUrl;
                 m_resolvedUrls[url] = directUrl;
             } else {
                 static const QRegularExpression dlRx(

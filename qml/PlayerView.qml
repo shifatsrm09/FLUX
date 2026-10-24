@@ -114,9 +114,35 @@ Rectangle {
         }
     }
 
+    property real pendingSwitchMs: -1
+
     onIsPlayingChanged: {
         if (root.isPlaying) {
             streamTimeoutTimer.stop()
+            if (root.pendingSwitchMs > 1000) {
+                var target = root.pendingSwitchMs
+                root.pendingSwitchMs = -1
+                ensureSeekTimer.targetMs = target
+                ensureSeekTimer.restart()
+            }
+        }
+    }
+
+    Timer {
+        id: ensureSeekTimer
+        interval: 350
+        repeat: false
+        property real targetMs: 0
+        onTriggered: {
+            if (root.player && targetMs > 1000) {
+                if (root.player.timeMs < targetMs - 3000) {
+                    if (root.player.durationMs > 0) {
+                        root.player.seek(Math.min(1.0, Math.max(0.0, targetMs / root.player.durationMs)))
+                    } else if (root.player.remoteSeekTo) {
+                        root.player.remoteSeekTo(targetMs)
+                    }
+                }
+            }
         }
     }
 
@@ -189,6 +215,7 @@ Rectangle {
                                         && !root.hasError
                                         && !controlsBar.isUserInteracting
                                         && !topHover.hovered
+                                        && !backGraceArea.containsMouse
                                         && !root.episodesPanelOpen
 
     onCanAutoHideChanged: {
@@ -417,6 +444,28 @@ Rectangle {
 
         HoverHandler { id: topHover }
 
+        // Dedicated grace area covering the entire top-left region so the Back button is effortless to click
+        MouseArea {
+            id: backGraceArea
+            anchors.top: topBar.top
+            anchors.left: topBar.left
+            anchors.right: backBtn.right
+            anchors.rightMargin: -16
+            anchors.bottom: backBtn.bottom
+            anchors.bottomMargin: -16
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            z: 10
+
+            onEntered: root.wakeControls()
+            onClicked: {
+                if (root.player && (!window || !window.inTeleparty)) {
+                    root.player.pause()
+                }
+                root.backRequested()
+            }
+        }
+
         RowLayout {
             anchors.left: parent.left
             anchors.right: parent.right
@@ -433,6 +482,8 @@ Rectangle {
                 filled: true
                 tip: "Back (Esc)"
                 tipAbove: false
+                forceHovered: backGraceArea.containsMouse
+                forcePressed: backGraceArea.pressed
                 Layout.alignment: Qt.AlignTop
 
                 onClicked: {
