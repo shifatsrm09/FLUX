@@ -1,5 +1,6 @@
 #include "VLCPlayer.h"
 #include <QSettings>
+#include <QSet>
 #include "VLCInstance.h"
 #include "../core/Logger.h"
 #include <QVariantMap>
@@ -200,13 +201,14 @@ CleanedTrack cleanTrackName(const QString &raw) {
     const QRegularExpressionMatch chm = chRe.match(s);
     if (chm.hasMatch()) extras << chm.captured(1);
 
-    static const QRegularExpression tagRe(QStringLiteral("\\b(commentary|forced|sdh|cc)\\b"),
+    static const QRegularExpression tagRe(QStringLiteral("\\b(commentary|forced|sdh|cc|signs & songs|signs and songs|signs|songs)\\b"),
                                           QRegularExpression::CaseInsensitiveOption);
     QRegularExpressionMatchIterator ti = tagRe.globalMatch(s);
     while (ti.hasNext()) {
         const QString tag = ti.next().captured(1).toLower();
         QString shown;
         if (tag == QLatin1String("sdh") || tag == QLatin1String("cc")) shown = tag.toUpper();
+        else if (tag.contains(QLatin1String("sign")) && tag.contains(QLatin1String("song"))) shown = QStringLiteral("Signs & Songs");
         else shown = tag.left(1).toUpper() + tag.mid(1);
         if (!extras.contains(shown)) extras << shown;
     }
@@ -291,6 +293,9 @@ bool trackMatches(const QVariantMap &t, const QString &pref) {
 // Commentary / forced / SDH variants are a worse default than the plain track
 int trackPenalty(const QVariantMap &t) {
     const QString n = (t.value("name").toString() + QLatin1Char(' ') + t.value("rawName").toString()).toLower();
+    if (n.contains(QLatin1String("sign")) || n.contains(QLatin1String("song"))) {
+        return 2;
+    }
     if (n.contains(QLatin1String("commentary")) || n.contains(QLatin1String("forced"))
         || n.contains(QLatin1String("sdh")) || n.contains(QLatin1String("descript"))) {
         return 1;
@@ -1126,12 +1131,40 @@ void VLCPlayer::updateTracks() {
     emit audioTracksChanged();
 
     // 2. Subtitle (SPU) Tracks
+    QHash<int, QString> subTypeMap;
+    if (m_currentMedia) {
+        libvlc_media_track_t **tracks = nullptr;
+        unsigned count = libvlc_media_tracks_get(m_currentMedia, &tracks);
+        for (unsigned i = 0; i < count; ++i) {
+            if (tracks[i]->i_type == libvlc_track_text) {
+                uint32_t c = tracks[i]->i_codec;
+                // Bitmap formats: PGS (bdpg: 0x67706462), VobSub (spu : 0x20757073), DVB (dvbs: 0x73627664), XSub (xsub: 0x62757378)
+                if (c == 0x67706462 || c == 0x20757073 || c == 0x73627664 || c == 0x62757378) {
+                    subTypeMap[tracks[i]->i_id] = QStringLiteral("bitmap");
+                } else if (c == 0x20617373 || c == 0x20737361) {
+                    // SSA (0x20617373), ASS (0x20737361)
+                    subTypeMap[tracks[i]->i_id] = QStringLiteral("ass");
+                } else {
+                    subTypeMap[tracks[i]->i_id] = QStringLiteral("text");
+                }
+            }
+        }
+        if (tracks) {
+            libvlc_media_tracks_release(tracks, count);
+        }
+    }
+
     QVariantList subList;
     libvlc_track_description_t *spuDesc = libvlc_video_get_spu_description(m_mediaPlayer);
     cur = spuDesc;
     while (cur) {
         const QString rawName = cur->psz_name ? QString::fromUtf8(cur->psz_name) : QString("Subtitle %1").arg(cur->i_id);
-        subList.append(makeTrack(cur->i_id, rawName));
+        QVariantMap tr = makeTrack(cur->i_id, rawName);
+        const QString st = subTypeMap.value(cur->i_id, QStringLiteral("text"));
+        tr["subType"] = st;
+        tr["isBitmap"] = (st == QLatin1String("bitmap"));
+        tr["isAss"] = (st == QLatin1String("ass"));
+        subList.append(tr);
         cur = cur->p_next;
     }
     if (spuDesc) {
@@ -1659,6 +1692,23 @@ QString VLCPlayer::formatMilliseconds(qint64 ms) {
     return QString("%1:%2")
         .arg(minutes, 2, 10, QChar('0'))
         .arg(seconds, 2, 10, QChar('0'));
+}
+
+bool VLCPlayer::isCurrentSubtitleScalable() const {
+    return currentSubtitleType() == QLatin1String("text");
+}
+
+QString VLCPlayer::currentSubtitleType() const {
+    if (!m_mediaPlayer) return QString();
+    int curSpu = selectedSubtitleTrack();
+    if (curSpu < 0) return QString();
+    for (const auto &v : m_subtitleTracks) {
+        QVariantMap m = v.toMap();
+        if (m.value("id").toInt() == curSpu) {
+            return m.value("subType", QStringLiteral("text")).toString();
+        }
+    }
+    return QString();
 }
 
 void VLCPlayer::setSubtitleScale(int scale) {

@@ -768,33 +768,68 @@ Item {
 
                     Item { Layout.fillWidth: true }
 
-                    // Real-time subtitle scale stepper: [ ▼ ]  100%  [ ▲ ]
+                    // Indicator for pre-rendered bitmap subtitles (e.g. Blu-ray PGS in Oppenheimer)
+                    Text {
+                        text: "PGS Image Subtitle"
+                        color: Theme.textMute
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        visible: !!root.player && root.player.currentSubtitleType === "bitmap" && root.player.selectedSubtitleTrack >= 0
+                    }
+
+                    // Indicator for author-styled SSA/ASS vector subtitles (e.g. Princess Mononoke)
+                    Text {
+                        text: "ASS Styled Subtitle"
+                        color: Theme.textMute
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        visible: !!root.player && root.player.currentSubtitleType === "ass" && root.player.selectedSubtitleTrack >= 0
+                    }
+
+                    // Real-time subtitle scale stepper (active only for scalable text subtitles)
                     RowLayout {
-                        spacing: 3
+                        spacing: 2
+                        visible: !!root.player && root.player.isCurrentSubtitleScalable
 
-                        Rectangle {
-                            width: 22
-                            height: 22
-                            radius: 4
-                            color: downMouse.containsMouse ? "#33FFFFFF" : "#1AFFFFFF"
-                            border.width: 1
-                            border.color: "#25FFFFFF"
+                        Item {
+                            implicitWidth: 24
+                            implicitHeight: 24
 
-                            Text {
+                            readonly property bool canDecrease: !!(root.player && root.player.subtitleScale > 50)
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: width / 2
+                                color: downMouse.pressed ? "#40FFFFFF"
+                                     : (downMouse.containsMouse ? "#26FFFFFF" : "transparent")
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+
+                            FluxIcon {
                                 anchors.centerIn: parent
-                                text: "▼"
-                                color: (root.player && root.player.subtitleScale > 50) ? Theme.text : Theme.textMute
-                                font.pixelSize: 8
+                                name: "chevronDown"
+                                size: 14
+                                color: parent.canDecrease
+                                       ? (downMouse.containsMouse ? "#FFFFFF" : "#D0FFFFFF")
+                                       : "#35FFFFFF"
+                                Behavior on color { ColorAnimation { duration: 120 } }
                             }
 
                             MouseArea {
                                 id: downMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
+                                cursorShape: parent.canDecrease ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                enabled: parent.canDecrease
                                 onClicked: {
                                     if (root.player) root.player.decreaseSubtitleScale()
                                 }
+                            }
+
+                            FluxToolTip {
+                                visible: downMouse.containsMouse && parent.canDecrease
+                                text: "Decrease subtitle size"
+                                above: true
                             }
                         }
 
@@ -807,29 +842,45 @@ Item {
                             horizontalAlignment: Text.AlignHCenter
                         }
 
-                        Rectangle {
-                            width: 22
-                            height: 22
-                            radius: 4
-                            color: upMouse.containsMouse ? "#33FFFFFF" : "#1AFFFFFF"
-                            border.width: 1
-                            border.color: "#25FFFFFF"
+                        Item {
+                            implicitWidth: 24
+                            implicitHeight: 24
 
-                            Text {
+                            readonly property bool canIncrease: !!(root.player && root.player.subtitleScale < 200)
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: width / 2
+                                color: upMouse.pressed ? "#40FFFFFF"
+                                     : (upMouse.containsMouse ? "#26FFFFFF" : "transparent")
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+
+                            FluxIcon {
                                 anchors.centerIn: parent
-                                text: "▲"
-                                color: (root.player && root.player.subtitleScale < 200) ? Theme.text : Theme.textMute
-                                font.pixelSize: 8
+                                name: "chevronUp"
+                                size: 14
+                                color: parent.canIncrease
+                                       ? (upMouse.containsMouse ? "#FFFFFF" : "#D0FFFFFF")
+                                       : "#35FFFFFF"
+                                Behavior on color { ColorAnimation { duration: 120 } }
                             }
 
                             MouseArea {
                                 id: upMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
+                                cursorShape: parent.canIncrease ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                enabled: parent.canIncrease
                                 onClicked: {
                                     if (root.player) root.player.increaseSubtitleScale()
                                 }
+                            }
+
+                            FluxToolTip {
+                                visible: upMouse.containsMouse && parent.canIncrease
+                                text: "Increase subtitle size"
+                                above: true
                             }
                         }
                     }

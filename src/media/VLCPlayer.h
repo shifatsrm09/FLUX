@@ -38,6 +38,8 @@ class VLCPlayer : public QObject {
     Q_PROPERTY(QVariantList subtitleTracks READ subtitleTracks NOTIFY subtitleTracksChanged)
     Q_PROPERTY(int selectedSubtitleTrack READ selectedSubtitleTrack WRITE selectSubtitleTrack NOTIFY selectedSubtitleTrackChanged)
     Q_PROPERTY(int subtitleScale READ subtitleScale WRITE setSubtitleScale NOTIFY subtitleScaleChanged)
+    Q_PROPERTY(bool isCurrentSubtitleScalable READ isCurrentSubtitleScalable NOTIFY selectedSubtitleTrackChanged)
+    Q_PROPERTY(QString currentSubtitleType READ currentSubtitleType NOTIFY selectedSubtitleTrackChanged)
 
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorOccurred)
     Q_PROPERTY(double playbackRate READ playbackRate NOTIFY playbackRateChanged)
@@ -121,6 +123,8 @@ public slots:
     Q_INVOKABLE void playFrom(const QString &url, qint64 startMs, qreal startPosition = -1.0);
     Q_INVOKABLE void setLanguagePreferences(const QStringList &audio, const QString &subtitle);
     int subtitleScale() const { return m_subtitleScale; }
+    bool isCurrentSubtitleScalable() const;
+    QString currentSubtitleType() const;
     Q_INVOKABLE void setSubtitleScale(int scale);
     Q_INVOKABLE void increaseSubtitleScale();
     Q_INVOKABLE void decreaseSubtitleScale();
