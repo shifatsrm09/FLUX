@@ -408,7 +408,17 @@ Item {
             // Server toggle button with animated arrow (Top Picks only)
             Item {
                 id: serverBtn
-                visible: !!(window && window.currentIsTopPick && window.currentAltUrl && window.currentAltUrl.length > 0)
+                readonly property bool canSwitchServer: {
+                    if (typeof fluxUser === "undefined" || !fluxUser) return true
+                    if (!fluxUser.serverCheckComplete || fluxUser.bothServersDown) return true
+                    return fluxUser.server1Available && fluxUser.server2Available
+                }
+                visible: !!(window && window.currentIsTopPick && window.currentAltUrl && window.currentAltUrl.length > 0 && canSwitchServer)
+                onVisibleChanged: {
+                    if (!visible && serverPopup.visible) {
+                        serverPopup.close()
+                    }
+                }
                 Layout.alignment: Qt.AlignVCenter
                 implicitWidth: 38
                 implicitHeight: 38

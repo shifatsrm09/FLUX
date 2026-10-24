@@ -236,6 +236,12 @@ ApplicationWindow {
 
     function switchTopPickServer() {
         if (!currentIsTopPick || !currentAltUrl || currentAltUrl.length === 0) return
+        if (fluxUser && fluxUser.serverCheckComplete && !fluxUser.bothServersDown) {
+            if (!fluxUser.server1Available || !fluxUser.server2Available) {
+                console.log("[Main] Cannot switch server: alternative server is unreachable.")
+                return
+            }
+        }
         var currentTimeMs = (fluxPlayer && fluxPlayer.timeMs > 0) ? fluxPlayer.timeMs : 0
         var currentDurationMs = (fluxPlayer && fluxPlayer.durationMs > 0) ? fluxPlayer.durationMs : 0
         var currentFraction = currentDurationMs > 0 ? (currentTimeMs / currentDurationMs) : -1
@@ -265,6 +271,19 @@ ApplicationWindow {
         if (topPick) {
             currentIsTopPick = true
             currentTopPickItem = topPick
+
+            if (fluxUser && fluxUser.serverCheckComplete && !fluxUser.bothServersDown) {
+                var isReqDhaka = (url === topPick.url)
+                var isReqIcc = (url === topPick.altUrl)
+                if (isReqDhaka && !fluxUser.server1Available && fluxUser.server2Available && topPick.altUrl) {
+                    console.log("[Main] Dhaka Flix is unreachable, auto-routing to ICC for Top Pick:", title)
+                    url = topPick.altUrl
+                } else if (isReqIcc && !fluxUser.server2Available && fluxUser.server1Available && topPick.url) {
+                    console.log("[Main] ICC is unreachable, auto-routing to Dhaka Flix for Top Pick:", title)
+                    url = topPick.url
+                }
+            }
+
             if (currentAltUrl.length === 0) {
                 if (url === topPick.url) {
                     currentAltUrl = topPick.altUrl || ""
