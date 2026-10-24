@@ -13,3 +13,4 @@ dist/
 !.env.example
 inspirationREADME.md
 tools/nsis/
+torrserver/

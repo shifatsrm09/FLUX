@@ -7,7 +7,7 @@
 ; The self-updater downloads the release asset named  FLUX-<version>-Setup.exe
 ; and runs it silently:  FLUX-<version>-Setup.exe /S /NOGUI /D=<install dir>
 !ifndef VERSION
-  !define VERSION "2.2.4"
+  !define VERSION "2.2.5"
 !endif
 
 ; General — Discord-style per-user zero-click setup:
