@@ -30,7 +30,7 @@ using namespace Gdiplus;
 namespace {
 
 constexpr int kBaseWidth  = 300;
-constexpr int kBaseHeight = 310;
+constexpr int kBaseHeight = 350;
 constexpr UINT_PTR kTimerId = 1;
 constexpr UINT kFrameIntervalMs = 16; // ~60 FPS
 
@@ -186,7 +186,7 @@ void RenderSplashFrame() {
         // 2. Centered Still FLUX v2.png Logo (exact Discord Clyde position and size: 72x72 at top margin ~82)
         const REAL iconSize = 72.0f * s;
         const REAL iconX = (static_cast<REAL>(w) - iconSize) / 2.0f;
-        const REAL iconY = 82.0f * s;
+        const REAL iconY = 96.0f * s;
 
         if (g_state.logoImage) {
             g.DrawImage(g_state.logoImage, iconX, iconY, iconSize, iconSize);
@@ -209,7 +209,7 @@ void RenderSplashFrame() {
                                     ? L"STARTING\u2026"
                                     : g_state.statusStep.c_str();
 
-        RectF textRect(10.0f * s, 192.0f * s, (kBaseWidth - 20.0f) * s, 24.0f * s);
+        RectF textRect(10.0f * s, 206.0f * s, (kBaseWidth - 20.0f) * s, 24.0f * s);
         g.DrawString(statusText, -1, &statusFont, textRect, &centerFormat, &textBrush);
 
         // 4. Exact Discord Progress Bar
@@ -219,7 +219,7 @@ void RenderSplashFrame() {
         const REAL barH = 8.0f * s;
         const REAL barR = 4.0f * s;
         const REAL barX = (static_cast<REAL>(w) - barW) / 2.0f;
-        const REAL barY = 232.0f * s;
+        const REAL barY = 246.0f * s;
 
         GraphicsPath trackPath;
         AddRoundedRect(trackPath, barX, barY, barW, barH, barR);

@@ -779,8 +779,12 @@ ApplicationWindow {
         if (currentPage === "player") stage.forceActiveFocus()
     }
 
+    property double lastActivatedAt: 0
     onActiveChanged: {
-        if (active && currentPage === "player") stage.forceActiveFocus()
+        if (active) {
+            lastActivatedAt = Date.now()
+            if (currentPage === "player") stage.forceActiveFocus()
+        }
     }
 
     Connections {

@@ -262,6 +262,7 @@ Item {
                 tip: (root.player && (root.player.isPlaying || root.player.isBuffering)) ? "Pause (Space)" : "Play (Space)"
 
                 onClicked: {
+                    if (window && (Date.now() - window.lastActivatedAt < 350)) return
                     if (root.player) root.player.togglePlay()
                 }
             }

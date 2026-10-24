@@ -358,10 +358,17 @@ Rectangle {
         // Popup.CloseOnPressOutside closes the menu on press, before onClicked runs.
         // Remember its state so that same outside click doesn't also toggle playback.
         property bool menuWasOpenAtPress: false
+        property bool wasActiveAtPress: true
+        property bool wasActivationClick: false
         property real anchorX: -1
         property real anchorY: -1
 
-        onPressed: menuWasOpenAtPress = root.menuOpen
+        onPressed: {
+            menuWasOpenAtPress = root.menuOpen
+            wasActiveAtPress = (window ? window.active : true)
+            var justActivated = (window && (Date.now() - window.lastActivatedAt < 350))
+            wasActivationClick = (!wasActiveAtPress || justActivated)
+        }
 
         onPositionChanged: function(mouse) {
             if (!root.showControls) {
@@ -387,6 +394,12 @@ Rectangle {
             root.wakeControls()
             if (menuWasOpenAtPress || !root.player) return
 
+            // If this click was to focus/activate FLUX from another monitor/window,
+            // only wake controls and gain focus — do NOT toggle playback!
+            if (wasActivationClick) {
+                return
+            }
+
             // 15% top and 15% bottom deadspace where clicking does not toggle playback
             var topDeadzone = root.height * 0.15
             var bottomDeadzone = root.height * 0.85
@@ -402,7 +415,7 @@ Rectangle {
                 var topDeadzone = root.height * 0.15
                 var bottomDeadzone = root.height * 0.85
                 var wasInPlayArea = (mouse.y >= topDeadzone && mouse.y <= bottomDeadzone)
-                if (wasInPlayArea && root.player) {
+                if (wasInPlayArea && root.player && !wasActivationClick) {
                     root.player.togglePlay()
                 }
                 root.toggleFullscreenRequested()
@@ -610,7 +623,14 @@ Rectangle {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
+            property bool wasActivationClick: false
+            onPressed: {
+                var wasActive = (window ? window.active : true)
+                var justActivated = (window && (Date.now() - window.lastActivatedAt < 350))
+                wasActivationClick = (!wasActive || justActivated)
+            }
             onClicked: {
+                if (wasActivationClick) return
                 if (root.player) root.player.togglePlay()
             }
         }
