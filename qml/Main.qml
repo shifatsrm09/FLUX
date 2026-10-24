@@ -223,8 +223,12 @@ ApplicationWindow {
     property var currentTopPickItem: null
     property string currentServerName: {
         if (!currentIsTopPick) return ""
+        if (fluxUser) {
+            var s = fluxUser.serverNameForUrl(currentSourceUrl)
+            if (s === "ICC FTP" || s === "Dhaka Flix") return s
+        }
         var src = currentSourceUrl || ""
-        if (src.indexOf("10.16.100.244") !== -1 || src.indexOf("player.php") !== -1) {
+        if (src.indexOf("10.16.") !== -1 || src.indexOf("player.php") !== -1 || src.indexOf("icc") !== -1) {
             return "ICC FTP"
         }
         return "Dhaka Flix"
@@ -368,9 +372,15 @@ ApplicationWindow {
             if (resumeMs <= 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
                 resumeMs = fluxUser.resumePositionFor(directUrl)
             }
+            if (resumeMs <= 0 && currentAltUrl && currentAltUrl.length > 0 && fluxUser) {
+                resumeMs = fluxUser.resumePositionFor(currentAltUrl)
+            }
             var resumeProgress = (resumeMs > 0 && fluxUser) ? fluxUser.progressFor(sourceUrl) : ({})
             if ((!resumeProgress || !resumeProgress.fraction) && resumeMs > 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
                 resumeProgress = fluxUser.progressFor(directUrl)
+            }
+            if ((!resumeProgress || !resumeProgress.fraction) && resumeMs > 0 && currentAltUrl && currentAltUrl.length > 0 && fluxUser) {
+                resumeProgress = fluxUser.progressFor(currentAltUrl)
             }
             var resumeFraction = (resumeProgress && resumeProgress.fraction > 0) ? resumeProgress.fraction : -1
         } else {

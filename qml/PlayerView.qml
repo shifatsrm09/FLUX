@@ -149,10 +149,18 @@ Rectangle {
     onHasErrorChanged: {
         if (root.hasError && window && window.currentAltUrl && window.currentAltUrl.length > 0) {
             var alt = window.currentAltUrl
+            if (fluxUser && fluxUser.serverCheckComplete && !fluxUser.bothServersDown && !fluxUser.isServerAvailableForUrl(alt)) {
+                return
+            }
             window.currentAltUrl = ""
             streamTimeoutTimer.stop()
+            var curTimeMs = (root.player && root.player.timeMs > 0) ? root.player.timeMs : (root.pendingSwitchMs > 0 ? root.pendingSwitchMs : 0)
+            var curDurMs = (root.player && root.player.durationMs > 0) ? root.player.durationMs : 0
+            var curFrac = curDurMs > 0 ? (curTimeMs / curDurMs) : -1
             autoFallbackTimer.targetUrl = alt
             autoFallbackTimer.targetTitle = window.currentPlayingTitle
+            autoFallbackTimer.targetTimeMs = curTimeMs
+            autoFallbackTimer.targetFraction = curFrac
             autoFallbackTimer.restart()
         }
     }
@@ -163,10 +171,12 @@ Rectangle {
         repeat: false
         property string targetUrl: ""
         property string targetTitle: ""
+        property real targetTimeMs: 0
+        property real targetFraction: -1
         onTriggered: {
             if (targetUrl.length > 0) {
                 root.showOsd("Playback failed. Auto-switching to alternative server...", -1)
-                window.playMedia(targetUrl, targetTitle, "")
+                window.playMedia(targetUrl, targetTitle, "", targetTimeMs, targetFraction)
             }
         }
     }
@@ -179,9 +189,13 @@ Rectangle {
             if (window && window.currentAltUrl && window.currentAltUrl.length > 0) {
                 if (root.player && !root.player.isPlaying && root.player.timeMs === 0) {
                     var alt = window.currentAltUrl
+                    if (fluxUser && fluxUser.serverCheckComplete && !fluxUser.bothServersDown && !fluxUser.isServerAvailableForUrl(alt)) {
+                        return
+                    }
                     window.currentAltUrl = ""
+                    var curTimeMs = root.pendingSwitchMs > 0 ? root.pendingSwitchMs : 0
                     root.showOsd("Connection timed out. Auto-switching to alternative server...", -1)
-                    window.playMedia(alt, window.currentPlayingTitle, "")
+                    window.playMedia(alt, window.currentPlayingTitle, "", curTimeMs, -1)
                 }
             }
         }
