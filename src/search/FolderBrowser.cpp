@@ -527,6 +527,107 @@ void FolderBrowser::requestListing(const QString &origin, const QString &href,
 
     QPointer<FolderBrowser> self(this);
 
+    // Special handling for Circle FTP series/posts
+    if (href.contains(QLatin1String("/api/posts/")) || origin.contains(QLatin1String("circleftp.net:5000"))) {
+        self->getHtml(origin, href, [self, origin, href, libraryName, group, cacheKey, done](bool ok, const QByteArray &data) {
+            if (!self) return;
+            if (!ok) {
+                done(false, {});
+                return;
+            }
+            QJsonDocument doc = QJsonDocument::fromJson(data);
+            if (!doc.isObject()) {
+                done(false, {});
+                return;
+            }
+            QJsonObject post = doc.object();
+            QString showTitle = post["title"].toString().trimmed();
+            QString image = post["image"].toString().trimmed();
+            if (image.isEmpty()) image = post["imageSm"].toString().trimmed();
+            QString pagePosterUrl;
+            if (!image.isEmpty()) {
+                if (image.startsWith(QLatin1String("http://")) || image.startsWith(QLatin1String("https://"))) {
+                    pagePosterUrl = image;
+                } else {
+                    pagePosterUrl = QStringLiteral("http://new.circleftp.net:5000/uploads/") + image;
+                }
+            }
+
+            std::vector<SearchResult> epItems;
+            if (post.contains("content") && post["content"].isArray()) {
+                QJsonArray seasons = post["content"].toArray();
+                for (const auto &sVal : seasons) {
+                    if (!sVal.isObject()) continue;
+                    QJsonObject sObj = sVal.toObject();
+                    QString sName = sObj["seasonName"].toString().trimmed();
+                    if (sName.isEmpty()) sName = QStringLiteral("Season 1");
+                    QJsonArray episodes = sObj["episodes"].toArray();
+                    for (const auto &eVal : episodes) {
+                        if (!eVal.isObject()) continue;
+                        QJsonObject eObj = eVal.toObject();
+                        QString epTitle = eObj["title"].toString().trimmed();
+                        QString epLink = eObj["link"].toString().trimmed();
+                        if (epLink.isEmpty()) continue;
+
+                        QString filename = QUrl::fromPercentEncoding(QUrl(epLink).fileName().toUtf8());
+                        SearchResult r;
+                        r.displayName = epTitle.isEmpty() ? filename : epTitle;
+                        r.parentPath = sName;
+                        r.isFolder = false;
+                        r.formattedSize = QString();
+                        r.playUrl = epLink;
+                        r.rawHref = epLink;
+                        r.libraryName = libraryName.isEmpty() ? QStringLiteral("Circle FTP") : libraryName;
+                        r.group = sName;
+                        r.posterUrl = pagePosterUrl;
+                        r.extension = QFileInfo(filename).suffix();
+                        epItems.push_back(std::move(r));
+                    }
+                }
+            } else if (post.contains("content") && post["content"].isString()) {
+                QString link = post["content"].toString().trimmed();
+                if (!link.isEmpty()) {
+                    QString filename = QUrl::fromPercentEncoding(QUrl(link).fileName().toUtf8());
+                    SearchResult r;
+                    r.displayName = showTitle.isEmpty() ? filename : showTitle;
+                    r.parentPath = QStringLiteral("Movies");
+                    r.isFolder = false;
+                    r.formattedSize = QString();
+                    r.playUrl = link;
+                    r.rawHref = link;
+                    r.libraryName = libraryName.isEmpty() ? QStringLiteral("Circle FTP") : libraryName;
+                    r.group = group;
+                    r.posterUrl = pagePosterUrl;
+                    r.extension = QFileInfo(filename).suffix();
+                    epItems.push_back(std::move(r));
+                }
+            }
+
+            if (!epItems.empty()) {
+                const QString webFolderUrl = origin + href;
+                if (!pagePosterUrl.isEmpty()) {
+                    emit self->posterFound(webFolderUrl, pagePosterUrl, showTitle);
+                }
+
+                for (const auto &item : epItems) {
+                    if (!item.playUrl.isEmpty()) {
+                        self->m_mediaToWebFolder[item.playUrl] = webFolderUrl;
+                        if (!pagePosterUrl.isEmpty()) {
+                            emit self->posterFound(item.playUrl, pagePosterUrl, item.displayName);
+                        }
+                    }
+                }
+
+                epItems = postProcess(std::move(epItems));
+                self->storeCache(cacheKey, epItems);
+                done(true, std::move(epItems));
+                return;
+            }
+            done(false, {});
+        });
+        return;
+    }
+
     // Special handling for ICC FTP series/episodes or category listings
     if (href.contains(QLatin1String("player.php"))) {
         self->getHtml(origin, href, [self, origin, href, libraryName, group, cacheKey, done](bool ok, const QByteArray &html) {

@@ -65,6 +65,59 @@ Item {
         }
     ]
 
+    // Circle FTP (Server 3) groups
+    readonly property var circleFtpGroups: [
+        {
+            title: "English Movies",
+            items: [
+                { id: "circle_eng_movies", name: "English Movies" },
+                { id: "circle_featured", name: "Featured Posts" }
+            ]
+        },
+        {
+            title: "Hindi Movies",
+            items: [
+                { id: "circle_hindi_movies", name: "Hindi Movies" },
+                { id: "circle_hindi_dubbed", name: "Hindi Dubbed Movies" },
+                { id: "circle_south_dubbed", name: "South Dubbed Movies" }
+            ]
+        },
+        {
+            title: "Animation",
+            items: [
+                { id: "circle_anim_movies", name: "Animation Movies" },
+                { id: "circle_anim_dubbed", name: "Animation Dubbed" },
+                { id: "circle_anime_series", name: "Anime Series" }
+            ]
+        },
+        {
+            title: "Other Movies",
+            items: [
+                { id: "circle_foreign_movies", name: "Foreign Movies" },
+                { id: "circle_south_movies", name: "South Indian Movies" },
+                { id: "circle_doc", name: "Documentary" }
+            ]
+        },
+        {
+            title: "TV & Shows",
+            items: [
+                { id: "circle_tv_eng", name: "English & Foreign TV Series" },
+                { id: "circle_tv_dubbed", name: "Dubbed TV Series" },
+                { id: "circle_tv_hindi", name: "Hindi TV Serials" },
+                { id: "circle_indian_shows", name: "Indian TV Shows" }
+            ]
+        },
+        {
+            title: "Others",
+            items: [
+                { id: "circle_wwe", name: "WWE" },
+                { id: "circle_awards", name: "Awards Shows" },
+                { id: "circle_software", name: "Software" },
+                { id: "circle_pc_games", name: "PC & Console Games" }
+            ]
+        }
+    ]
+
     // ICC FTP (Server 2) groups
     readonly property var iccftpGroups: [
         {
@@ -119,7 +172,8 @@ Item {
         }
     ]
 
-    readonly property var categoryGroups: (fluxUser && fluxUser.activeServer === 1) ? dhakaFlixGroups : iccftpGroups
+    readonly property var categoryGroups: (fluxUser && fluxUser.activeServer === 1) ? dhakaFlixGroups
+                                        : ((fluxUser && fluxUser.activeServer === 3) ? circleFtpGroups : iccftpGroups)
 
     readonly property bool groupsOpen: !root.collapsible || root.isExpanded
     readonly property int rowHeight: root.collapsible ? 38 : 44

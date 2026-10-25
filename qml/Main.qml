@@ -225,9 +225,12 @@ ApplicationWindow {
         if (!currentIsTopPick) return ""
         if (fluxUser) {
             var s = fluxUser.serverNameForUrl(currentSourceUrl)
-            if (s === "ICC FTP" || s === "Dhaka Flix") return s
+            if (s === "ICC FTP" || s === "Dhaka Flix" || s === "Circle FTP") return s
         }
         var src = currentSourceUrl || ""
+        if (src.indexOf("circleftp") !== -1) {
+            return "Circle FTP"
+        }
         if (src.indexOf("10.16.") !== -1 || src.indexOf("player.php") !== -1 || src.indexOf("icc") !== -1) {
             return "ICC FTP"
         }

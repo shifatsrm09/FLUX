@@ -503,46 +503,208 @@ Popup {
                                         }
                                     }
 
-                                    // Server Selector Button
-                                    Rectangle {
-                                        implicitWidth: 210
+                                    // Server Selector Dropdown
+                                    Item {
+                                        id: srvDropdownContainer
+                                        implicitWidth: 220
                                         implicitHeight: 34
-                                        radius: 4
-                                        color: srvMouse.containsMouse ? "#282e3a" : "#171a21"
-                                        border.width: 1
-                                        border.color: "#384152"
+                                        z: srvDropdown.visible ? 200 : 1
 
-                                        RowLayout {
+                                        property bool isOpen: false
+
+                                        Rectangle {
+                                            id: srvBtn
                                             anchors.fill: parent
-                                            anchors.leftMargin: 12
-                                            anchors.rightMargin: 10
+                                            radius: 4
+                                            color: srvMouse.containsMouse || srvDropdownContainer.isOpen ? "#282e3a" : "#171a21"
+                                            border.width: 1
+                                            border.color: srvDropdownContainer.isOpen ? panel.cSteamBlue : "#384152"
 
-                                            Text {
-                                                text: (fluxUser && fluxUser.activeServer === 2)
-                                                    ? "Server 2 (ICC Flix)"
-                                                    : "Server 1 (Dhaka Flix)"
-                                                color: panel.cTextWhite
-                                                font.pixelSize: 12
-                                                font.weight: Font.DemiBold
-                                                Layout.fillWidth: true
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 12
+                                                anchors.rightMargin: 10
+
+                                                Text {
+                                                    text: (fluxUser && fluxUser.activeServer === 3)
+                                                        ? "Server 3 (Circle FTP)"
+                                                        : ((fluxUser && fluxUser.activeServer === 2)
+                                                            ? "Server 2 (ICC Flix)"
+                                                            : "Server 1 (Dhaka Flix)")
+                                                    color: panel.cTextWhite
+                                                    font.pixelSize: 12
+                                                    font.weight: Font.DemiBold
+                                                    Layout.fillWidth: true
+                                                }
+
+                                                FluxIcon {
+                                                    name: "chevronDown"
+                                                    size: 12
+                                                    color: panel.cSteamBlue
+                                                    rotation: srvDropdownContainer.isOpen ? 180 : 0
+                                                    Behavior on rotation { NumberAnimation { duration: 150 } }
+                                                }
                                             }
 
-                                            FluxIcon {
-                                                name: "chevronDown"
-                                                size: 12
-                                                color: panel.cSteamBlue
+                                            MouseArea {
+                                                id: srvMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    srvDropdownContainer.isOpen = !srvDropdownContainer.isOpen
+                                                }
                                             }
                                         }
 
-                                        MouseArea {
-                                            id: srvMouse
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                if (fluxUser) {
-                                                    fluxUser.activeServer = (fluxUser.activeServer === 1) ? 2 : 1
-                                                    panel.serverTestStatus = ""
+                                        // Dropdown menu list
+                                        Rectangle {
+                                            id: srvDropdown
+                                            visible: srvDropdownContainer.isOpen
+                                            anchors.top: srvBtn.bottom
+                                            anchors.topMargin: 4
+                                            anchors.left: srvBtn.left
+                                            anchors.right: srvBtn.right
+                                            implicitHeight: srvDropCol.implicitHeight + 8
+                                            color: "#171a21"
+                                            radius: 4
+                                            border.width: 1
+                                            border.color: "#384152"
+                                            z: 300
+
+                                            ColumnLayout {
+                                                id: srvDropCol
+                                                anchors.fill: parent
+                                                anchors.margins: 4
+                                                spacing: 2
+
+                                                // Option 1: Dhaka Flix
+                                                Rectangle {
+                                                    Layout.fillWidth: true
+                                                    implicitHeight: 32
+                                                    radius: 3
+                                                    color: opt1Mouse.containsMouse ? "#282e3a" : (fluxUser && fluxUser.activeServer === 1 ? "#1f2633" : "transparent")
+
+                                                    RowLayout {
+                                                        anchors.fill: parent
+                                                        anchors.leftMargin: 10
+                                                        anchors.rightMargin: 10
+                                                        spacing: 8
+
+                                                        Text {
+                                                            text: (fluxUser && fluxUser.activeServer === 1) ? "\u2713" : ""
+                                                            color: panel.cSteamBlue
+                                                            font.pixelSize: 12
+                                                            font.weight: Font.Bold
+                                                            Layout.preferredWidth: 12
+                                                        }
+
+                                                        Text {
+                                                            text: "Server 1 (Dhaka Flix)"
+                                                            color: (fluxUser && fluxUser.activeServer === 1) ? panel.cTextWhite : panel.cTextDim
+                                                            font.pixelSize: 12
+                                                            font.weight: (fluxUser && fluxUser.activeServer === 1) ? Font.DemiBold : Font.Normal
+                                                            Layout.fillWidth: true
+                                                        }
+                                                    }
+
+                                                    MouseArea {
+                                                        id: opt1Mouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: {
+                                                            if (fluxUser) fluxUser.activeServer = 1
+                                                            srvDropdownContainer.isOpen = false
+                                                            panel.serverTestStatus = ""
+                                                        }
+                                                    }
+                                                }
+
+                                                // Option 2: ICC Flix
+                                                Rectangle {
+                                                    Layout.fillWidth: true
+                                                    implicitHeight: 32
+                                                    radius: 3
+                                                    color: opt2Mouse.containsMouse ? "#282e3a" : (fluxUser && fluxUser.activeServer === 2 ? "#1f2633" : "transparent")
+
+                                                    RowLayout {
+                                                        anchors.fill: parent
+                                                        anchors.leftMargin: 10
+                                                        anchors.rightMargin: 10
+                                                        spacing: 8
+
+                                                        Text {
+                                                            text: (fluxUser && fluxUser.activeServer === 2) ? "\u2713" : ""
+                                                            color: panel.cSteamBlue
+                                                            font.pixelSize: 12
+                                                            font.weight: Font.Bold
+                                                            Layout.preferredWidth: 12
+                                                        }
+
+                                                        Text {
+                                                            text: "Server 2 (ICC Flix)"
+                                                            color: (fluxUser && fluxUser.activeServer === 2) ? panel.cTextWhite : panel.cTextDim
+                                                            font.pixelSize: 12
+                                                            font.weight: (fluxUser && fluxUser.activeServer === 2) ? Font.DemiBold : Font.Normal
+                                                            Layout.fillWidth: true
+                                                        }
+                                                    }
+
+                                                    MouseArea {
+                                                        id: opt2Mouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: {
+                                                            if (fluxUser) fluxUser.activeServer = 2
+                                                            srvDropdownContainer.isOpen = false
+                                                            panel.serverTestStatus = ""
+                                                        }
+                                                    }
+                                                }
+
+                                                // Option 3: Circle FTP
+                                                Rectangle {
+                                                    Layout.fillWidth: true
+                                                    implicitHeight: 32
+                                                    radius: 3
+                                                    color: opt3Mouse.containsMouse ? "#282e3a" : (fluxUser && fluxUser.activeServer === 3 ? "#1f2633" : "transparent")
+
+                                                    RowLayout {
+                                                        anchors.fill: parent
+                                                        anchors.leftMargin: 10
+                                                        anchors.rightMargin: 10
+                                                        spacing: 8
+
+                                                        Text {
+                                                            text: (fluxUser && fluxUser.activeServer === 3) ? "\u2713" : ""
+                                                            color: panel.cSteamBlue
+                                                            font.pixelSize: 12
+                                                            font.weight: Font.Bold
+                                                            Layout.preferredWidth: 12
+                                                        }
+
+                                                        Text {
+                                                            text: "Server 3 (Circle FTP)"
+                                                            color: (fluxUser && fluxUser.activeServer === 3) ? panel.cTextWhite : panel.cTextDim
+                                                            font.pixelSize: 12
+                                                            font.weight: (fluxUser && fluxUser.activeServer === 3) ? Font.DemiBold : Font.Normal
+                                                            Layout.fillWidth: true
+                                                        }
+                                                    }
+
+                                                    MouseArea {
+                                                        id: opt3Mouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: {
+                                                            if (fluxUser) fluxUser.activeServer = 3
+                                                            srvDropdownContainer.isOpen = false
+                                                            panel.serverTestStatus = ""
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -572,6 +734,13 @@ Popup {
                                             Rectangle { width: 6; height: 6; radius: 3; color: (fluxUser && fluxUser.activeServer === 2) ? panel.cSteamBlue : panel.cTextMute }
                                             Text { text: "Server 2: ICC Flix"; color: panel.cTextWhite; font.pixelSize: 12; font.weight: Font.DemiBold }
                                             Text { text: "http://10.16.100.244/"; color: panel.cTextMute; font.family: Theme.monoFamily; font.pixelSize: 11 }
+                                        }
+
+                                        RowLayout {
+                                            spacing: 8
+                                            Rectangle { width: 6; height: 6; radius: 3; color: (fluxUser && fluxUser.activeServer === 3) ? panel.cSteamBlue : panel.cTextMute }
+                                            Text { text: "Server 3: Circle FTP"; color: panel.cTextWhite; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                            Text { text: "http://new.circleftp.net/"; color: panel.cTextMute; font.family: Theme.monoFamily; font.pixelSize: 11 }
                                         }
                                     }
                                 }
@@ -617,9 +786,11 @@ Popup {
                                             if (panel.serverTesting) return
                                             panel.serverTesting = true
                                             panel.serverTestStatus = "Checking server response..."
-                                            var targetUrl = (fluxUser && fluxUser.activeServer === 2)
-                                                ? "http://10.16.100.244/"
-                                                : "http://172.16.50.14/"
+                                            var targetUrl = (fluxUser && fluxUser.activeServer === 3)
+                                                ? "http://new.circleftp.net:5000/api/categories"
+                                                : ((fluxUser && fluxUser.activeServer === 2)
+                                                    ? "http://10.16.100.244/"
+                                                    : "http://172.16.50.14/")
                                             var xhr = new XMLHttpRequest()
                                             var startTime = Date.now()
                                             xhr.open("HEAD", targetUrl, true)

@@ -790,12 +790,9 @@ Item {
             Rectangle {
                 id: searchServerSelector
 
-                readonly property int activeServerIndex: (fluxUser && fluxUser.activeServer === 1) ? 1 : 2
-                readonly property bool isWide: root.width >= 700
-                readonly property bool bothDown: !!fluxUser && fluxUser.bothServersDown
-                readonly property bool showServer1: !fluxUser || !fluxUser.serverCheckComplete || fluxUser.server1Available || bothDown
-                readonly property bool showServer2: !fluxUser || !fluxUser.serverCheckComplete || fluxUser.server2Available || bothDown
-                readonly property bool hasBothServers: showServer1 && showServer2
+                readonly property int activeServerIndex: (fluxUser && fluxUser.activeServer === 1) ? 1
+                                                       : ((fluxUser && fluxUser.activeServer === 3) ? 3 : 2)
+                readonly property bool isWide: root.width >= 750
 
                 implicitHeight: 42
                 implicitWidth: searchSegmentsRow.width + 8
@@ -810,8 +807,10 @@ Item {
                     radius: 17
                     anchors.verticalCenter: parent.verticalCenter
                     color: Theme.accent
-                    x: searchSegmentsRow.x + (searchServerSelector.activeServerIndex === 1 ? sseg1.x : sseg2.x)
-                    width: searchServerSelector.activeServerIndex === 1 ? sseg1.width : sseg2.width
+                    x: searchSegmentsRow.x + (searchServerSelector.activeServerIndex === 1 ? sseg1.x
+                                            : (searchServerSelector.activeServerIndex === 3 ? sseg3.x : sseg2.x))
+                    width: searchServerSelector.activeServerIndex === 1 ? sseg1.width
+                         : (searchServerSelector.activeServerIndex === 3 ? sseg3.width : sseg2.width)
 
                     Behavior on x { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                     Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
@@ -821,13 +820,13 @@ Item {
                     id: searchSegmentsRow
                     anchors.verticalCenter: parent.verticalCenter
                     x: 4
-                    spacing: searchServerSelector.hasBothServers ? 4 : 0
+                    spacing: 4
 
+                    // Server 1: Dhaka Flix
                     Item {
                         id: sseg1
-                        visible: searchServerSelector.showServer1
                         height: 34
-                        width: visible ? (sseg1Row.implicitWidth + 24) : 0
+                        width: sseg1Row.implicitWidth + 24
 
                         Rectangle {
                             anchors.fill: parent
@@ -869,6 +868,7 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 if (fluxUser && fluxUser.activeServer !== 1) {
+                                    if (fluxSearch) fluxSearch.clearSuggestions()
                                     categoryFilter.isExpanded = false
                                     var textQuery = topSearchInput.text.trim()
                                     fluxUser.activeServer = 1
@@ -887,11 +887,11 @@ Item {
                         }
                     }
 
+                    // Server 2: ICC FTP
                     Item {
                         id: sseg2
-                        visible: searchServerSelector.showServer2
                         height: 34
-                        width: visible ? (sseg2Row.implicitWidth + 24) : 0
+                        width: sseg2Row.implicitWidth + 24
 
                         Rectangle {
                             anchors.fill: parent
@@ -933,6 +933,7 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 if (fluxUser && fluxUser.activeServer !== 2) {
+                                    if (fluxSearch) fluxSearch.clearSuggestions()
                                     categoryFilter.isExpanded = false
                                     var textQuery = topSearchInput.text.trim()
                                     fluxUser.activeServer = 2
@@ -950,6 +951,71 @@ Item {
                             text: "Server 2 (ICC FTP) \u2014 Direct high-speed streaming"
                         }
                     }
+
+                    // Server 3: Circle FTP
+                    Item {
+                        id: sseg3
+                        height: 34
+                        width: sseg3Row.implicitWidth + 24
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 17
+                            color: "#1AFFFFFF"
+                            visible: sseg3Mouse.containsMouse && searchServerSelector.activeServerIndex !== 3
+                        }
+
+                        Row {
+                            id: sseg3Row
+                            anchors.centerIn: parent
+                            spacing: 6
+
+                            Rectangle {
+                                width: 6
+                                height: 6
+                                radius: 3
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: "#FFFFFF"
+                                opacity: (searchServerSelector.activeServerIndex === 3) ? 1.0 : 0.0
+                                Behavior on opacity { NumberAnimation { duration: 140 } }
+                            }
+
+                            Text {
+                                text: searchServerSelector.isWide ? "Server 3 (Circle FTP)" : "Server 3"
+                                color: searchServerSelector.activeServerIndex === 3 ? "#FFFFFF"
+                                     : (sseg3Mouse.containsMouse ? "#FFFFFF" : Theme.textDim)
+                                font.pixelSize: 13
+                                font.weight: searchServerSelector.activeServerIndex === 3 ? Font.Bold : Font.Normal
+                                anchors.verticalCenter: parent.verticalCenter
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+                        }
+
+                        MouseArea {
+                            id: sseg3Mouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (fluxUser && fluxUser.activeServer !== 3) {
+                                    if (fluxSearch) fluxSearch.clearSuggestions()
+                                    categoryFilter.isExpanded = false
+                                    var textQuery = topSearchInput.text.trim()
+                                    fluxUser.activeServer = 3
+                                    if (fluxBrowser && fluxBrowser.active) fluxBrowser.close()
+                                    if (textQuery.length > 0 && fluxSearch && fluxSearch.query !== textQuery) {
+                                        fluxSearch.search(textQuery)
+                                    }
+                                }
+                            }
+                        }
+
+                        FluxToolTip {
+                            visible: sseg3Mouse.containsMouse
+                            delay: 400
+                            text: "Server 3 (Circle FTP) \u2014 Direct high-speed streaming"
+                        }
+                    }
                 }
             }
 
@@ -961,6 +1027,7 @@ Item {
             Layout.fillWidth: true
             Layout.topMargin: 2
             Layout.bottomMargin: 2
+            z: 100
 
             Item { Layout.fillWidth: true }
 
@@ -971,64 +1038,194 @@ Item {
                 implicitWidth: Math.min(480, Math.max(300, Math.round(resultsView.width * 0.45)))
                 spacing: 10
 
-                Rectangle {
+                Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 44
-                    radius: 22
-                    color: Theme.surface
-                    border.width: topSearchInput.activeFocus ? 2 : 1
-                    border.color: topSearchInput.activeFocus ? Theme.accent : Theme.border
 
-                    Behavior on border.color { ColorAnimation { duration: 180 } }
-
-                    RowLayout {
+                    Rectangle {
+                        id: searchInputBox
                         anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 8
-                        spacing: 10
+                        radius: 22
+                        color: Theme.surface
+                        border.width: topSearchInput.activeFocus ? 2 : 1
+                        border.color: topSearchInput.activeFocus ? Theme.accent : Theme.border
 
-                        FluxIcon {
-                            name: "search"
-                            size: 18
-                            color: topSearchInput.activeFocus ? Theme.text : Theme.textMute
-                            Layout.alignment: Qt.AlignVCenter
-                        }
+                        Behavior on border.color { ColorAnimation { duration: 180 } }
 
-                        TextField {
-                            id: topSearchInput
-                            Layout.fillWidth: true
-                            text: fluxSearch ? fluxSearch.query : ""
-                            placeholderText: "Search movies, shows, episodes..."
-                            placeholderTextColor: Theme.textMute
-                            font.pixelSize: 13
-                            color: Theme.text
-                            selectedTextColor: "#FFFFFF"
-                            selectionColor: Theme.accent
-                            background: null
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 16
+                            anchors.rightMargin: 8
+                            spacing: 10
 
-                            onAccepted: {
-                                if (fluxSearch && text.trim().length > 0) {
-                                    categoryFilter.isExpanded = false
-                                    fluxSearch.search(text.trim())
+                            FluxIcon {
+                                name: "search"
+                                size: 18
+                                color: topSearchInput.activeFocus ? Theme.text : Theme.textMute
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            Timer {
+                                id: suggestDebounceTimer
+                                interval: 180
+                                repeat: false
+                                onTriggered: {
+                                    if (fluxUser && fluxUser.activeServer === 3 && fluxSearch) {
+                                        var q = topSearchInput.text.trim()
+                                        if (q.length > 0) {
+                                            fluxSearch.requestSuggestions(q)
+                                        } else {
+                                            fluxSearch.clearSuggestions()
+                                        }
+                                    }
+                                }
+                            }
+
+                            TextField {
+                                id: topSearchInput
+                                Layout.fillWidth: true
+                                text: fluxSearch ? fluxSearch.query : ""
+                                placeholderText: "Search movies, shows, episodes..."
+                                placeholderTextColor: Theme.textMute
+                                font.pixelSize: 13
+                                color: Theme.text
+                                selectedTextColor: "#FFFFFF"
+                                selectionColor: Theme.accent
+                                background: null
+
+                                onTextChanged: {
+                                    // Search suggestions ONLY for Circle FTP (Server 3)
+                                    if (fluxUser && fluxUser.activeServer === 3) {
+                                        if (activeFocus) {
+                                            suggestDebounceTimer.restart()
+                                        }
+                                    }
+                                }
+
+                                onActiveFocusChanged: {
+                                    if (activeFocus && fluxUser && fluxUser.activeServer === 3 && text.trim().length > 0) {
+                                        suggestDebounceTimer.restart()
+                                    }
+                                }
+
+                                onAccepted: {
+                                    suggestDebounceTimer.stop()
+                                    if (fluxSearch) fluxSearch.clearSuggestions()
+                                    if (fluxSearch && text.trim().length > 0) {
+                                        categoryFilter.isExpanded = false
+                                        fluxSearch.search(text.trim())
+                                    }
+                                }
+                            }
+
+                            IconButton {
+                                id: topClearBtn
+                                visible: topSearchInput.text.length > 0
+                                iconName: "close"
+                                iconSize: 14
+                                iconColor: Theme.textDim
+                                implicitWidth: 28
+                                implicitHeight: 28
+                                tip: "Clear"
+                                tipAbove: false
+
+                                onClicked: {
+                                    suggestDebounceTimer.stop()
+                                    topSearchInput.text = ""
+                                    if (fluxSearch) {
+                                        fluxSearch.clearSuggestions()
+                                        fluxSearch.clear()
+                                    }
+                                    categoryFilter.isExpanded = true
                                 }
                             }
                         }
+                    }
 
-                        IconButton {
-                            id: topClearBtn
-                            visible: topSearchInput.text.length > 0
-                            iconName: "close"
-                            iconSize: 14
-                            iconColor: Theme.textDim
-                            implicitWidth: 28
-                            implicitHeight: 28
-                            tip: "Clear"
-                            tipAbove: false
+                    // Auto-suggestions overlay dropdown (Circle FTP Server 3 ONLY)
+                    Rectangle {
+                        id: suggestOverlay
+                        z: 9999
+                        anchors.top: searchInputBox.bottom
+                        anchors.topMargin: 4
+                        anchors.left: searchInputBox.left
+                        anchors.right: searchInputBox.right
+                        implicitHeight: Math.min(300, suggestCol.implicitHeight + 12)
+                        height: implicitHeight
+                        color: "#181d26"
+                        radius: 12
+                        border.width: 1
+                        border.color: "#303947"
+                        clip: true
+                        visible: (fluxUser && fluxUser.activeServer === 3)
+                                 && (topSearchInput.activeFocus || suggestOverlayMouse.containsMouse)
+                                 && (fluxSearch && fluxSearch.suggestions.length > 0)
+                                 && (topSearchInput.text.trim().length > 0)
 
-                            onClicked: {
-                                topSearchInput.text = ""
-                                if (fluxSearch) fluxSearch.clear()
-                                categoryFilter.isExpanded = true
+                        MouseArea {
+                            id: suggestOverlayMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+
+                        Column {
+                            id: suggestCol
+                            anchors.top: parent.top
+                            anchors.topMargin: 6
+                            anchors.left: parent.left
+                            anchors.leftMargin: 6
+                            anchors.right: parent.right
+                            anchors.rightMargin: 6
+                            spacing: 2
+
+                            Repeater {
+                                model: (fluxUser && fluxUser.activeServer === 3 && fluxSearch) ? fluxSearch.suggestions : []
+                                delegate: Rectangle {
+                                    id: sugDelegate
+                                    width: suggestCol.width
+                                    height: 34
+                                    radius: 6
+                                    color: sugMouse.containsMouse ? "#26FFFFFF" : "transparent"
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 12
+                                        anchors.rightMargin: 12
+                                        spacing: 10
+
+                                        FluxIcon {
+                                            name: "search"
+                                            size: 14
+                                            color: sugMouse.containsMouse ? Theme.accent : Theme.textMute
+                                        }
+
+                                        Text {
+                                            text: modelData
+                                            color: sugMouse.containsMouse ? "#FFFFFF" : Theme.text
+                                            font.pixelSize: 13
+                                            font.weight: sugMouse.containsMouse ? Font.DemiBold : Font.Normal
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: sugMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            suggestDebounceTimer.stop()
+                                            var chosen = modelData
+                                            topSearchInput.text = chosen
+                                            if (fluxSearch) {
+                                                fluxSearch.clearSuggestions()
+                                                categoryFilter.isExpanded = false
+                                                fluxSearch.search(chosen)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1041,7 +1238,9 @@ Item {
                     enabled: !(fluxSearch && fluxSearch.isSearching)
 
                     onClicked: {
+                        suggestDebounceTimer.stop()
                         if (fluxSearch && topSearchInput.text.trim().length > 0) {
+                            fluxSearch.clearSuggestions()
                             categoryFilter.isExpanded = false
                             fluxSearch.search(topSearchInput.text.trim())
                         }
@@ -1052,7 +1251,7 @@ Item {
             Item { Layout.fillWidth: true }
         }
 
-        // 3. Category filters (collapsible, automatically collapses on search; only shown for Server 1)
+        // 3. Category filters (collapsible, automatically collapses on search)
         CategoryFilterSection {
             id: categoryFilter
             Layout.fillWidth: true
@@ -1089,7 +1288,7 @@ Item {
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "Search on " + ((fluxUser && fluxUser.activeServer === 1) ? "Server 1 (Dhaka Flix)" : "Server 2 (ICC FTP)")
+                text: "Search on " + ((fluxUser && fluxUser.activeServer === 1) ? "Server 1 (Dhaka Flix)" : ((fluxUser && fluxUser.activeServer === 3) ? "Server 3 (Circle FTP)" : "Server 2 (ICC FTP)"))
                 color: Theme.text
                 font.pixelSize: 20
                 font.weight: Font.Bold

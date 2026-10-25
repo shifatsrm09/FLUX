@@ -191,14 +191,14 @@ QString SearchManager::selectedLibraryUrl() const {
 }
 
 void SearchManager::setActiveServer(int server) {
-    server = (server == 2) ? 2 : 1;
+    server = (server == 2) ? 2 : ((server == 3) ? 3 : 1);
     if (m_activeServer == server) return;
 
     const QString prevQuery = m_query;
 
     m_activeServer = server;
     FLUX_LOG_INFO("Search", QString("Switched to server %1 (%2)")
-                  .arg(server).arg(server == 2 ? "ICC FTP" : "Dhaka Flix"));
+                  .arg(server).arg(server == 3 ? "Circle FTP" : (server == 2 ? "ICC FTP" : "Dhaka Flix")));
 
     // Cancel in-flight requests and clear previous results without erasing m_query
     cancel();
@@ -607,6 +607,25 @@ void SearchManager::search(const QString &query) {
         return;
     }
 
+    if (m_activeServer == 3) {
+        m_query = trimmed;
+        emit queryChanged();
+
+        cancel();
+
+        const quint64 searchId = ++m_activeSearchId;
+        setSearching(true);
+        setErrorMessage("");
+        m_accumulatedResults.clear();
+        m_plan = SearchQuery::plan(trimmed, 6);
+
+        setStatusMessage(QString("Searching Circle FTP for \"%1\"...").arg(trimmed));
+        FLUX_LOG_INFO("Search", QString("[#%1] Circle FTP search for \"%2\"").arg(searchId).arg(trimmed));
+
+        startCircleSearch(searchId, trimmed);
+        return;
+    }
+
     if (m_activeServer == 2) {
         m_query = trimmed;
         emit queryChanged();
@@ -860,6 +879,16 @@ void SearchManager::resolveDirectUrl(const QString &playUrl, int resultIndex) {
 }
 
 void SearchManager::cancel() {
+    if (m_suggestionReply) {
+        QNetworkReply *rep = m_suggestionReply.data();
+        m_suggestionReply.clear();
+        if (rep) {
+            rep->disconnect();
+            rep->abort();
+            rep->deleteLater();
+        }
+    }
+
     // Take the list first: aborting a reply can emit finished() right away
     std::vector<QNetworkReply*> replies;
     replies.swap(m_activeReplies);
@@ -867,7 +896,7 @@ void SearchManager::cancel() {
 
     for (auto *reply : replies) {
         if (reply) {
-            reply->disconnect(this);   // no more callbacks from this reply
+            reply->disconnect();   // no more callbacks from this reply
             reply->abort();
             reply->deleteLater();
         }
@@ -1148,6 +1177,185 @@ void SearchManager::setStatusMessage(const QString &msg) {
     if (m_statusMessage != msg) {
         m_statusMessage = msg;
         emit statusMessageChanged();
+    }
+}
+
+void SearchManager::startCircleSearch(quint64 searchId, const QString &query) {
+    QUrl url;
+    if (query.isEmpty() || query == QStringLiteral("*")) {
+        url = QUrl(QStringLiteral("http://new.circleftp.net:5000/api/posts?limit=50&order=desc"));
+    } else {
+        url = QUrl(QString("http://new.circleftp.net:5000/api/posts?searchTerm=%1").arg(QString::fromUtf8(QUrl::toPercentEncoding(query))));
+    }
+
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0");
+    request.setTransferTimeout(10000);
+
+    m_pendingReplies = 1;
+    QNetworkReply *reply = m_networkManager.get(request);
+    m_activeReplies.push_back(reply);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, searchId, query]() {
+        reply->deleteLater();
+        auto it = std::find(m_activeReplies.begin(), m_activeReplies.end(), reply);
+        if (it != m_activeReplies.end()) {
+            m_activeReplies.erase(it);
+        }
+
+        if (searchId != m_activeSearchId) return;
+
+        if (reply->error() != QNetworkReply::NoError) {
+            setErrorMessage(QString("Circle search error: %1").arg(reply->errorString()));
+            finishSearch(searchId);
+            return;
+        }
+
+        QByteArray data = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        if (!doc.isObject()) {
+            FLUX_LOG_WARN("Search", "Circle search response is not a JSON object");
+            finishSearch(searchId);
+            return;
+        }
+
+        QJsonObject rootObj = doc.object();
+        QJsonArray postsArr = rootObj["posts"].toArray();
+
+        for (const auto &val : postsArr) {
+            if (!val.isObject()) continue;
+            QJsonObject post = val.toObject();
+            int id = post["id"].toInt();
+            QString title = post["title"].toString().trimmed();
+            QString type = post["type"].toString().trimmed();
+            if (id <= 0 || title.isEmpty()) continue;
+
+            bool isFolder = (type == QStringLiteral("series"));
+            QString image = post["image"].toString().trimmed();
+            if (image.isEmpty()) {
+                image = post["imageSm"].toString().trimmed();
+            }
+
+            QString posterUrl;
+            if (!image.isEmpty()) {
+                if (image.startsWith(QLatin1String("http://")) || image.startsWith(QLatin1String("https://"))) {
+                    posterUrl = image;
+                } else {
+                    posterUrl = QStringLiteral("http://new.circleftp.net:5000/uploads/") + image;
+                }
+            }
+
+            QString playUrl = QStringLiteral("http://new.circleftp.net:5000/api/posts/%1").arg(id);
+
+            SearchResult item;
+            item.displayName = title;
+            item.parentPath = isFolder ? QStringLiteral("TV Shows") : QStringLiteral("Movies");
+            item.isFolder = isFolder;
+            item.formattedSize = isFolder ? QStringLiteral("Series") : QString();
+            item.playUrl = playUrl;
+            item.extension = isFolder ? QString() : QStringLiteral("mp4");
+            item.rawHref = playUrl;
+            item.libraryName = QStringLiteral("Circle FTP");
+            item.group = isFolder ? QStringLiteral("TV & Web Series") : QStringLiteral("English Movies");
+            item.posterUrl = posterUrl;
+
+            if (!posterUrl.isEmpty()) {
+                emit posterFound(playUrl, posterUrl, title);
+            }
+
+            int score = SearchQuery::score(title, m_plan);
+            item.matchScore = score > 0 ? score : 2;
+
+            m_accumulatedResults.push_back(std::move(item));
+        }
+
+        finishSearch(searchId);
+
+        for (size_t i = 0; i < std::min<size_t>(m_results.size(), 8); ++i) {
+            if (!m_results[i].isFolder) {
+                resolveDirectUrl(m_results[i].playUrl, static_cast<int>(i));
+            }
+        }
+    });
+}
+
+void SearchManager::requestSuggestions(const QString &text) {
+    const QString trimmed = text.trimmed();
+    if (trimmed.isEmpty()) {
+        clearSuggestions();
+        return;
+    }
+
+    if (m_suggestionReply) {
+        QNetworkReply *rep = m_suggestionReply.data();
+        m_suggestionReply.clear();
+        if (rep) {
+            rep->disconnect();
+            rep->abort();
+            rep->deleteLater();
+        }
+    }
+
+    QUrl url(QStringLiteral("https://suggestqueries.google.com/complete/search"));
+    QUrlQuery q;
+    q.addQueryItem(QStringLiteral("client"), QStringLiteral("firefox"));
+    q.addQueryItem(QStringLiteral("q"), trimmed);
+    url.setQuery(q);
+
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0");
+    req.setTransferTimeout(3000);
+
+    QNetworkReply *reply = m_networkManager.get(req);
+    m_suggestionReply = reply;
+    connect(reply, &QNetworkReply::finished, this, [this, reply, trimmed]() {
+        if (!reply) return;
+        if (m_suggestionReply != reply) {
+            reply->deleteLater();
+            return;
+        }
+        m_suggestionReply.clear();
+        reply->deleteLater();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            return;
+        }
+
+        QByteArray data = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        if (!doc.isArray()) return;
+
+        QJsonArray arr = doc.array();
+        if (arr.size() < 2 || !arr[1].isArray()) return;
+
+        QJsonArray suggestionsArr = arr[1].toArray();
+        QStringList list;
+        for (const auto &val : suggestionsArr) {
+            QString s = val.toString().trimmed();
+            if (!s.isEmpty()) {
+                list.append(s);
+                if (list.size() >= 8) break;
+            }
+        }
+
+        m_suggestions = list;
+        emit suggestionsChanged();
+    });
+}
+
+void SearchManager::clearSuggestions() {
+    if (m_suggestionReply) {
+        QNetworkReply *rep = m_suggestionReply.data();
+        m_suggestionReply.clear();
+        if (rep) {
+            rep->disconnect();
+            rep->abort();
+            rep->deleteLater();
+        }
+    }
+    if (!m_suggestions.isEmpty()) {
+        m_suggestions.clear();
+        emit suggestionsChanged();
     }
 }
 
