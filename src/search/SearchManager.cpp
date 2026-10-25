@@ -253,10 +253,14 @@ void SearchManager::setIccftpSession(const QString &session) {
 }
 
 void SearchManager::resolvePlayUrl(const QString &url, const QJSValue &callback) {
-    if (!url.contains(QLatin1String("player.php"))) {
+    if (!url.contains(QLatin1String("player.php")) && !url.contains(QLatin1String("/api/posts/"))) {
+        QString directUrl = url;
+        if (directUrl.contains(QLatin1String("index.circleftp.net"))) {
+            directUrl.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+        }
         if (callback.isCallable()) {
             QJSValue cb = callback;
-            cb.call(QJSValueList{url});
+            cb.call(QJSValueList{directUrl});
         }
         return;
     }
@@ -278,37 +282,75 @@ void SearchManager::resolvePlayUrl(const QString &url, const QJSValue &callback)
         reply->deleteLater();
         QString directUrl = url;
         if (reply->error() == QNetworkReply::NoError) {
-            QString html = QString::fromUtf8(reply->readAll());
-            static const QRegularExpression sourceRx(
-                QStringLiteral("<source\\s+[^>]*src=['\"]([^'\"]+)['\"]"),
-                QRegularExpression::CaseInsensitiveOption);
-            auto it = sourceRx.globalMatch(html);
-            QString chosenUrl;
-            while (it.hasNext()) {
-                QString candidate = it.next().captured(1);
-                if (chosenUrl.isEmpty()) {
-                    chosenUrl = candidate;
+            QByteArray raw = reply->readAll();
+            if (url.contains(QLatin1String("/api/posts/"))) {
+                QJsonDocument doc = QJsonDocument::fromJson(raw);
+                if (doc.isObject()) {
+                    QJsonObject obj = doc.object();
+                    if (obj.contains(QLatin1String("content"))) {
+                        if (obj[QLatin1String("content")].isString()) {
+                            directUrl = obj[QLatin1String("content")].toString().trimmed();
+                        } else if (obj[QLatin1String("content")].isArray()) {
+                            QJsonArray seasons = obj[QLatin1String("content")].toArray();
+                            for (const auto &sVal : seasons) {
+                                if (!sVal.isObject()) continue;
+                                QJsonArray eps = sVal.toObject()[QLatin1String("episodes")].toArray();
+                                for (const auto &eVal : eps) {
+                                    if (!eVal.isObject()) continue;
+                                    QString link = eVal.toObject()[QLatin1String("link")].toString().trimmed();
+                                    if (!link.isEmpty()) {
+                                        directUrl = link;
+                                        break;
+                                    }
+                                }
+                                if (directUrl != url) break;
+                            }
+                        }
+                    }
+                    if (directUrl.contains(QLatin1String("index.circleftp.net"))) {
+                        directUrl.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+                    }
+                    if (directUrl != url) {
+                        m_resolvedUrls[url] = directUrl;
+                    }
                 }
-                const QString lower = candidate.toLower();
-                if ((lower.contains(QLatin1String("1080")) || lower.contains(QLatin1String("2160")) || lower.contains(QLatin1String("4k")))
-                        && !lower.contains(QLatin1String("720"))) {
-                    chosenUrl = candidate;
-                    break;
-                }
-            }
-            if (!chosenUrl.isEmpty()) {
-                directUrl = chosenUrl;
-                m_resolvedUrls[url] = directUrl;
             } else {
-                static const QRegularExpression dlRx(
-                    QStringLiteral("<a\\s+[^>]*href=['\"]([^'\"]+\\.(?:mp4|mkv|avi))['\"][^>]*download"),
+                QString html = QString::fromUtf8(raw);
+                static const QRegularExpression sourceRx(
+                    QStringLiteral("<source\\s+[^>]*src=['\"]([^'\"]+)['\"]"),
                     QRegularExpression::CaseInsensitiveOption);
-                QRegularExpressionMatch dlMatch = dlRx.match(html);
-                if (dlMatch.hasMatch()) {
-                    directUrl = dlMatch.captured(1);
+                auto it = sourceRx.globalMatch(html);
+                QString chosenUrl;
+                while (it.hasNext()) {
+                    QString candidate = it.next().captured(1);
+                    if (chosenUrl.isEmpty()) {
+                        chosenUrl = candidate;
+                    }
+                    const QString lower = candidate.toLower();
+                    if ((lower.contains(QLatin1String("1080")) || lower.contains(QLatin1String("2160")) || lower.contains(QLatin1String("4k")))
+                            && !lower.contains(QLatin1String("720"))) {
+                        chosenUrl = candidate;
+                        break;
+                    }
+                }
+                if (!chosenUrl.isEmpty()) {
+                    directUrl = chosenUrl;
                     m_resolvedUrls[url] = directUrl;
+                } else {
+                    static const QRegularExpression dlRx(
+                        QStringLiteral("<a\\s+[^>]*href=['\"]([^'\"]+\\.(?:mp4|mkv|avi))['\"][^>]*download"),
+                        QRegularExpression::CaseInsensitiveOption);
+                    QRegularExpressionMatch dlMatch = dlRx.match(html);
+                    if (dlMatch.hasMatch()) {
+                        directUrl = dlMatch.captured(1);
+                        m_resolvedUrls[url] = directUrl;
+                    }
                 }
             }
+        }
+
+        if (directUrl.contains(QLatin1String("index.circleftp.net"))) {
+            directUrl.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
         }
 
         if (callback.isCallable()) {

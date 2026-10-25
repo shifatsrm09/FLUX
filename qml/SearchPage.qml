@@ -28,7 +28,7 @@ Item {
         if (!fluxDownloads) return
         if (isPack) {
             fluxDownloads.downloadPack(url, title)
-        } else if (url && url.indexOf("player.php") !== -1 && fluxSearch) {
+        } else if (url && (url.indexOf("player.php") !== -1 || url.indexOf("/api/posts/") !== -1) && fluxSearch) {
             fluxSearch.resolvePlayUrl(url, function(directUrl) {
                 if (directUrl && directUrl.length > 0) {
                     fluxDownloads.downloadFile(directUrl, title)
@@ -539,6 +539,9 @@ Item {
                             if (topPicksList[i].altUrl && topPicksList[i].altUrl.length > 0) {
                                 fluxUser.rememberPoster(topPicksList[i].altUrl, topPicksList[i].posterUrl, topPicksList[i].title)
                             }
+                            if (topPicksList[i].circleUrl && topPicksList[i].circleUrl.length > 0) {
+                                fluxUser.rememberPoster(topPicksList[i].circleUrl, topPicksList[i].posterUrl, topPicksList[i].title)
+                            }
                         }
                     }
                 }
@@ -657,19 +660,27 @@ Item {
                                 required property var modelData
                                 required property int index
 
-                                readonly property bool preferIcc: {
+                                readonly property int chosenServer: {
                                     if (fluxUser) {
-                                        if (fluxUser.bothServersDown) {
-                                            return (fluxUser.activeServer === 2 && modelData.altUrl && modelData.altUrl.length > 0)
-                                        }
-                                        if (!fluxUser.server2Available && fluxUser.server1Available) return false
-                                        if (!fluxUser.server1Available && fluxUser.server2Available) return true
-                                        return (fluxUser.activeServer === 2 && modelData.altUrl && modelData.altUrl.length > 0)
+                                        if (fluxUser.activeServer === 3 && modelData.circleUrl && modelData.circleUrl.length > 0) return 3
+                                        if (fluxUser.activeServer === 2 && modelData.altUrl && modelData.altUrl.length > 0) return 2
+                                        if (fluxUser.activeServer === 1 && modelData.url && modelData.url.length > 0) return 1
+                                        if (modelData.circleUrl) return 3
+                                        if (modelData.altUrl) return 2
+                                        if (modelData.url) return 1
                                     }
-                                    return false
+                                    return 1
                                 }
-                                readonly property string effectiveUrl: preferIcc ? modelData.altUrl : modelData.url
-                                readonly property string fallbackUrl: preferIcc ? modelData.url : (modelData.altUrl || "")
+                                readonly property string effectiveUrl: {
+                                    if (chosenServer === 3) return modelData.circleUrl
+                                    if (chosenServer === 2) return modelData.altUrl
+                                    return modelData.url || modelData.circleUrl || modelData.altUrl || ""
+                                }
+                                readonly property string fallbackUrl: {
+                                    if (chosenServer === 3) return modelData.altUrl || modelData.url || ""
+                                    if (chosenServer === 2) return modelData.circleUrl || modelData.url || ""
+                                    return modelData.circleUrl || modelData.altUrl || ""
+                                }
 
                                 width: topPicksSection.picksCardW
                                 height: topPicksSection.picksCardH
@@ -677,7 +688,7 @@ Item {
                                 playUrl: effectiveUrl
                                 posterUrl: modelData.posterUrl || ""
                                 isFolder: false
-                                libraryName: preferIcc ? "ICC FTP" : "DHAKA FLIX"
+                                libraryName: chosenServer === 3 ? "CIRCLE FTP" : (chosenServer === 2 ? "ICC FTP" : "DHAKA FLIX")
                                 progress: 0
                                 showRemove: false
                                 extraInfo: modelData.extraInfo || "Top Pick"

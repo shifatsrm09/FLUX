@@ -53,11 +53,19 @@ Popup {
     readonly property bool atDefaultLocation: !!fluxDownloads
         && fluxDownloads.downloadLocation.toLowerCase() === fluxDownloads.defaultLocation.toLowerCase()
 
-    // Escape: close a folder picker first, then the dialog
+    // Escape: close a folder picker or dropdown first, then the dialog
     function dismiss() {
-        if (targetPicker.visible) targetPicker.close()
+        if (srvDropdownPopup && srvDropdownPopup.visible) srvDropdownPopup.close()
+        else if (targetPicker.visible) targetPicker.close()
         else if (picker.visible) picker.close()
         else panel.close()
+    }
+
+    onCurrentTabChanged: {
+        if (srvDropdownPopup && srvDropdownPopup.visible) srvDropdownPopup.close()
+    }
+    onClosed: {
+        if (srvDropdownPopup && srvDropdownPopup.visible) srvDropdownPopup.close()
     }
 
     parent: Overlay.overlay
@@ -508,17 +516,14 @@ Popup {
                                         id: srvDropdownContainer
                                         implicitWidth: 220
                                         implicitHeight: 34
-                                        z: srvDropdown.visible ? 200 : 1
-
-                                        property bool isOpen: false
 
                                         Rectangle {
                                             id: srvBtn
                                             anchors.fill: parent
                                             radius: 4
-                                            color: srvMouse.containsMouse || srvDropdownContainer.isOpen ? "#282e3a" : "#171a21"
+                                            color: srvMouse.containsMouse || srvDropdownPopup.visible ? "#282e3a" : "#171a21"
                                             border.width: 1
-                                            border.color: srvDropdownContainer.isOpen ? panel.cSteamBlue : "#384152"
+                                            border.color: srvDropdownPopup.visible ? panel.cSteamBlue : "#384152"
 
                                             RowLayout {
                                                 anchors.fill: parent
@@ -541,7 +546,7 @@ Popup {
                                                     name: "chevronDown"
                                                     size: 12
                                                     color: panel.cSteamBlue
-                                                    rotation: srvDropdownContainer.isOpen ? 180 : 0
+                                                    rotation: srvDropdownPopup.visible ? 180 : 0
                                                     Behavior on rotation { NumberAnimation { duration: 150 } }
                                                 }
                                             }
@@ -552,30 +557,43 @@ Popup {
                                                 hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
                                                 onClicked: {
-                                                    srvDropdownContainer.isOpen = !srvDropdownContainer.isOpen
+                                                    if (srvDropdownPopup.visible) {
+                                                        srvDropdownPopup.close()
+                                                    } else {
+                                                        srvDropdownPopup.open()
+                                                    }
                                                 }
                                             }
                                         }
 
-                                        // Dropdown menu list
-                                        Rectangle {
-                                            id: srvDropdown
-                                            visible: srvDropdownContainer.isOpen
-                                            anchors.top: srvBtn.bottom
-                                            anchors.topMargin: 4
-                                            anchors.left: srvBtn.left
-                                            anchors.right: srvBtn.right
-                                            implicitHeight: srvDropCol.implicitHeight + 8
-                                            color: "#171a21"
-                                            radius: 4
-                                            border.width: 1
-                                            border.color: "#384152"
-                                            z: 300
+                                        // Dropdown menu popup (QtQuick.Controls Popup overlays above all layout cards)
+                                        Popup {
+                                            id: srvDropdownPopup
+                                            parent: srvBtn
+                                            x: 0
+                                            y: srvBtn.height + 4
+                                            width: srvBtn.width
+                                            padding: 4
+                                            modal: false
+                                            focus: true
+                                            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-                                            ColumnLayout {
-                                                id: srvDropCol
-                                                anchors.fill: parent
-                                                anchors.margins: 4
+                                            enter: Transition {
+                                                NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 120 }
+                                                NumberAnimation { property: "scale"; from: 0.98; to: 1.0; duration: 120; easing.type: Easing.OutCubic }
+                                            }
+                                            exit: Transition {
+                                                NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 90 }
+                                            }
+
+                                            background: Rectangle {
+                                                color: "#171a21"
+                                                radius: 4
+                                                border.width: 1
+                                                border.color: "#384152"
+                                            }
+
+                                            contentItem: ColumnLayout {
                                                 spacing: 2
 
                                                 // Option 1: Dhaka Flix
@@ -615,7 +633,7 @@ Popup {
                                                         cursorShape: Qt.PointingHandCursor
                                                         onClicked: {
                                                             if (fluxUser) fluxUser.activeServer = 1
-                                                            srvDropdownContainer.isOpen = false
+                                                            srvDropdownPopup.close()
                                                             panel.serverTestStatus = ""
                                                         }
                                                     }
@@ -658,7 +676,7 @@ Popup {
                                                         cursorShape: Qt.PointingHandCursor
                                                         onClicked: {
                                                             if (fluxUser) fluxUser.activeServer = 2
-                                                            srvDropdownContainer.isOpen = false
+                                                            srvDropdownPopup.close()
                                                             panel.serverTestStatus = ""
                                                         }
                                                     }
@@ -701,7 +719,7 @@ Popup {
                                                         cursorShape: Qt.PointingHandCursor
                                                         onClicked: {
                                                             if (fluxUser) fluxUser.activeServer = 3
-                                                            srvDropdownContainer.isOpen = false
+                                                            srvDropdownPopup.close()
                                                             panel.serverTestStatus = ""
                                                         }
                                                     }

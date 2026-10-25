@@ -568,6 +568,9 @@ void FolderBrowser::requestListing(const QString &origin, const QString &href,
                         QString epTitle = eObj["title"].toString().trimmed();
                         QString epLink = eObj["link"].toString().trimmed();
                         if (epLink.isEmpty()) continue;
+                        if (epLink.contains(QLatin1String("index.circleftp.net"))) {
+                            epLink.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+                        }
 
                         QString filename = QUrl::fromPercentEncoding(QUrl(epLink).fileName().toUtf8());
                         SearchResult r;
@@ -587,6 +590,9 @@ void FolderBrowser::requestListing(const QString &origin, const QString &href,
             } else if (post.contains("content") && post["content"].isString()) {
                 QString link = post["content"].toString().trimmed();
                 if (!link.isEmpty()) {
+                    if (link.contains(QLatin1String("index.circleftp.net"))) {
+                        link.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+                    }
                     QString filename = QUrl::fromPercentEncoding(QUrl(link).fileName().toUtf8());
                     SearchResult r;
                     r.displayName = showTitle.isEmpty() ? filename : showTitle;

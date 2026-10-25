@@ -241,34 +241,53 @@ ApplicationWindow {
         return currentServerName === "Dhaka Flix" ? "ICC FTP" : "Dhaka Flix"
     }
 
-    function switchTopPickServer() {
-        if (!currentIsTopPick || !currentAltUrl || currentAltUrl.length === 0) return
-        if (fluxUser && fluxUser.serverCheckComplete && !fluxUser.bothServersDown) {
-            if (!fluxUser.server1Available || !fluxUser.server2Available) {
-                console.log("[Main] Cannot switch server: alternative server is unreachable.")
-                return
-            }
+    function switchTopPickToServer(targetServerNum) {
+        if (!currentIsTopPick || !currentTopPickItem) return
+        var targetUrl = ""
+        var targetServerName = ""
+        if (targetServerNum === 1) {
+            targetUrl = currentTopPickItem.url || ""
+            targetServerName = "Dhaka Flix"
+        } else if (targetServerNum === 2) {
+            targetUrl = currentTopPickItem.altUrl || ""
+            targetServerName = "ICC FTP"
+        } else if (targetServerNum === 3) {
+            targetUrl = currentTopPickItem.circleUrl || ""
+            targetServerName = "Circle FTP"
         }
+
+        if (!targetUrl || targetUrl.length === 0 || targetUrl === currentSourceUrl) return
+
         var currentTimeMs = (fluxPlayer && fluxPlayer.timeMs > 0) ? fluxPlayer.timeMs : 0
         var currentDurationMs = (fluxPlayer && fluxPlayer.durationMs > 0) ? fluxPlayer.durationMs : 0
         var currentFraction = currentDurationMs > 0 ? (currentTimeMs / currentDurationMs) : -1
 
-        var targetUrl = currentAltUrl
-        var currentUrl = currentSourceUrl
-        var title = currentPlayingTitle
-
-        var newServer = targetServerName
         if (playerView) {
             playerView.pendingSwitchMs = currentTimeMs
             if (playerView.showOsd) {
-                playerView.showOsd("Switching to " + newServer + "...", -1)
+                playerView.showOsd("Switching to " + targetServerName + "...", -1)
             }
             if (playerView.armTimeoutWatchdog) {
                 playerView.armTimeoutWatchdog()
             }
         }
 
-        playMedia(targetUrl, title, currentUrl, currentTimeMs, currentFraction)
+        playMedia(targetUrl, currentPlayingTitle, currentSourceUrl, currentTimeMs, currentFraction)
+    }
+
+    function switchTopPickServer() {
+        if (!currentIsTopPick || !currentTopPickItem) return
+        var cur = currentServerName
+        if (cur === "Dhaka Flix") {
+            if (currentTopPickItem.altUrl) switchTopPickToServer(2)
+            else if (currentTopPickItem.circleUrl) switchTopPickToServer(3)
+        } else if (cur === "ICC FTP") {
+            if (currentTopPickItem.circleUrl) switchTopPickToServer(3)
+            else if (currentTopPickItem.url) switchTopPickToServer(1)
+        } else {
+            if (currentTopPickItem.url) switchTopPickToServer(1)
+            else if (currentTopPickItem.altUrl) switchTopPickToServer(2)
+        }
     }
 
     function playMedia(url, title, altUrl, targetStartTimeMs, targetStartFraction) {
@@ -282,20 +301,26 @@ ApplicationWindow {
             if (fluxUser && fluxUser.serverCheckComplete && !fluxUser.bothServersDown) {
                 var isReqDhaka = (url === topPick.url)
                 var isReqIcc = (url === topPick.altUrl)
-                if (isReqDhaka && !fluxUser.server1Available && fluxUser.server2Available && topPick.altUrl) {
-                    console.log("[Main] Dhaka Flix is unreachable, auto-routing to ICC for Top Pick:", title)
-                    url = topPick.altUrl
-                } else if (isReqIcc && !fluxUser.server2Available && fluxUser.server1Available && topPick.url) {
-                    console.log("[Main] ICC is unreachable, auto-routing to Dhaka Flix for Top Pick:", title)
-                    url = topPick.url
+                var isReqCircle = (url === topPick.circleUrl)
+                if (isReqDhaka && !fluxUser.server1Available) {
+                    if (fluxUser.server3Available && topPick.circleUrl) url = topPick.circleUrl
+                    else if (fluxUser.server2Available && topPick.altUrl) url = topPick.altUrl
+                } else if (isReqIcc && !fluxUser.server2Available) {
+                    if (fluxUser.server3Available && topPick.circleUrl) url = topPick.circleUrl
+                    else if (fluxUser.server1Available && topPick.url) url = topPick.url
+                } else if (isReqCircle && !fluxUser.server3Available) {
+                    if (fluxUser.server1Available && topPick.url) url = topPick.url
+                    else if (fluxUser.server2Available && topPick.altUrl) url = topPick.altUrl
                 }
             }
 
             if (currentAltUrl.length === 0) {
                 if (url === topPick.url) {
-                    currentAltUrl = topPick.altUrl || ""
+                    currentAltUrl = topPick.circleUrl || topPick.altUrl || ""
                 } else if (url === topPick.altUrl) {
-                    currentAltUrl = topPick.url || ""
+                    currentAltUrl = topPick.circleUrl || topPick.url || ""
+                } else {
+                    currentAltUrl = topPick.url || topPick.altUrl || ""
                 }
             }
         } else {
@@ -303,7 +328,7 @@ ApplicationWindow {
             currentTopPickItem = null
         }
 
-        if (url && url.indexOf("player.php") !== -1 && fluxSearch) {
+        if (url && (url.indexOf("player.php") !== -1 || url.indexOf("/api/posts/") !== -1) && fluxSearch) {
             fluxSearch.resolvePlayUrl(url, function(directUrl) {
                 if (directUrl && directUrl.length > 0) {
                     playResolvedMedia(url, directUrl, title, targetStartTimeMs, targetStartFraction)

@@ -720,7 +720,11 @@ void VLCPlayer::play(const QString &mediaUrl) {
     }
 
     // Direct HTTP Range streaming from URL
-    m_currentMedia = libvlc_media_new_location(vlc, m_url.toUtf8().constData());
+    QString playLocation = m_url;
+    if (playLocation.contains(QLatin1String("index.circleftp.net"))) {
+        playLocation.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+    }
+    m_currentMedia = libvlc_media_new_location(vlc, playLocation.toUtf8().constData());
     if (!m_currentMedia) {
         m_errorMessage = QString("Failed to create libVLC media object for URL: %1").arg(m_url);
         m_state = "Error";

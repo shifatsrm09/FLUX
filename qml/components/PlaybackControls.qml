@@ -410,11 +410,12 @@ Item {
             Item {
                 id: serverBtn
                 readonly property bool canSwitchServer: {
-                    if (typeof fluxUser === "undefined" || !fluxUser) return true
-                    if (!fluxUser.serverCheckComplete || fluxUser.bothServersDown) return true
-                    return fluxUser.server1Available && fluxUser.server2Available
+                    if (!window || !window.currentIsTopPick || !window.currentTopPickItem) return false
+                    var item = window.currentTopPickItem
+                    var count = (item.url ? 1 : 0) + (item.altUrl ? 1 : 0) + (item.circleUrl ? 1 : 0)
+                    return count > 1
                 }
-                visible: !!(window && window.currentIsTopPick && window.currentAltUrl && window.currentAltUrl.length > 0 && canSwitchServer)
+                visible: canSwitchServer
                 onVisibleChanged: {
                     if (!visible && serverPopup.visible) {
                         serverPopup.close()
@@ -424,7 +425,7 @@ Item {
                 implicitWidth: 38
                 implicitHeight: 38
 
-                readonly property bool isDhakaFlix: !window || window.currentServerName !== "ICC FTP"
+                readonly property string currentServer: window ? window.currentServerName : ""
                 readonly property bool isOpen: serverPopup.visible
 
                 Rectangle {
@@ -468,7 +469,7 @@ Item {
 
                 FluxToolTip {
                     visible: serverBtnMouse.containsMouse && !serverPopup.visible
-                    text: "Server (" + (serverBtn.isDhakaFlix ? "Dhaka Flix" : "ICC") + ")"
+                    text: "Server (" + (window && window.currentServerName ? window.currentServerName : "Server") + ")"
                     above: true
                 }
             }
@@ -523,7 +524,8 @@ Item {
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-        readonly property bool isDhakaFlix: !window || window.currentServerName !== "ICC FTP"
+        readonly property string activeServer: window ? window.currentServerName : ""
+        readonly property var topPickItem: window ? window.currentTopPickItem : null
 
         onClosed: root.serverPopupClosedAt = Date.now()
 
@@ -562,7 +564,8 @@ Item {
                 Layout.fillWidth: true
                 height: 36
                 radius: 8
-                color: dhakaOptionMouse.containsMouse ? "#20FFFFFF" : (serverPopup.isDhakaFlix ? "#18FFFFFF" : "transparent")
+                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.url)
+                color: dhakaOptionMouse.containsMouse ? "#20FFFFFF" : (serverPopup.activeServer === "Dhaka Flix" ? "#18FFFFFF" : "transparent")
 
                 RowLayout {
                     anchors.fill: parent
@@ -575,19 +578,19 @@ Item {
                         color: Theme.accentHover
                         font.pixelSize: 14
                         font.weight: Font.Bold
-                        visible: serverPopup.isDhakaFlix
+                        visible: serverPopup.activeServer === "Dhaka Flix"
                         Layout.preferredWidth: 14
                     }
                     Item {
-                        visible: !serverPopup.isDhakaFlix
+                        visible: serverPopup.activeServer !== "Dhaka Flix"
                         Layout.preferredWidth: 14
                     }
 
                     Text {
                         text: "Dhaka Flix"
-                        color: serverPopup.isDhakaFlix ? "#FFFFFF" : Theme.textDim
+                        color: serverPopup.activeServer === "Dhaka Flix" ? "#FFFFFF" : Theme.textDim
                         font.pixelSize: 13
-                        font.weight: serverPopup.isDhakaFlix ? Font.DemiBold : Font.Normal
+                        font.weight: serverPopup.activeServer === "Dhaka Flix" ? Font.DemiBold : Font.Normal
                         Layout.fillWidth: true
                     }
                 }
@@ -599,8 +602,8 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         serverPopup.close()
-                        if (!serverPopup.isDhakaFlix && window && window.switchTopPickServer) {
-                            window.switchTopPickServer()
+                        if (serverPopup.activeServer !== "Dhaka Flix" && window && window.switchTopPickToServer) {
+                            window.switchTopPickToServer(1)
                         }
                     }
                 }
@@ -611,7 +614,8 @@ Item {
                 Layout.fillWidth: true
                 height: 36
                 radius: 8
-                color: iccOptionMouse.containsMouse ? "#20FFFFFF" : (!serverPopup.isDhakaFlix ? "#18FFFFFF" : "transparent")
+                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.altUrl)
+                color: iccOptionMouse.containsMouse ? "#20FFFFFF" : (serverPopup.activeServer === "ICC FTP" ? "#18FFFFFF" : "transparent")
 
                 RowLayout {
                     anchors.fill: parent
@@ -624,19 +628,19 @@ Item {
                         color: Theme.accentHover
                         font.pixelSize: 14
                         font.weight: Font.Bold
-                        visible: !serverPopup.isDhakaFlix
+                        visible: serverPopup.activeServer === "ICC FTP"
                         Layout.preferredWidth: 14
                     }
                     Item {
-                        visible: serverPopup.isDhakaFlix
+                        visible: serverPopup.activeServer !== "ICC FTP"
                         Layout.preferredWidth: 14
                     }
 
                     Text {
                         text: "ICC"
-                        color: !serverPopup.isDhakaFlix ? "#FFFFFF" : Theme.textDim
+                        color: serverPopup.activeServer === "ICC FTP" ? "#FFFFFF" : Theme.textDim
                         font.pixelSize: 13
-                        font.weight: !serverPopup.isDhakaFlix ? Font.DemiBold : Font.Normal
+                        font.weight: serverPopup.activeServer === "ICC FTP" ? Font.DemiBold : Font.Normal
                         Layout.fillWidth: true
                     }
                 }
@@ -648,8 +652,58 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         serverPopup.close()
-                        if (serverPopup.isDhakaFlix && window && window.switchTopPickServer) {
-                            window.switchTopPickServer()
+                        if (serverPopup.activeServer !== "ICC FTP" && window && window.switchTopPickToServer) {
+                            window.switchTopPickToServer(2)
+                        }
+                    }
+                }
+            }
+
+            // Option 3: Circle FTP
+            Rectangle {
+                Layout.fillWidth: true
+                height: 36
+                radius: 8
+                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.circleUrl)
+                color: circleOptionMouse.containsMouse ? "#20FFFFFF" : (serverPopup.activeServer === "Circle FTP" ? "#18FFFFFF" : "transparent")
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 8
+
+                    Text {
+                        text: "\u2713"
+                        color: Theme.accentHover
+                        font.pixelSize: 14
+                        font.weight: Font.Bold
+                        visible: serverPopup.activeServer === "Circle FTP"
+                        Layout.preferredWidth: 14
+                    }
+                    Item {
+                        visible: serverPopup.activeServer !== "Circle FTP"
+                        Layout.preferredWidth: 14
+                    }
+
+                    Text {
+                        text: "Circle FTP"
+                        color: serverPopup.activeServer === "Circle FTP" ? "#FFFFFF" : Theme.textDim
+                        font.pixelSize: 13
+                        font.weight: serverPopup.activeServer === "Circle FTP" ? Font.DemiBold : Font.Normal
+                        Layout.fillWidth: true
+                    }
+                }
+
+                MouseArea {
+                    id: circleOptionMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        serverPopup.close()
+                        if (serverPopup.activeServer !== "Circle FTP" && window && window.switchTopPickToServer) {
+                            window.switchTopPickToServer(3)
                         }
                     }
                 }
