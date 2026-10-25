@@ -83,6 +83,8 @@ public:
 
     // ---- Library targets ----
     Q_INVOKABLE bool addTarget(const QString &path);
+    Q_INVOKABLE QString browseFolder(const QString &title = QString(), const QString &initialPath = QString());
+    Q_INVOKABLE bool promptAddTarget();
     Q_INVOKABLE void removeTarget(const QString &path);
     // Folder to go to when stepping out of `rel` in the Library ("" = top level)
     Q_INVOKABLE QString offlineParent(const QString &rel) const;

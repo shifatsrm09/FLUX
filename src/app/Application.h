@@ -15,6 +15,7 @@
 #include "../downloads/MediaCache.h"
 #include "../teleparty/TelepartySession.h"
 #include "../teleparty/TelepartySync.h"
+#include "SystemManager.h"
 
 namespace Flux {
 
@@ -28,11 +29,12 @@ public:
     explicit Application(QObject *parent = nullptr);
     ~Application() override;
 
-    bool initialize(QQmlApplicationEngine &engine);
+    bool initialize(QQmlApplicationEngine &engine, bool startedFromBoot = false);
 
     VLCPlayer* player() const { return m_player.get(); }
     TestMediaModel* testMedia() const { return m_testMedia.get(); }
     SearchManager* searchManager() const { return m_searchManager.get(); }
+    SystemManager* systemManager() const { return m_system.get(); }
 
 private:
     std::unique_ptr<VLCPlayer> m_player;
@@ -46,6 +48,7 @@ private:
     std::unique_ptr<UserStore> m_userStore;
     std::unique_ptr<BookmarkManager> m_bookmarks;
     std::unique_ptr<Updater> m_updater;
+    std::unique_ptr<SystemManager> m_system;
 };
 
 } // namespace Flux

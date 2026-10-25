@@ -39,6 +39,8 @@ qt_add_executable(FLUX WIN32
     src/main.cpp
     src/app/Application.h
     src/app/Application.cpp
+    src/app/SystemManager.h
+    src/app/SystemManager.cpp
     src/app/WindowsSnapHelper.h
     src/app/WindowsSnapHelper.cpp
     src/media/VLCInstance.h
@@ -154,7 +156,7 @@ target_link_libraries(FLUX PRIVATE
 
 # Windows desktop subsystem and runtime DLL handling
 if(WIN32)
-    target_link_libraries(FLUX PRIVATE dwmapi user32)
+    target_link_libraries(FLUX PRIVATE dwmapi user32 ole32 shell32 advapi32)
     # Automatically copy libVLC runtime DLLs and plugins to output dir for running
     set(SYSTEM_VLC_DIR "C:/Program Files/VideoLAN/VLC")
     if(EXISTS "${SYSTEM_VLC_DIR}/libvlc.dll")

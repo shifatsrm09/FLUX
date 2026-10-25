@@ -22,6 +22,7 @@ Application::~Application() {
     // Leave any Teleparty session (tells the other members) before the player goes away
     m_sync.reset();
     m_teleparty.reset();
+    m_system.reset();
     m_updater.reset();
     // The user store records final watch progress from the player, so it goes first
     m_userStore.reset();
@@ -34,7 +35,7 @@ Application::~Application() {
     VLCInstance::instance().shutdown();
 }
 
-bool Application::initialize(QQmlApplicationEngine &engine) {
+bool Application::initialize(QQmlApplicationEngine &engine, bool startedFromBoot) {
     FLUX_LOG_INFO("Application", QString("Starting FLUX Media Player v%1...").arg(QString::fromLatin1(FLUX_VERSION)));
 
     // 1. Initialize libVLC instance asynchronously in background so splash and UI appear instantly
@@ -57,6 +58,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     m_userStore = std::make_unique<UserStore>(this);
     m_bookmarks = std::make_unique<BookmarkManager>(this);
     m_updater = std::make_unique<Updater>(this);
+    m_system = std::make_unique<SystemManager>(m_userStore.get(), startedFromBoot, this);
     // Pre-warm update check immediately so the splash popup has data without waiting
     m_updater->checkForUpdates(true);
 
@@ -237,6 +239,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     rootContext->setContextProperty("fluxLibrary", m_searchManager->libraryModel());
     rootContext->setContextProperty("fluxLogger", &Logger::instance());
     rootContext->setContextProperty("fluxSnap", WindowsSnapHelper::instance());
+    rootContext->setContextProperty("fluxSystem", m_system.get());
 
     // 5. Startup update check is driven immediately by the Discord-style StartupPopup window
 

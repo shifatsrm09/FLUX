@@ -1,4 +1,9 @@
 #include "DownloadManager.h"
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <shobjidl.h>
+#include <shlobj.h>
+#endif
 #include "../search/FolderBrowser.h"
 #include "../search/SearchResult.h"
 #include "../core/Logger.h"
@@ -780,6 +785,72 @@ void DownloadManager::setTargets(const QStringList &paths) {
     emit targetsChanged();
     ++m_offlineRevision;
     emit offlineChanged();
+}
+
+QString DownloadManager::browseFolder(const QString &title, const QString &initialPath) {
+#ifdef Q_OS_WIN
+    IFileOpenDialog *pfd = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd));
+    if (SUCCEEDED(hr)) {
+        DWORD dwOptions = 0;
+        if (SUCCEEDED(pfd->GetOptions(&dwOptions))) {
+            pfd->SetOptions(dwOptions | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR);
+        }
+        if (!title.isEmpty()) {
+            pfd->SetTitle(reinterpret_cast<LPCWSTR>(title.utf16()));
+        }
+
+        bool folderSet = false;
+        if (!initialPath.trimmed().isEmpty() && QDir(initialPath).exists()) {
+            IShellItem *psiFolder = nullptr;
+            const QString nativePath = QDir::toNativeSeparators(initialPath.trimmed());
+            if (SUCCEEDED(SHCreateItemFromParsingName(reinterpret_cast<LPCWSTR>(nativePath.utf16()), NULL, IID_PPV_ARGS(&psiFolder)))) {
+                pfd->SetFolder(psiFolder);
+                pfd->SetDefaultFolder(psiFolder);
+                psiFolder->Release();
+                folderSet = true;
+            }
+        }
+
+        if (!folderSet) {
+            // Default initial folder: "This PC" (FOLDERID_ComputerFolder: {0AC0837C-BBF8-452A-850D-79D08E667CA7})
+            static const GUID kComputerFolder = { 0x0AC0837C, 0xBBF8, 0x452A, { 0x85, 0x0D, 0x79, 0xD0, 0x8E, 0x66, 0x7C, 0xA7 } };
+            IShellItem *psiComputer = nullptr;
+            if (SUCCEEDED(SHCreateItemInKnownFolder(kComputerFolder, 0, NULL, IID_PPV_ARGS(&psiComputer)))) {
+                pfd->SetFolder(psiComputer);
+                pfd->SetDefaultFolder(psiComputer);
+                psiComputer->Release();
+            }
+        }
+        hr = pfd->Show(NULL);
+        if (SUCCEEDED(hr)) {
+            IShellItem *psi = nullptr;
+            hr = pfd->GetResult(&psi);
+            if (SUCCEEDED(hr)) {
+                PWSTR pszPath = nullptr;
+                hr = psi->GetDisplayName(SIGDN_FILESYSPATH, &pszPath);
+                if (SUCCEEDED(hr)) {
+                    QString path = QString::fromWCharArray(pszPath);
+                    CoTaskMemFree(pszPath);
+                    psi->Release();
+                    pfd->Release();
+                    return QDir::cleanPath(QDir::fromNativeSeparators(path));
+                }
+                psi->Release();
+            }
+        }
+        pfd->Release();
+    }
+#endif
+    return QString();
+}
+
+bool DownloadManager::promptAddTarget() {
+    const QString path = browseFolder(QStringLiteral("Select Folder to Add to Library"));
+    if (!path.isEmpty()) {
+        return addTarget(path);
+    }
+    return false;
 }
 
 bool DownloadManager::addTarget(const QString &path) {

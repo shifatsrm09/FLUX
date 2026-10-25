@@ -53,7 +53,16 @@ int main(int argc, char *argv[]) {
     QQmlApplicationEngine engine;
     Flux::Application fluxApp;
 
-    if (!fluxApp.initialize(engine)) {
+    bool startedFromBoot = false;
+    for (int i = 1; i < argc; ++i) {
+        QString arg = QString::fromLocal8Bit(argv[i]);
+        if (arg == QStringLiteral("--autostart") || arg == QStringLiteral("-autostart")) {
+            startedFromBoot = true;
+            break;
+        }
+    }
+
+    if (!fluxApp.initialize(engine, startedFromBoot)) {
         FLUX_LOG_ERROR("Main", "Failed to initialize FLUX application services!");
         return -1;
     }
@@ -102,6 +111,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef Q_OS_WIN
     if (quickWindow) {
+        fluxApp.systemManager()->setWindow(quickWindow);
         Flux::installWindowsSnapHelper(quickWindow);
     }
 #endif

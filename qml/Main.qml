@@ -765,13 +765,40 @@ ApplicationWindow {
         window.checkNetworkNotice()
     }
 
-    onClosing: function(close) {
+    function saveWindowState() {
         if (!fluxUser || !window.startupComplete) return
         fluxUser.setValue("window/maximized", window.visibility === Window.Maximized)
-        // Only remember the size of a normal window (not maximized / fullscreen)
         if (window.visibility === Window.Windowed) {
             fluxUser.setValue("window/width", window.width)
             fluxUser.setValue("window/height", window.height)
+        }
+    }
+
+    onClosing: function(close) {
+        saveWindowState()
+        if (fluxSystem && fluxSystem.isExiting) {
+            return
+        }
+        if (fluxSystem && fluxSystem.closeToTray) {
+            close.accepted = false
+            window.hide()
+            return
+        }
+    }
+
+    Connections {
+        target: fluxSystem
+        function onRequestedShowWindow() {
+            if (startupPopup.visible) {
+                startupPopup.visible = false
+            }
+            if (fluxUser && fluxUser.boolValue("window/maximized", false)) {
+                window.showMaximized()
+            } else {
+                window.showNormal()
+            }
+            window.raise()
+            window.requestActivate()
         }
     }
     onCurrentPageChanged: {
@@ -1178,6 +1205,14 @@ ApplicationWindow {
     // Discord-style startup updater popup window
     StartupPopup {
         id: startupPopup
-        onFinished: window.completeStartup()
+        visible: !fluxSystem || !fluxSystem.startedFromBoot
+        onFinished: {
+            if (fluxSystem && fluxSystem.startedFromBoot) {
+                window.startupComplete = true
+                startupPopup.visible = false
+            } else {
+                window.completeStartup()
+            }
+        }
     }
 }

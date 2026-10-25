@@ -296,7 +296,7 @@ Popup {
                         { id: "downloads", label: "Downloads",          icon: "download" },
                         { id: "playback",  label: "Playback",           icon: "film" },
                         { id: "storage",   label: "Library & Storage",  icon: "storage" },
-                        { id: "interface", label: "Interface",          icon: "tv" },
+                        { id: "system",    label: "System",             icon: "settings" },
                         { id: "developer", label: "Developer",          icon: "shield" },
                         { id: "about",     label: "About",              icon: "info" }
                     ]
@@ -401,7 +401,7 @@ Popup {
                                 case "downloads": return "Downloads"
                                 case "playback":  return "Playback"
                                 case "storage":   return "Library & Storage"
-                                case "interface": return "Interface"
+                                case "system":    return "System & Startup"
                                 case "developer": return "Developer Options"
                                 case "about":     return "About FLUX"
                                 default:          return "Settings"
@@ -719,7 +719,12 @@ Popup {
                                             SteamButton {
                                                 text: "Change..."
                                                 iconName: "folder"
-                                                onClicked: picker.open()
+                                                onClicked: {
+                                                    if (fluxDownloads) {
+                                                        var p = fluxDownloads.browseFolder("Select Downloads Folder")
+                                                        if (p) fluxDownloads.changeLocation(p)
+                                                    }
+                                                }
                                             }
 
                                             SteamButton {
@@ -878,66 +883,6 @@ Popup {
                                 }
                             }
 
-                            SteamCard {
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 16
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 2
-
-                                        Text {
-                                            text: "Hardware accelerated decoding"
-                                            color: panel.cTextWhite
-                                            font.pixelSize: 13
-                                            font.weight: Font.DemiBold
-                                        }
-
-                                        Text {
-                                            text: "Use D3D11 / DXVA2 GPU hardware decoding for smooth 4K HEVC & H.264 streams."
-                                            color: panel.cTextMute
-                                            font.pixelSize: 12
-                                        }
-                                    }
-
-                                    SteamToggle {
-                                        checked: true
-                                        onToggled: function(val) { checked = val }
-                                    }
-                                }
-                            }
-
-                            SteamCard {
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 16
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 2
-
-                                        Text {
-                                            text: "Remember playback position"
-                                            color: panel.cTextWhite
-                                            font.pixelSize: 13
-                                            font.weight: Font.DemiBold
-                                        }
-
-                                        Text {
-                                            text: "Save timestamp checkpoints to prompt resuming when returning to a video."
-                                            color: panel.cTextMute
-                                            font.pixelSize: 12
-                                        }
-                                    }
-
-                                    SteamToggle {
-                                        checked: true
-                                        onToggled: function(val) { checked = val }
-                                    }
-                                }
-                            }
-
                             SteamSectionTitle { text: "Dialogue & Subtitle Preference" }
 
                             SteamCard {
@@ -1010,7 +955,9 @@ Popup {
                                         SteamButton {
                                             text: "Add Folder..."
                                             iconName: "folder"
-                                            onClicked: targetPicker.open()
+                                            onClicked: {
+                                                if (fluxDownloads) fluxDownloads.promptAddTarget()
+                                            }
                                         }
                                     }
 
@@ -1145,14 +1092,14 @@ Popup {
                         }
 
                         // ====================================================
-                        // 5. INTERFACE TAB
+                        // 5. SYSTEM TAB
                         // ====================================================
                         ColumnLayout {
-                            visible: panel.currentTab === "interface"
+                            visible: panel.currentTab === "system"
                             Layout.fillWidth: true
                             spacing: 12
 
-                            SteamSectionTitle { text: "Visual Theme" }
+                            SteamSectionTitle { text: "Startup & Window Behavior" }
 
                             SteamCard {
                                 RowLayout {
@@ -1164,54 +1111,24 @@ Popup {
                                         spacing: 2
 
                                         Text {
-                                            text: "Steam Dark Theme & Accent Styling"
+                                            text: "Start FLUX when Windows boots up"
                                             color: panel.cTextWhite
                                             font.pixelSize: 13
                                             font.weight: Font.DemiBold
                                         }
 
                                         Text {
-                                            text: "Active Steam dark navy palette with signature electric blue accents."
+                                            text: "Automatically launch FLUX into the system tray when Windows starts."
                                             color: panel.cTextMute
                                             font.pixelSize: 12
                                         }
                                     }
 
                                     SteamToggle {
-                                        checked: true
-                                        onToggled: function(val) { checked = val }
-                                    }
-                                }
-                            }
-
-                            SteamSectionTitle { text: "Window & Notifications" }
-
-                            SteamCard {
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 16
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 2
-
-                                        Text {
-                                            text: "Windows 11 Snap Layouts"
-                                            color: panel.cTextWhite
-                                            font.pixelSize: 13
-                                            font.weight: Font.DemiBold
+                                        checked: !!fluxSystem && fluxSystem.autostart
+                                        onToggled: function(val) {
+                                            if (fluxSystem) fluxSystem.autostart = val
                                         }
-
-                                        Text {
-                                            text: "Native Aero snap grid and resize handles for borderless window."
-                                            color: panel.cTextMute
-                                            font.pixelSize: 12
-                                        }
-                                    }
-
-                                    SteamToggle {
-                                        checked: true
-                                        onToggled: function(val) { checked = val }
                                     }
                                 }
                             }
@@ -1226,22 +1143,24 @@ Popup {
                                         spacing: 2
 
                                         Text {
-                                            text: "Check for updates on startup"
+                                            text: "Keep FLUX running in tray when closed"
                                             color: panel.cTextWhite
                                             font.pixelSize: 13
                                             font.weight: Font.DemiBold
                                         }
 
                                         Text {
-                                            text: "Notify when a new version of FLUX is released on GitHub."
+                                            text: "Clicking the close button keeps FLUX running in the Windows notification tray."
                                             color: panel.cTextMute
                                             font.pixelSize: 12
                                         }
                                     }
 
                                     SteamToggle {
-                                        checked: true
-                                        onToggled: function(val) { checked = val }
+                                        checked: !fluxSystem || fluxSystem.closeToTray
+                                        onToggled: function(val) {
+                                            if (fluxSystem) fluxSystem.closeToTray = val
+                                        }
                                     }
                                 }
                             }
@@ -1268,7 +1187,7 @@ Popup {
 
                                         Text {
                                             text: "Developer Mode"
-                                            color: (fluxUser && fluxUser.devModeUnlocked) ? Theme.success : panel.cTextWhite
+                                            color: panel.cTextWhite
                                             font.pixelSize: 13
                                             font.weight: Font.DemiBold
                                         }
@@ -1472,7 +1391,7 @@ Popup {
                                             Text {
                                                 visible: panel.customCodeSavedText !== ""
                                                 text: panel.customCodeSavedText
-                                                color: Theme.success
+                                                color: panel.cTextWhite
                                                 font.pixelSize: 11
                                                 font.weight: Font.DemiBold
                                             }
