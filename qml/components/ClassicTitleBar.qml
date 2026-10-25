@@ -19,7 +19,7 @@ Item {
     property bool solid: false          // opaque background (scrolled / results page)
     property bool overlayMode: false    // player mode: transparent, window controls only
     property bool shown: true           // fade whole bar in / out
-    readonly property bool menuOpen: updateMenu.opened || telepartyMenu.opened
+    readonly property bool menuOpen: (updateMenu && updateMenu.opened) || (telepartyMenu && telepartyMenu.opened) || (fluxMenu && fluxMenu.opened)
     property string section: "home"    // which nav link is highlighted: "home" | "bookmarks" | "library" | ""
     // In a Teleparty session offline playback is unavailable: the Library link is grayed out
     property bool offlineLocked: false
@@ -29,8 +29,9 @@ Item {
     signal bookmarksClicked()
     signal libraryClicked()
     signal nowPlayingClicked()
+    signal settingsClicked()
 
-    // Text link in the nav (Home / Library) with an underline on the current one
+    // Steam-style text link in the titlebar
     component NavLink: Item {
         id: navLink
 
@@ -40,7 +41,7 @@ Item {
         property string lockedTip: ""
         signal clicked()
 
-        implicitWidth: navText.implicitWidth
+        implicitWidth: navText.implicitWidth + 8
         implicitHeight: 32
         opacity: navLink.locked ? 0.4 : 1.0
 
@@ -50,23 +51,11 @@ Item {
             id: navText
             anchors.centerIn: parent
             text: navLink.label
-            color: (!navLink.locked && (navLink.current || navMouse.containsMouse)) ? Theme.text : Theme.textDim
-            font.pixelSize: 14
-            font.weight: navLink.current ? Font.Bold : Font.DemiBold
+            color: (!navLink.locked && (navLink.current || navMouse.containsMouse)) ? "#FFFFFF" : "#C5C3C0"
+            font.pixelSize: 12
+            font.weight: navLink.current ? Font.DemiBold : Font.Normal
 
             Behavior on color { ColorAnimation { duration: 120 } }
-        }
-
-        Rectangle {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            width: navText.implicitWidth
-            height: 2
-            radius: 1
-            color: Theme.accent
-            opacity: navLink.current ? 1.0 : 0.0
-
-            Behavior on opacity { NumberAnimation { duration: 160 } }
         }
 
         MouseArea {
@@ -88,13 +77,14 @@ Item {
         }
     }
 
-    height: 48
+    height: 40
     opacity: root.shown ? 1.0 : 0.0
     visible: opacity > 0.0
 
     Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
     function closeMenu() {
+        if (fluxMenu && fluxMenu.opened) fluxMenu.close()
         updateMenu.close()
         telepartyMenu.close()
     }
@@ -127,8 +117,8 @@ Item {
         opacity: (root.solid || root.overlayMode) ? 0.0 : 1.0
 
         gradient: Gradient {
-            GradientStop { position: 0.0; color: "#E61E1F22" }
-            GradientStop { position: 1.0; color: "#001E1F22" }
+            GradientStop { position: 0.0; color: "#E6171d25" }
+            GradientStop { position: 1.0; color: "#00171d25" }
         }
 
         Behavior on opacity { NumberAnimation { duration: 240 } }
@@ -137,7 +127,7 @@ Item {
     // Solid bar with hairline
     Rectangle {
         anchors.fill: parent
-        color: "#F21E1F22"
+        color: "#F2171d25"
         opacity: (root.solid && !root.overlayMode) ? 1.0 : 0.0
 
         Behavior on opacity { NumberAnimation { duration: 240 } }
@@ -177,51 +167,207 @@ Item {
         width: implicitWidth
 
         anchors.left: parent.left
-        anchors.leftMargin: 32
+        anchors.leftMargin: 10
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 30
+        spacing: 16
         z: 3
         opacity: root.overlayMode ? 0.0 : 1.0
         visible: opacity > 0.0
 
         Behavior on opacity { NumberAnimation { duration: 200 } }
 
-        // Wordmark
+        // Steam-style Brand Menu button: Logo + "FLUX"
         Item {
-            implicitWidth: logoText.implicitWidth
+            id: fluxBtn
+            implicitWidth: fluxBtnRow.implicitWidth + 6
             implicitHeight: 32
 
-            Text {
-                id: logoText
+            RowLayout {
+                id: fluxBtnRow
                 anchors.centerIn: parent
-                text: "FLUX"
-                color: logoMouse.containsMouse ? Theme.accent : "#FFFFFF"
-                font.pixelSize: 26
-                font.weight: Font.Black
-                font.letterSpacing: 4
+                spacing: 6
 
-                Behavior on color { ColorAnimation { duration: 120 } }
+                Image {
+                    source: "qrc:/FLUX/resources/flux.png"
+                    width: logoText.font.pixelSize
+                    height: logoText.font.pixelSize
+                    sourceSize: Qt.size(24, 24)
+                    fillMode: Image.PreserveAspectFit
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                    id: logoText
+                    text: "FLUX"
+                    color: (fluxMenu.opened || fluxMouse.containsMouse) ? "#FFFFFF" : "#C5C3C0"
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                }
             }
 
             MouseArea {
-                id: logoMouse
+                id: fluxMouse
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.homeClicked()
+                onClicked: {
+                    if (fluxMenu.opened) fluxMenu.close()
+                    else fluxMenu.open()
+                }
             }
 
-            FluxToolTip {
-                visible: logoMouse.containsMouse
-                delay: 500
-                text: "Return to Home Page"
+            // Steam-style FLUX menu popup
+            Popup {
+                id: fluxMenu
+                parent: fluxBtn
+                x: 0
+                y: fluxBtn.height + 6
+                width: 220
+                padding: 4
+                modal: false
+                focus: true
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                enter: Transition {
+                    NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 100 }
+                    NumberAnimation { property: "scale"; from: 0.98; to: 1.0; duration: 100; easing.type: Easing.OutCubic }
+                }
+                exit: Transition {
+                    NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 80 }
+                }
+
+                background: Rectangle {
+                    color: "#171a21"
+                    radius: 4
+                    border.width: 1
+                    border.color: "#384152"
+                }
+
+                contentItem: ColumnLayout {
+                    spacing: 2
+
+                    // Option 1: Check for Client Updates...
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 28
+                        radius: 3
+                        color: optUpdateMouse.containsMouse ? "#282e3a" : "transparent"
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+
+                            Text {
+                                text: "Check for Client Updates..."
+                                color: optUpdateMouse.containsMouse ? "#FFFFFF" : "#C5C3C0"
+                                font.pixelSize: 12
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        MouseArea {
+                            id: optUpdateMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                fluxMenu.close()
+                                if (fluxUpdater) fluxUpdater.checkForUpdates(false)
+                                updateMenu.parent = fluxBtn
+                                updateMenu.x = 0
+                                updateMenu.y = fluxBtn.height + 4
+                                updateMenu.open()
+                            }
+                        }
+                    }
+
+                    // Option 2: Settings
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 28
+                        radius: 3
+                        color: optSettingsMouse.containsMouse ? "#282e3a" : "transparent"
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+
+                            Text {
+                                text: "Settings"
+                                color: optSettingsMouse.containsMouse ? "#FFFFFF" : "#C5C3C0"
+                                font.pixelSize: 12
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        MouseArea {
+                            id: optSettingsMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                fluxMenu.close()
+                                root.settingsClicked()
+                            }
+                        }
+                    }
+
+                    // Separator
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 1
+                        Layout.topMargin: 2
+                        Layout.bottomMargin: 2
+                        color: "#2e3440"
+                    }
+
+                    // Option 3: Exit
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 28
+                        radius: 3
+                        color: optExitMouse.containsMouse ? "#282e3a" : "transparent"
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+
+                            Text {
+                                text: "Exit"
+                                color: optExitMouse.containsMouse ? "#FFFFFF" : "#C5C3C0"
+                                font.pixelSize: 12
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        MouseArea {
+                            id: optExitMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                fluxMenu.close()
+                                if (typeof fluxSystem !== "undefined" && fluxSystem) {
+                                    fluxSystem.exitApp()
+                                }
+                                Qt.quit()
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        // Primary navigation
+        // Primary navigation items (existing buttons from FLUX)
         RowLayout {
             Layout.alignment: Qt.AlignVCenter
-            spacing: 24
+            spacing: 16
 
             NavLink {
                 label: "Home"
@@ -229,59 +375,10 @@ Item {
                 onClicked: root.homeClicked()
             }
 
-            // Search with icon
-            Item {
-                id: searchNavItem
-                implicitWidth: searchNavRow.implicitWidth + 8
-                implicitHeight: 32
-
-                Row {
-                    id: searchNavRow
-                    anchors.centerIn: parent
-                    spacing: 6
-
-                    FluxIcon {
-                        name: "search"
-                        size: 15
-                        color: (root.section === "search" || searchNavMouse.containsMouse) ? Theme.text : Theme.textDim
-                        anchors.verticalCenter: parent.verticalCenter
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "Search"
-                        color: (root.section === "search" || searchNavMouse.containsMouse) ? Theme.text : Theme.textDim
-                        font.pixelSize: 14
-                        font.weight: root.section === "search" ? Font.Bold : Font.DemiBold
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                }
-
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    width: searchNavRow.implicitWidth
-                    height: 2
-                    radius: 1
-                    color: Theme.accent
-                    opacity: root.section === "search" ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: 160 } }
-                }
-
-                MouseArea {
-                    id: searchNavMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.searchClicked()
-                }
-
-                FluxToolTip {
-                    visible: searchNavMouse.containsMouse
-                    delay: 500
-                    text: "Search & Categories"
-                }
+            NavLink {
+                label: "Search"
+                current: root.section === "search"
+                onClicked: root.searchClicked()
             }
 
             NavLink {
@@ -522,8 +619,14 @@ Item {
                 hoverEnabled: true
                 onClicked: {
                     if (Date.now() - moreButton.lastClosed < 250) return
-                    if (updateMenu.opened) updateMenu.close()
-                    else updateMenu.open()
+                    if (updateMenu.opened) {
+                        updateMenu.close()
+                    } else {
+                        updateMenu.parent = moreButton
+                        updateMenu.x = moreButton.width - updateMenu.width
+                        updateMenu.y = moreButton.height + 4
+                        updateMenu.open()
+                    }
                 }
             }
 

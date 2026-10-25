@@ -1165,6 +1165,7 @@ ApplicationWindow {
             onSearchClicked: window.showSearch()
             onBookmarksClicked: window.showBookmarks()
             onLibraryClicked: window.showLibrary()
+            onSettingsClicked: settingsPanel.open()
         }
 
         // Bottom-right dock: downloads + settings (browsing pages only)
