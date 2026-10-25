@@ -335,6 +335,45 @@ Item {
             poly(ctx, [13.5, 14.5, 16.5, 18, 19.5, 14.5], false)
             ctx.stroke()
             break
+
+        case "server":
+            // 2 stacked server rack units with indicator lights
+            ctx.beginPath()
+            ctx.roundedRect(3.5, 4.5, 17, 6, 1.5, 1.5)
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(6.5, 7.5, 1, 0, PI * 2, false)
+            ctx.fill()
+            poly(ctx, [15.5, 7.5, 18, 7.5], false)
+            ctx.stroke()
+
+            ctx.beginPath()
+            ctx.roundedRect(3.5, 13.5, 17, 6, 1.5, 1.5)
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(6.5, 16.5, 1, 0, PI * 2, false)
+            ctx.fill()
+            poly(ctx, [15.5, 16.5, 18, 16.5], false)
+            ctx.stroke()
+            break
+
+        case "shield":
+            // Security shield outline
+            poly(ctx, [12, 3.5, 19, 6.5, 19, 12, 12, 20.5, 5, 12, 5, 6.5], true)
+            ctx.stroke()
+            break
+
+        case "storage":
+            // Hard drive / storage box
+            ctx.beginPath()
+            ctx.roundedRect(4, 5, 16, 14, 2, 2)
+            ctx.stroke()
+            poly(ctx, [4, 14, 20, 14], false)
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(16, 16.5, 1, 0, PI * 2, false)
+            ctx.fill()
+            break
         }
     }
 

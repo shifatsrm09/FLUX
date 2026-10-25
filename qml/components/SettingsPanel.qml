@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "Theme.js" as Theme
 
-// App settings dialog (opened from the gear at the bottom-right).
+// Steam-Style Settings Dialog for FLUX
 Popup {
     id: panel
 
@@ -15,6 +15,22 @@ Popup {
     property bool showPinPrompt: false
     property string devPinErrorText: ""
     property string customCodeSavedText: ""
+
+    // Active category in left sidebar
+    property string currentTab: "downloads"
+
+    // Steam Dark Theme Palette
+    readonly property color cSidebarBg: "#171a21"       // Steam deep dark navy sidebar
+    readonly property color cContentBg: "#1b1e24"       // Steam main content background
+    readonly property color cBorder: "#2a2f3a"          // Subtle slate border
+    readonly property color cCardBg: "#21252d"          // Steam settings card background
+    readonly property color cCardBorder: "#2e3440"      // Card outline
+    readonly property color cItemHover: "#1e232b"       // Sidebar hover
+    readonly property color cItemActive: "#282c35"      // Sidebar active pill
+    readonly property color cSteamBlue: "#1a9fff"       // Steam vibrant blue accent
+    readonly property color cTextWhite: "#F2F3F5"       // Primary text
+    readonly property color cTextDim: "#949BA4"         // Secondary text
+    readonly property color cTextMute: "#80848E"        // Helper / label text
 
     function unlockDevMode() {
         if (!fluxUser) return
@@ -46,9 +62,8 @@ Popup {
 
     parent: Overlay.overlay
     anchors.centerIn: Overlay.overlay
-    width: Math.min(560, (Overlay.overlay ? Overlay.overlay.width : 560) - 48)
-    // Header (about 70px) + all sections; scrolls when the window is shorter than that
-    height: Math.min(70 + settingsBody.implicitHeight, (Overlay.overlay ? Overlay.overlay.height : 720) - 48)
+    width: Math.min(920, (Overlay.overlay ? Overlay.overlay.width : 920) - 32)
+    height: Math.min(620, (Overlay.overlay ? Overlay.overlay.height : 620) - 32)
     modal: true
     focus: true
     padding: 0
@@ -60,23 +75,24 @@ Popup {
         serverTestStatus = ""
         serverTesting = false
         serverTestSuccess = false
+        if (currentTab === "") currentTab = "downloads"
     }
 
     Overlay.modal: Rectangle { color: "#B3000000" }
 
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 160 }
-        NumberAnimation { property: "scale"; from: 0.96; to: 1; duration: 200; easing.type: Easing.OutCubic }
+        NumberAnimation { property: "scale"; from: 0.97; to: 1; duration: 180; easing.type: Easing.OutCubic }
     }
     exit: Transition {
         NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 120 }
     }
 
     background: Rectangle {
-        radius: 18
-        color: Theme.bgRaised
+        radius: 8
+        color: panel.cContentBg
         border.width: 1
-        border.color: Theme.borderHi
+        border.color: panel.cBorder
     }
 
     Connections {
@@ -108,896 +124,1435 @@ Popup {
         }
     }
 
-    // Small uppercase section label
-    component SectionLabel: Text {
-        color: Theme.textMute
-        font.pixelSize: 11
-        font.weight: Font.Bold
-        font.letterSpacing: 1.2
-    }
+    // Steam-style Pill Toggle Switch component
+    component SteamToggle: Item {
+        id: stRoot
 
-    // "Series  ->  C:\path" row
-    component PathRow: RowLayout {
-        property string label: ""
-        property string path: ""
+        property bool checked: false
+        signal toggled(bool value)
 
-        spacing: 10
+        implicitWidth: 42
+        implicitHeight: 22
 
-        Text {
-            text: parent.label
-            color: Theme.textDim
-            font.pixelSize: 12
-            font.weight: Font.DemiBold
-            Layout.preferredWidth: 78
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: stRoot.checked ? panel.cSteamBlue : "#3e4450"
+
+            Behavior on color { ColorAnimation { duration: 160 } }
+
+            Rectangle {
+                width: 16
+                height: 16
+                radius: 8
+                y: 3
+                x: stRoot.checked ? parent.width - width - 3 : 3
+                color: "#FFFFFF"
+
+                Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+            }
         }
 
-        Text {
-            text: parent.path
-            color: Theme.text
-            font.pixelSize: 12
-            font.family: Theme.monoFamily
-            elide: Text.ElideMiddle
-            Layout.fillWidth: true
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: stRoot.toggled(!stRoot.checked)
         }
     }
 
-    contentItem: ColumnLayout {
-        spacing: 0
+    // Steam-style Button component
+    component SteamButton: Rectangle {
+        id: btnRoot
 
-        // ---- Header ----
+        property string text: ""
+        property string iconName: ""
+        property bool isAccent: false
+        signal clicked()
+
+        implicitWidth: Math.max(88, btnRow.implicitWidth + 24)
+        implicitHeight: 32
+        radius: 4
+        color: btnMouse.pressed ? (isAccent ? "#1177cc" : "#1a2029")
+             : btnMouse.containsMouse ? (isAccent ? "#29a8ff" : "#2e3542")
+             : (isAccent ? panel.cSteamBlue : "#242933")
+        border.width: 1
+        border.color: isAccent ? panel.cSteamBlue : "#3a4150"
+
+        Behavior on color { ColorAnimation { duration: 120 } }
+
         RowLayout {
-            Layout.fillWidth: true
-            Layout.margins: 22
-            Layout.bottomMargin: 8
-            spacing: 10
+            id: btnRow
+            anchors.centerIn: parent
+            spacing: 6
 
             FluxIcon {
-                name: "settings"
-                size: 22
-                color: Theme.text
-                Layout.alignment: Qt.AlignVCenter
+                visible: btnRoot.iconName !== ""
+                name: btnRoot.iconName
+                size: 14
+                color: btnRoot.isAccent ? "#FFFFFF" : panel.cTextWhite
             }
 
             Text {
-                text: "Settings"
-                color: Theme.text
-                font.pixelSize: 20
-                font.weight: Font.Bold
-                font.letterSpacing: -0.3
-                Layout.fillWidth: true
-            }
-
-            IconButton {
-                iconName: "close"
-                iconSize: 16
-                implicitWidth: 34
-                implicitHeight: 34
-                tip: "Close"
-                tipAbove: false
-                onClicked: panel.close()
+                text: btnRoot.text
+                color: btnRoot.isAccent ? "#FFFFFF" : panel.cTextWhite
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
             }
         }
 
-        // ---- Scrollable body ----
-        Flickable {
-            id: scroller
+        MouseArea {
+            id: btnMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: btnRoot.clicked()
+        }
+    }
 
-            Layout.fillWidth: true
+    // Steam-style Setting Card Row
+    component SteamCard: Rectangle {
+        default property alias content: cardLayout.children
+        property alias rowSpacing: cardLayout.spacing
+
+        Layout.fillWidth: true
+        implicitHeight: cardLayout.implicitHeight + 24
+        radius: 4
+        color: panel.cCardBg
+        border.width: 1
+        border.color: panel.cCardBorder
+
+        ColumnLayout {
+            id: cardLayout
+            anchors.fill: parent
+            anchors.margins: 12
+            anchors.leftMargin: 16
+            anchors.rightMargin: 16
+            spacing: 8
+        }
+    }
+
+    // Steam Section Header Label
+    component SteamSectionTitle: Text {
+        color: panel.cTextWhite
+        font.pixelSize: 15
+        font.weight: Font.DemiBold
+        Layout.topMargin: 16
+        Layout.bottomMargin: 4
+    }
+
+    contentItem: RowLayout {
+        spacing: 0
+
+        // ====================================================================
+        // LEFT SIDEBAR: Steam Navigation
+        // ====================================================================
+        Rectangle {
+            Layout.preferredWidth: 220
             Layout.fillHeight: true
-            contentWidth: width
-            contentHeight: settingsBody.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
+            color: panel.cSidebarBg
+            border.width: 0
 
-            ScrollBar.vertical: FluxScrollBar { }
+            // Right border line separating sidebar from content
+            Rectangle {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: 1
+                color: panel.cBorder
+            }
 
             ColumnLayout {
-                id: settingsBody
-
-                width: scroller.width
+                anchors.fill: parent
                 spacing: 0
 
-                // ---- Media Server ----
-                SectionLabel {
-                    text: "MEDIA SERVER"
-                    Layout.leftMargin: 22
-                    Layout.topMargin: 10
-                }
-
-                Rectangle {
+                // Header: "FLUX SETTINGS"
+                Item {
                     Layout.fillWidth: true
-                    Layout.leftMargin: 22
-                    Layout.rightMargin: 22
-                    Layout.topMargin: 10
-                    implicitHeight: serverColumn.implicitHeight + 36
-                    radius: 14
-                    color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.border
+                    implicitHeight: 56
 
-                    ColumnLayout {
-                        id: serverColumn
-
-                        anchors.fill: parent
-                        anchors.margins: 18
-                        spacing: 12
-
-                        Text {
-                            text: "Active Media Server"
-                            color: Theme.text
-                            font.pixelSize: 14
-                            font.weight: Font.DemiBold
-                        }
-
-                        // Server choice buttons (Server 1 vs Server 2)
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 10
-
-                            Rectangle {
-                                id: server1Btn
-                                Layout.fillWidth: true
-                                implicitHeight: 46
-                                radius: 10
-                                color: (fluxUser && fluxUser.activeServer === 1) ? Theme.accent : Theme.surface
-                                border.width: 1
-                                border.color: (fluxUser && fluxUser.activeServer === 1) ? Theme.accent : Theme.border
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (fluxUser) fluxUser.activeServer = 1
-                                        panel.serverTestStatus = ""
-                                    }
-                                }
-
-                                RowLayout {
-                                    anchors.centerIn: parent
-                                    spacing: 8
-                                    FluxIcon {
-                                        name: (fluxUser && fluxUser.activeServer === 1) ? "check" : "folder"
-                                        size: 16
-                                        color: (fluxUser && fluxUser.activeServer === 1) ? "#FFFFFF" : Theme.textDim
-                                    }
-                                    Text {
-                                        text: "Server 1 (Dhaka Flix)"
-                                        color: (fluxUser && fluxUser.activeServer === 1) ? "#FFFFFF" : Theme.text
-                                        font.pixelSize: 13
-                                        font.weight: (fluxUser && fluxUser.activeServer === 1) ? Font.DemiBold : Font.Normal
-                                    }
-                                }
-                            }
-
-                            Rectangle {
-                                id: server2Btn
-                                Layout.fillWidth: true
-                                implicitHeight: 46
-                                radius: 10
-                                color: (fluxUser && fluxUser.activeServer === 2) ? Theme.accent : Theme.surface
-                                border.width: 1
-                                border.color: (fluxUser && fluxUser.activeServer === 2) ? Theme.accent : Theme.border
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (fluxUser) fluxUser.activeServer = 2
-                                        panel.serverTestStatus = ""
-                                    }
-                                }
-
-                                RowLayout {
-                                    anchors.centerIn: parent
-                                    spacing: 8
-                                    FluxIcon {
-                                        name: (fluxUser && fluxUser.activeServer === 2) ? "check" : "folder"
-                                        size: 16
-                                        color: (fluxUser && fluxUser.activeServer === 2) ? "#FFFFFF" : Theme.textDim
-                                    }
-                                    Text {
-                                        text: "Server 2 (ICC FTP)"
-                                        color: (fluxUser && fluxUser.activeServer === 2) ? "#FFFFFF" : Theme.text
-                                        font.pixelSize: 13
-                                        font.weight: (fluxUser && fluxUser.activeServer === 2) ? Font.DemiBold : Font.Normal
-                                    }
-                                }
-                            }
-                        }
-
-                        // Test server connection
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            FluxButton {
-                                text: panel.serverTesting ? "Testing\u2026" : "Test Connection"
-                                iconName: "refresh"
-                                iconSize: 16
-                                implicitHeight: 36
-                                enabled: !panel.serverTesting
-                                onClicked: {
-                                    if (!fluxUser) return
-                                    panel.serverTesting = true
-                                    panel.serverTestStatus = "Checking server connectivity..."
-                                    var srv = fluxUser.activeServer
-                                    fluxUser.testServerConnection(srv, "", function(ok, msg) {
-                                        panel.serverTesting = false
-                                        panel.serverTestSuccess = ok
-                                        panel.serverTestStatus = ok ? ("Connected successfully! (" + (srv === 2 ? "ICC FTP" : "Dhaka Flix") + ")")
-                                                                    : ("Connection failed: " + msg)
-                                    })
-                                }
-                            }
-
-                            Item { Layout.fillWidth: true }
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            visible: panel.serverTestStatus.length > 0
-                            text: panel.serverTestStatus
-                            color: panel.serverTestSuccess ? Theme.success : Theme.danger
-                            font.pixelSize: 12
-                            wrapMode: Text.Wrap
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: fluxUser && fluxUser.activeServer === 2
-                                  ? "Server 2 streams directly from ICC FTP nodes with instant video lookup and poster artwork."
-                                  : "Server 1 connects to Dhaka Flix BDIX indexer using h5ai directory search."
-                            color: Theme.textMute
-                            font.pixelSize: 12
-                            wrapMode: Text.Wrap
-                        }
-                    }
-                }
-
-
-                // ---- Downloads ----
-                SectionLabel {
-                    text: "DOWNLOADS"
-                    Layout.leftMargin: 22
-                    Layout.topMargin: 20
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 22
-                    Layout.rightMargin: 22
-                    Layout.topMargin: 10
-                    implicitHeight: downloadsColumn.implicitHeight + 36
-                    radius: 14
-                    color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.border
-
-                    ColumnLayout {
-                        id: downloadsColumn
-
-                        anchors.fill: parent
-                        anchors.margins: 18
-                        spacing: 12
-
-                        Text {
-                            text: "Download location"
-                            color: Theme.text
-                            font.pixelSize: 14
-                            font.weight: Font.DemiBold
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            implicitHeight: 40
-                            radius: 10
-                            color: Theme.bg
-                            border.width: 1
-                            border.color: Theme.border
-
-                            Text {
-                                anchors.fill: parent
-                                anchors.leftMargin: 14
-                                anchors.rightMargin: 14
-                                verticalAlignment: Text.AlignVCenter
-                                text: fluxDownloads ? fluxDownloads.downloadLocation : ""
-                                color: Theme.text
-                                font.pixelSize: 13
-                                font.family: Theme.monoFamily
-                                elide: Text.ElideMiddle
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            FluxButton {
-                                text: "Change\u2026"
-                                iconName: "folder"
-                                iconSize: 18
-                                implicitHeight: 38
-                                onClicked: picker.openAt(fluxDownloads ? fluxDownloads.downloadLocation : "")
-                            }
-
-                            FluxButton {
-                                text: "Open folder"
-                                variant: "secondary"
-                                implicitHeight: 38
-                                onClicked: if (fluxDownloads) fluxDownloads.openRoot()
-                            }
-
-                            FluxButton {
-                                text: "Reset to default"
-                                variant: "ghost"
-                                implicitHeight: 38
-                                visible: !panel.atDefaultLocation
-                                onClicked: if (fluxDownloads) fluxDownloads.resetLocation()
-                            }
-
-                            Item { Layout.fillWidth: true }
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            visible: panel.errorText.length > 0
-                            text: panel.errorText
-                            color: Theme.danger
-                            font.pixelSize: 12
-                            wrapMode: Text.Wrap
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            implicitHeight: 1
-                            color: Theme.border
-                        }
-
-                        PathRow {
-                            Layout.fillWidth: true
-                            label: "Series"
-                            path: fluxDownloads ? fluxDownloads.seriesDir : ""
-                        }
-
-                        PathRow {
-                            Layout.fillWidth: true
-                            label: "Individuals"
-                            path: fluxDownloads ? fluxDownloads.individualsDir : ""
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: "Folders you download as a pack are saved under Series, one folder per show. Single movies and episodes are saved under Individuals. Changing the location doesn't move files you've already downloaded."
-                            color: Theme.textMute
-                            font.pixelSize: 12
-                            wrapMode: Text.Wrap
-                        }
-                    }
-                }
-
-                SectionLabel {
-                    text: "VIEWING CACHE"
-                    Layout.leftMargin: 22
-                    Layout.topMargin: 20
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 22
-                    Layout.rightMargin: 22
-                    Layout.topMargin: 10
-                    implicitHeight: 76
-                    radius: 14
-                    color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.border
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 18
-                        anchors.rightMargin: 18
-                        spacing: 12
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 3
-                            Text {
-                                text: "Recently watched media"
-                                color: Theme.text
-                                font.pixelSize: 14
-                                font.weight: Font.DemiBold
-                            }
-                            Text {
-                                text: fluxCache ? fluxCache.sizeText : "0.00 GB of 10 GB"
-                                color: Theme.textMute
-                                font.pixelSize: 12
-                            }
-                        }
-
-                        FluxButton {
-                            text: "Clear cache"
-                            variant: "secondary"
-                            implicitHeight: 36
-                            enabled: !!fluxCache && fluxCache.sizeBytes > 0
-                            onClicked: fluxCache.clearCache()
-                        }
-                    }
-                }
-
-                // ---- Library targets ----
-                SectionLabel {
-                    text: "LIBRARY TARGETS"
-                    Layout.leftMargin: 22
-                    Layout.topMargin: 20
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 22
-                    Layout.rightMargin: 22
-                    Layout.topMargin: 10
-                    implicitHeight: targetsColumn.implicitHeight + 36
-                    radius: 14
-                    color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.border
-
-                    ColumnLayout {
-                        id: targetsColumn
-
-                        anchors.fill: parent
-                        anchors.margins: 18
-                        spacing: 12
-
-                        Text {
-                            text: "More places to find media"
-                            color: Theme.text
-                            font.pixelSize: 14
-                            font.weight: Font.DemiBold
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: "Add folders from anywhere on your PC. FLUX looks inside them for playable videos and lists them in your Library, and its search covers them too."
-                            color: Theme.textMute
-                            font.pixelSize: 12
-                            wrapMode: Text.Wrap
-                        }
-
-                        // Added targets
-                        Repeater {
-                            model: fluxDownloads ? fluxDownloads.targets : []
-
-                            Rectangle {
-                                id: targetRow
-
-                                required property string modelData
-
-                                Layout.fillWidth: true
-                                implicitHeight: 40
-                                radius: 10
-                                color: Theme.bg
-                                border.width: 1
-                                border.color: Theme.border
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 12
-                                    anchors.rightMargin: 4
-                                    spacing: 10
-
-                                    FluxIcon {
-                                        name: "folder"
-                                        size: 16
-                                        color: Theme.textDim
-                                        Layout.alignment: Qt.AlignVCenter
-                                    }
-
-                                    Text {
-                                        text: targetRow.modelData
-                                        color: Theme.text
-                                        font.pixelSize: 12
-                                        font.family: Theme.monoFamily
-                                        elide: Text.ElideMiddle
-                                        Layout.fillWidth: true
-                                        Layout.alignment: Qt.AlignVCenter
-                                    }
-
-                                    IconButton {
-                                        iconName: "close"
-                                        iconSize: 14
-                                        implicitWidth: 32
-                                        implicitHeight: 32
-                                        tip: "Remove"
-                                        tipAbove: false
-                                        Layout.alignment: Qt.AlignVCenter
-                                        onClicked: if (fluxDownloads) fluxDownloads.removeTarget(targetRow.modelData)
-                                    }
-                                }
-                            }
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            visible: !fluxDownloads || fluxDownloads.targets.length === 0
-                            text: "No extra folders added yet."
-                            color: Theme.textDim
-                            font.pixelSize: 12
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            FluxButton {
-                                text: "Add more targets\u2026"
-                                iconName: "folder"
-                                iconSize: 18
-                                implicitHeight: 38
-                                onClicked: targetPicker.openAt("")
-                            }
-
-                            Item { Layout.fillWidth: true }
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            visible: panel.targetErrorText.length > 0
-                            text: panel.targetErrorText
-                            color: Theme.danger
-                            font.pixelSize: 12
-                            wrapMode: Text.Wrap
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: "Targets are only read, never changed. Downloads still go to your download location, and removing a target doesn't delete any files."
-                            color: Theme.textMute
-                            font.pixelSize: 12
-                            wrapMode: Text.Wrap
-                        }
-                    }
-                }
-
-                // ---- Playback ----
-                SectionLabel {
-                    text: "PLAYBACK"
-                    Layout.leftMargin: 22
-                    Layout.topMargin: 20
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 22
-                    Layout.rightMargin: 22
-                    Layout.topMargin: 10
-                    Layout.bottomMargin: 22
-                    implicitHeight: 62
-                    radius: 14
-                    color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.border
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 18
-                        anchors.rightMargin: 18
-                        spacing: 12
-
-                        ColumnLayout {
-                            spacing: 2
-                            Layout.fillWidth: true
-
-                            Text {
-                                text: "Autoplay next episode"
-                                color: Theme.text
-                                font.pixelSize: 14
-                                font.weight: Font.DemiBold
-                            }
-
-                            Text {
-                                text: "Offer the next episode when one finishes"
-                                color: Theme.textMute
-                                font.pixelSize: 12
-                            }
-                        }
-
-                        ToggleSwitch {
-                            checked: fluxUser ? fluxUser.autoplayNext : true
-                            onToggled: function(value) { if (fluxUser) fluxUser.autoplayNext = value }
-                        }
-                    }
-                }
-
-                // ---- Developer Options ----
-                SectionLabel {
-                    text: "DEVELOPER OPTIONS"
-                    Layout.leftMargin: 22
-                    Layout.topMargin: 20
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 22
-                    Layout.rightMargin: 22
-                    Layout.topMargin: 10
-                    Layout.bottomMargin: 24
-                    implicitHeight: devColumn.implicitHeight + 32
-                    radius: 14
-                    color: Theme.surface
-                    border.width: 1
-                    border.color: (fluxUser && fluxUser.devModeUnlocked) ? "#4046D369" : Theme.border
-
-                    ColumnLayout {
-                        id: devColumn
-
+                    Text {
                         anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.margins: 16
-                        spacing: 14
+                        anchors.leftMargin: 20
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "FLUX SETTINGS"
+                        color: panel.cSteamBlue
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.1
+                    }
+                }
 
-                        // --- 1. Developer Mode On / Off Row ---
-                        RowLayout {
+                // Nav Items List
+                ListView {
+                    id: navList
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    spacing: 2
+                    interactive: false
+
+                    model: [
+                        { id: "server",    label: "Media Server",       icon: "server" },
+                        { id: "downloads", label: "Downloads",          icon: "download" },
+                        { id: "playback",  label: "Playback",           icon: "film" },
+                        { id: "storage",   label: "Library & Storage",  icon: "storage" },
+                        { id: "interface", label: "Interface",          icon: "tv" },
+                        { id: "developer", label: "Developer",          icon: "shield" },
+                        { id: "about",     label: "About",              icon: "info" }
+                    ]
+
+                    delegate: Item {
+                        width: navList.width
+                        height: 36
+
+                        readonly property bool isSelected: panel.currentTab === modelData.id
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            radius: 4
+                            color: isSelected ? panel.cItemActive
+                                 : navMouse.containsMouse ? panel.cItemHover
+                                 : "transparent"
+
+                            Behavior on color { ColorAnimation { duration: 100 } }
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 12
+                                spacing: 12
+
+                                FluxIcon {
+                                    name: modelData.icon
+                                    size: 16
+                                    color: isSelected ? "#FFFFFF"
+                                         : navMouse.containsMouse ? "#c7d5e0"
+                                         : panel.cTextMute
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+
+                                Text {
+                                    text: modelData.label
+                                    color: isSelected ? "#FFFFFF"
+                                         : navMouse.containsMouse ? "#c7d5e0"
+                                         : panel.cTextDim
+                                    font.pixelSize: 13
+                                    font.weight: isSelected ? Font.DemiBold : Font.Normal
+                                    Layout.fillWidth: true
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                            }
+
+                            MouseArea {
+                                id: navMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: panel.currentTab = modelData.id
+                            }
+                        }
+                    }
+                }
+
+                // Footer build version string
+                Item {
+                    Layout.fillWidth: true
+                    implicitHeight: 38
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 20
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "FLUX v2.2.5"
+                        color: "#545d6b"
+                        font.pixelSize: 11
+                        font.weight: Font.Medium
+                    }
+                }
+            }
+        }
+
+        // ====================================================================
+        // RIGHT MAIN CONTENT PANE
+        // ====================================================================
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: panel.cContentBg
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 0
+
+                // Top Bar with Category Header & Steam Close Button
+                Item {
+                    Layout.fillWidth: true
+                    implicitHeight: 56
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 28
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: {
+                            switch (panel.currentTab) {
+                                case "server":    return "Media Server"
+                                case "downloads": return "Downloads"
+                                case "playback":  return "Playback"
+                                case "storage":   return "Library & Storage"
+                                case "interface": return "Interface"
+                                case "developer": return "Developer Options"
+                                case "about":     return "About FLUX"
+                                default:          return "Settings"
+                            }
+                        }
+                        color: panel.cTextWhite
+                        font.pixelSize: 22
+                        font.weight: Font.Bold
+                    }
+
+                    // Window Close Button
+                    Rectangle {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 16
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 32
+                        height: 32
+                        radius: 4
+                        color: closeMouse.pressed ? "#171a21"
+                             : closeMouse.containsMouse ? "#2c323d"
+                             : "transparent"
+
+                        FluxIcon {
+                            anchors.centerIn: parent
+                            name: "close"
+                            size: 14
+                            color: closeMouse.containsMouse ? "#FFFFFF" : panel.cTextDim
+                        }
+
+                        MouseArea {
+                            id: closeMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: panel.close()
+                        }
+                    }
+                }
+
+                // Divider line below category title
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 1
+                    color: panel.cBorder
+                }
+
+                // Scrollable Content Stack
+                Flickable {
+                    id: bodyScroller
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    contentWidth: width
+                    contentHeight: contentCol.implicitHeight + 40
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    ScrollBar.vertical: FluxScrollBar { }
+
+                    ColumnLayout {
+                        id: contentCol
+                        width: bodyScroller.width - 56
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 12
+
+                        Item { implicitHeight: 8 }
+
+                        // ====================================================
+                        // 1. MEDIA SERVER TAB
+                        // ====================================================
+                        ColumnLayout {
+                            visible: panel.currentTab === "server"
                             Layout.fillWidth: true
                             spacing: 12
 
-                            Rectangle {
-                                width: 34
-                                height: 34
-                                radius: 17
-                                color: (fluxUser && fluxUser.devModeUnlocked) ? "#2646D369" : "#1AFFFFFF"
+                            SteamSectionTitle { text: "Active Server Mirror" }
 
-                                FluxIcon {
-                                    anchors.centerIn: parent
-                                    name: (fluxUser && fluxUser.devModeUnlocked) ? "check" : "settings"
-                                    size: 16
-                                    color: (fluxUser && fluxUser.devModeUnlocked) ? "#46D369" : Theme.textDim
-                                }
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Layout.preferredWidth: 0
-                                spacing: 2
-
-                                Text {
-                                    text: "Developer Mode"
-                                    color: (fluxUser && fluxUser.devModeUnlocked) ? "#46D369" : Theme.text
-                                    font.pixelSize: 14
-                                    font.weight: Font.DemiBold
-                                }
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: (fluxUser && fluxUser.devModeUnlocked)
-                                          ? "Advanced developer settings & room overrides active"
-                                          : "Enable to access developer tools and custom room overrides"
-                                    color: Theme.textMute
-                                    font.pixelSize: 12
-                                    wrapMode: Text.Wrap
-                                }
-                            }
-
-                            ToggleSwitch {
-                                checked: !!fluxUser && fluxUser.devModeUnlocked
-                                onToggled: function(val) {
-                                    if (!val) {
-                                        if (fluxUser) fluxUser.devModeUnlocked = false
-                                        panel.showPinPrompt = false
-                                        devPinInput.text = ""
-                                        panel.devPinErrorText = ""
-                                        panel.customCodeSavedText = ""
-                                    } else {
-                                        panel.showPinPrompt = true
-                                        panel.devPinErrorText = ""
-                                        devPinInput.forceActiveFocus()
-                                    }
-                                }
-                            }
-                        }
-
-                        // --- 2. PIN Entry Prompt (shown when user flips toggle ON but mode is not yet unlocked) ---
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            visible: (!fluxUser || !fluxUser.devModeUnlocked) && panel.showPinPrompt
-                            spacing: 10
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: 1
-                                color: Theme.border
-                            }
-
-                            Text {
-                                text: "Enter 4-digit PIN to enable Developer Mode:"
-                                color: Theme.text
-                                font.pixelSize: 12
-                                font.weight: Font.Medium
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 10
-
-                                Rectangle {
-                                    implicitHeight: 40
-                                    implicitWidth: 140
-                                    radius: 10
-                                    color: devPinInput.activeFocus ? "#26FFFFFF" : "#1AFFFFFF"
-                                    border.width: 1
-                                    border.color: panel.devPinErrorText.length > 0 ? Theme.danger : (devPinInput.activeFocus ? Theme.accentRing : Theme.border)
-
-                                    TextField {
-                                        id: devPinInput
-                                        anchors.fill: parent
-                                        anchors.leftMargin: 12
-                                        anchors.rightMargin: 12
-                                        echoMode: TextInput.Password
-                                        placeholderText: "\u2022 \u2022 \u2022 \u2022"
-                                        placeholderTextColor: Theme.textMute
-                                        color: Theme.text
-                                        font.pixelSize: 18
-                                        font.weight: Font.Bold
-                                        font.letterSpacing: 6
-                                        horizontalAlignment: TextInput.AlignHCenter
-                                        verticalAlignment: TextInput.AlignVCenter
-                                        maximumLength: 8
-                                        inputMethodHints: Qt.ImhDigitsOnly
-                                        selectByMouse: true
-                                        background: null
-                                        validator: RegularExpressionValidator { regularExpression: /^\d{0,8}$/ }
-                                        onAccepted: panel.unlockDevMode()
-                                        onTextChanged: panel.devPinErrorText = ""
-                                    }
-                                }
-
-                                FluxButton {
-                                    text: "Confirm"
-                                    implicitHeight: 40
-                                    enabled: devPinInput.text.trim().length >= 4
-                                    onClicked: panel.unlockDevMode()
-                                }
-
-                                FluxButton {
-                                    text: "Cancel"
-                                    variant: "ghost"
-                                    implicitHeight: 40
-                                    onClicked: {
-                                        panel.showPinPrompt = false
-                                        devPinInput.text = ""
-                                        panel.devPinErrorText = ""
-                                    }
-                                }
-
-                                Item { Layout.fillWidth: true }
-                            }
-
-                            Text {
-                                visible: panel.devPinErrorText.length > 0
-                                text: panel.devPinErrorText
-                                color: Theme.danger
-                                font.pixelSize: 12
-                            }
-                        }
-
-                        // --- 3. Developer Options Content (shown only when unlocked / ON) ---
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            visible: !!fluxUser && fluxUser.devModeUnlocked
-                            spacing: 14
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: 1
-                                color: Theme.border
-                            }
-
-                            // Personal Teleparty Code setting
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 12
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    Layout.preferredWidth: 0
-                                    spacing: 2
-
-                                    Text {
-                                        text: "Personal Teleparty Code"
-                                        color: Theme.text
-                                        font.pixelSize: 14
-                                        font.weight: Font.DemiBold
-                                    }
-
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: "When hosting, always generate this custom code instead of a random 5-digit number."
-                                        color: Theme.textMute
-                                        font.pixelSize: 12
-                                        wrapMode: Text.Wrap
-                                    }
-                                }
-
-                                ToggleSwitch {
-                                    checked: fluxUser ? fluxUser.useCustomTelepartyCode : false
-                                    onToggled: function(val) {
-                                        if (fluxUser) fluxUser.useCustomTelepartyCode = val
-                                    }
-                                }
-                            }
-
-                            // Custom code input field (shown when toggle is on)
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                visible: !!fluxUser && fluxUser.useCustomTelepartyCode
-                                spacing: 8
-
+                            SteamCard {
                                 RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Primary Media Server"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Select the BDIX streaming mirror for browsing movies, series, and top picks."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                            wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+
+                                    // Server Selector Button
+                                    Rectangle {
+                                        implicitWidth: 210
+                                        implicitHeight: 34
+                                        radius: 4
+                                        color: srvMouse.containsMouse ? "#282e3a" : "#171a21"
+                                        border.width: 1
+                                        border.color: "#384152"
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 12
+                                            anchors.rightMargin: 10
+
+                                            Text {
+                                                text: (fluxUser && fluxUser.activeServer === 2)
+                                                    ? "Server 2 (ICC Flix)"
+                                                    : "Server 1 (Dhaka Flix)"
+                                                color: panel.cTextWhite
+                                                font.pixelSize: 12
+                                                font.weight: Font.DemiBold
+                                                Layout.fillWidth: true
+                                            }
+
+                                            FluxIcon {
+                                                name: "chevronDown"
+                                                size: 12
+                                                color: panel.cSteamBlue
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            id: srvMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (fluxUser) {
+                                                    fluxUser.activeServer = (fluxUser.activeServer === 1) ? 2 : 1
+                                                    panel.serverTestStatus = ""
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Host addresses info card
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 4
+
+                                        RowLayout {
+                                            spacing: 8
+                                            Rectangle { width: 6; height: 6; radius: 3; color: (fluxUser && fluxUser.activeServer === 1) ? panel.cSteamBlue : panel.cTextMute }
+                                            Text { text: "Server 1: Dhaka Flix"; color: panel.cTextWhite; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                            Text { text: "http://172.16.50.14/"; color: panel.cTextMute; font.family: Theme.monoFamily; font.pixelSize: 11 }
+                                        }
+
+                                        RowLayout {
+                                            spacing: 8
+                                            Rectangle { width: 6; height: 6; radius: 3; color: (fluxUser && fluxUser.activeServer === 2) ? panel.cSteamBlue : panel.cTextMute }
+                                            Text { text: "Server 2: ICC Flix"; color: panel.cTextWhite; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                            Text { text: "http://10.16.100.244/"; color: panel.cTextMute; font.family: Theme.monoFamily; font.pixelSize: 11 }
+                                        }
+                                    }
+                                }
+                            }
+
+                            SteamSectionTitle { text: "Connection & Latency Diagnostic" }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Ping & Reachability"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: panel.serverTestStatus !== ""
+                                                ? panel.serverTestStatus
+                                                : "Test round-trip latency to verify active BDIX server connectivity."
+                                            color: panel.serverTestStatus === "" ? panel.cTextMute
+                                                 : panel.serverTestSuccess ? Theme.success
+                                                 : Theme.danger
+                                            font.pixelSize: 12
+                                            font.weight: panel.serverTestStatus !== "" ? Font.DemiBold : Font.Normal
+                                            wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+
+                                    SteamButton {
+                                        text: panel.serverTesting ? "Testing..." : "Test Latency"
+                                        iconName: panel.serverTesting ? "refresh" : "swap"
+                                        isAccent: false
+                                        onClicked: {
+                                            if (panel.serverTesting) return
+                                            panel.serverTesting = true
+                                            panel.serverTestStatus = "Checking server response..."
+                                            var targetUrl = (fluxUser && fluxUser.activeServer === 2)
+                                                ? "http://10.16.100.244/"
+                                                : "http://172.16.50.14/"
+                                            var xhr = new XMLHttpRequest()
+                                            var startTime = Date.now()
+                                            xhr.open("HEAD", targetUrl, true)
+                                            xhr.timeout = 3500
+                                            xhr.onreadystatechange = function() {
+                                                if (xhr.readyState === XMLHttpRequest.DONE) {
+                                                    panel.serverTesting = false
+                                                    var elapsed = Date.now() - startTime
+                                                    if (xhr.status > 0) {
+                                                        panel.serverTestSuccess = true
+                                                        panel.serverTestStatus = "Online · Latency " + elapsed + " ms"
+                                                    } else {
+                                                        panel.serverTestSuccess = false
+                                                        panel.serverTestStatus = "Server unreachable (timeout / ISP restriction)"
+                                                    }
+                                                }
+                                            }
+                                            xhr.ontimeout = function() {
+                                                panel.serverTesting = false
+                                                panel.serverTestSuccess = false
+                                                panel.serverTestStatus = "Request timed out (> 3.5s)"
+                                            }
+                                            xhr.send()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ====================================================
+                        // 2. DOWNLOADS TAB (Steam-style 1:1)
+                        // ====================================================
+                        ColumnLayout {
+                            visible: panel.currentTab === "downloads"
+                            Layout.fillWidth: true
+                            spacing: 12
+
+                            SteamSectionTitle { text: "Download Location" }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 6
+
+                                        Text {
+                                            text: "Downloads folder"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        // Monospace path preview box
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            implicitHeight: 32
+                                            radius: 4
+                                            color: "#171a21"
+                                            border.width: 1
+                                            border.color: panel.errorText !== "" ? Theme.danger : "#2f3644"
+
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+
+                                                Text {
+                                                    text: fluxDownloads ? fluxDownloads.downloadLocation : "C:\\Users\\Downloads"
+                                                    color: panel.cTextWhite
+                                                    font.family: Theme.monoFamily
+                                                    font.pixelSize: 11
+                                                    elide: Text.ElideMiddle
+                                                    Layout.fillWidth: true
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            visible: panel.errorText !== ""
+                                            text: panel.errorText
+                                            color: Theme.danger
+                                            font.pixelSize: 11
+                                            font.weight: Font.DemiBold
+                                        }
+                                    }
+
+                                    ColumnLayout {
+                                        spacing: 6
+                                        Layout.alignment: Qt.AlignBottom
+
+                                        RowLayout {
+                                            spacing: 8
+
+                                            SteamButton {
+                                                text: "Change..."
+                                                iconName: "folder"
+                                                onClicked: picker.open()
+                                            }
+
+                                            SteamButton {
+                                                visible: !panel.atDefaultLocation
+                                                text: "Reset"
+                                                onClicked: {
+                                                    if (fluxDownloads) fluxDownloads.resetLocation()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Subfolder Structure
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 4
+
+                                        Text {
+                                            text: "Automated Subfolder Sorting"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Downloaded media is automatically routed into dedicated subfolders:"
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                        }
+
+                                        RowLayout {
+                                            spacing: 8
+                                            Text { text: "Series:"; color: panel.cTextDim; font.pixelSize: 11; font.weight: Font.DemiBold }
+                                            Text { text: (fluxDownloads ? fluxDownloads.downloadLocation : "") + "\\Series"; color: panel.cTextWhite; font.family: Theme.monoFamily; font.pixelSize: 11; elide: Text.ElideMiddle }
+                                        }
+
+                                        RowLayout {
+                                            spacing: 8
+                                            Text { text: "Movies:"; color: panel.cTextDim; font.pixelSize: 11; font.weight: Font.DemiBold }
+                                            Text { text: (fluxDownloads ? fluxDownloads.downloadLocation : "") + "\\Movies"; color: panel.cTextWhite; font.family: Theme.monoFamily; font.pixelSize: 11; elide: Text.ElideMiddle }
+                                        }
+                                    }
+                                }
+                            }
+
+                            SteamSectionTitle { text: "Download Options" }
+
+                            // Steam Toggle Rows
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Display download rates in bits per second"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Show speeds in Mbps rather than MB/s in the download manager."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                        }
+                                    }
+
+                                    SteamToggle {
+                                        checked: false
+                                        onToggled: function(val) { checked = val }
+                                    }
+                                }
+                            }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Throttle downloads while streaming"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Limit background file transfers so active video playback maintains high bandwidth."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                        }
+                                    }
+
+                                    SteamToggle {
+                                        checked: true
+                                        onToggled: function(val) { checked = val }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ====================================================
+                        // 3. PLAYBACK TAB
+                        // ====================================================
+                        ColumnLayout {
+                            visible: panel.currentTab === "playback"
+                            Layout.fillWidth: true
+                            spacing: 12
+
+                            SteamSectionTitle { text: "Playback Behavior" }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Autoplay next episode"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Continue with the next available episode in the folder when the current one ends."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                        }
+                                    }
+
+                                    SteamToggle {
+                                        checked: fluxUser ? fluxUser.autoplayNext : true
+                                        onToggled: function(val) {
+                                            if (fluxUser) fluxUser.autoplayNext = val
+                                        }
+                                    }
+                                }
+                            }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Hardware accelerated decoding"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Use D3D11 / DXVA2 GPU hardware decoding for smooth 4K HEVC & H.264 streams."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                        }
+                                    }
+
+                                    SteamToggle {
+                                        checked: true
+                                        onToggled: function(val) { checked = val }
+                                    }
+                                }
+                            }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Remember playback position"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Save timestamp checkpoints to prompt resuming when returning to a video."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                        }
+                                    }
+
+                                    SteamToggle {
+                                        checked: true
+                                        onToggled: function(val) { checked = val }
+                                    }
+                                }
+                            }
+
+                            SteamSectionTitle { text: "Dialogue & Subtitle Preference" }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Prioritize full dialogue tracks over signs"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Automatically prefer main English dialogue subtitles over auxiliary Songs & Signs."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                        }
+                                    }
+
+                                    SteamToggle {
+                                        checked: true
+                                        onToggled: function(val) { checked = val }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ====================================================
+                        // 4. LIBRARY & STORAGE TAB
+                        // ====================================================
+                        ColumnLayout {
+                            visible: panel.currentTab === "storage"
+                            Layout.fillWidth: true
+                            spacing: 12
+
+                            SteamSectionTitle { text: "Local Scanned Folders" }
+
+                            SteamCard {
+                                ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 10
 
-                                    Rectangle {
-                                        implicitHeight: 40
+                                    RowLayout {
                                         Layout.fillWidth: true
-                                        Layout.preferredWidth: 0
-                                        radius: 10
-                                        color: customCodeInput.activeFocus ? "#26FFFFFF" : "#1AFFFFFF"
-                                        border.width: 1
-                                        border.color: customCodeInput.activeFocus ? Theme.accentRing : Theme.border
 
-                                        TextField {
-                                            id: customCodeInput
-                                            anchors.fill: parent
-                                            anchors.leftMargin: 12
-                                            anchors.rightMargin: 12
-                                            text: fluxUser ? fluxUser.customTelepartyCode : ""
-                                            placeholderText: "e.g. CFAT, SHIFA, 77777"
-                                            placeholderTextColor: Theme.textMute
-                                            color: Theme.text
-                                            font.pixelSize: 14
-                                            font.weight: Font.Bold
-                                            font.letterSpacing: 2
-                                            verticalAlignment: TextInput.AlignVCenter
-                                            maximumLength: 16
-                                            selectByMouse: true
-                                            background: null
-                                            validator: RegularExpressionValidator { regularExpression: /^[a-zA-Z0-9_-]{0,16}$/ }
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 2
 
-                                            onEditingFinished: {
-                                                if (fluxUser) fluxUser.customTelepartyCode = text.trim().toUpperCase()
+                                            Text {
+                                                text: "Additional Library Targets"
+                                                color: panel.cTextWhite
+                                                font.pixelSize: 13
+                                                font.weight: Font.DemiBold
+                                            }
+
+                                            Text {
+                                                text: "Folders on this PC scanned for local offline movies and series."
+                                                color: panel.cTextMute
+                                                font.pixelSize: 12
+                                            }
+                                        }
+
+                                        SteamButton {
+                                            text: "Add Folder..."
+                                            iconName: "folder"
+                                            onClicked: targetPicker.open()
+                                        }
+                                    }
+
+                                    Text {
+                                        visible: panel.targetErrorText !== ""
+                                        text: panel.targetErrorText
+                                        color: Theme.danger
+                                        font.pixelSize: 11
+                                        font.weight: Font.DemiBold
+                                    }
+
+                                    // List of targets
+                                    ListView {
+                                        id: targetList
+                                        Layout.fillWidth: true
+                                        implicitHeight: Math.min(180, contentHeight)
+                                        clip: true
+                                        spacing: 6
+                                        model: fluxDownloads ? fluxDownloads.targets : []
+
+                                        delegate: Rectangle {
+                                            width: targetList.width
+                                            height: 36
+                                            radius: 4
+                                            color: "#171a21"
+                                            border.width: 1
+                                            border.color: "#2a303c"
+
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 12
+                                                anchors.rightMargin: 8
+                                                spacing: 8
+
+                                                FluxIcon {
+                                                    name: "folder"
+                                                    size: 14
+                                                    color: panel.cSteamBlue
+                                                }
+
+                                                Text {
+                                                    text: modelData
+                                                    color: panel.cTextWhite
+                                                    font.family: Theme.monoFamily
+                                                    font.pixelSize: 11
+                                                    elide: Text.ElideMiddle
+                                                    Layout.fillWidth: true
+                                                }
+
+                                                Rectangle {
+                                                    width: 26
+                                                    height: 26
+                                                    radius: 3
+                                                    color: delMouse.containsMouse ? "#3b2025" : "transparent"
+
+                                                    FluxIcon {
+                                                        anchors.centerIn: parent
+                                                        name: "close"
+                                                        size: 12
+                                                        color: delMouse.containsMouse ? Theme.danger : panel.cTextMute
+                                                    }
+
+                                                    MouseArea {
+                                                        id: delMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: {
+                                                            if (fluxDownloads) fluxDownloads.removeTarget(modelData)
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
 
-                                    FluxButton {
-                                        text: "Save"
-                                        implicitHeight: 40
-                                        enabled: customCodeInput.text.trim().length >= 3
+                                    Text {
+                                        visible: !fluxDownloads || !fluxDownloads.targets || fluxDownloads.targets.length === 0
+                                        text: "No extra folders added yet."
+                                        color: panel.cTextMute
+                                        font.pixelSize: 12
+                                        font.italic: true
+                                        Layout.topMargin: 4
+                                    }
+                                }
+                            }
+
+                            SteamSectionTitle { text: "Cache & Temporary Files" }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Stream & Thumbnail Cache"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Storage used: " + (fluxCache ? fluxCache.sizeText : "0 B")
+                                            color: panel.cSteamBlue
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: fluxDownloads ? (fluxDownloads.downloadLocation + "\\.cache") : ""
+                                            color: panel.cTextMute
+                                            font.family: Theme.monoFamily
+                                            font.pixelSize: 11
+                                            elide: Text.ElideMiddle
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+
+                                    SteamButton {
+                                        text: "Clear Cache"
+                                        iconName: "refresh"
                                         onClicked: {
-                                            if (fluxUser) {
-                                                fluxUser.customTelepartyCode = customCodeInput.text.trim().toUpperCase()
-                                                panel.customCodeSavedText = "Personal code set to \"" + fluxUser.customTelepartyCode + "\""
-                                                customCodeSavedTimer.restart()
-                                            }
+                                            if (fluxCache) fluxCache.clearCache()
                                         }
                                     }
-                                }
-
-                                Text {
-                                    visible: panel.customCodeSavedText.length > 0
-                                    text: panel.customCodeSavedText
-                                    color: "#46D369"
-                                    font.pixelSize: 11
-                                }
-
-                                Text {
-                                    text: "3-16 alphanumeric characters. Friends enter this exact code when joining."
-                                    color: Theme.textMute
-                                    font.pixelSize: 11
                                 }
                             }
                         }
+
+                        // ====================================================
+                        // 5. INTERFACE TAB
+                        // ====================================================
+                        ColumnLayout {
+                            visible: panel.currentTab === "interface"
+                            Layout.fillWidth: true
+                            spacing: 12
+
+                            SteamSectionTitle { text: "Visual Theme" }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Steam Dark Theme & Accent Styling"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Active Steam dark navy palette with signature electric blue accents."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                        }
+                                    }
+
+                                    SteamToggle {
+                                        checked: true
+                                        onToggled: function(val) { checked = val }
+                                    }
+                                }
+                            }
+
+                            SteamSectionTitle { text: "Window & Notifications" }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Windows 11 Snap Layouts"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Native Aero snap grid and resize handles for borderless window."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                        }
+                                    }
+
+                                    SteamToggle {
+                                        checked: true
+                                        onToggled: function(val) { checked = val }
+                                    }
+                                }
+                            }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Check for updates on startup"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "Notify when a new version of FLUX is released on GitHub."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                        }
+                                    }
+
+                                    SteamToggle {
+                                        checked: true
+                                        onToggled: function(val) { checked = val }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ====================================================
+                        // 6. DEVELOPER TAB
+                        // ====================================================
+                        ColumnLayout {
+                            visible: panel.currentTab === "developer"
+                            Layout.fillWidth: true
+                            spacing: 12
+
+                            SteamSectionTitle { text: "Developer Security" }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "Developer Mode"
+                                            color: (fluxUser && fluxUser.devModeUnlocked) ? Theme.success : panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: (fluxUser && fluxUser.devModeUnlocked)
+                                                ? "Developer mode unlocked. Diagnostic tools and room code overrides active."
+                                                : "Protected mode. Enter 4-digit PIN to access internal diagnostics."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                        }
+                                    }
+
+                                    SteamToggle {
+                                        checked: !!fluxUser && fluxUser.devModeUnlocked
+                                        onToggled: function(val) {
+                                            if (!val) {
+                                                if (fluxUser) fluxUser.devModeUnlocked = false
+                                                panel.showPinPrompt = false
+                                            } else {
+                                                panel.showPinPrompt = true
+                                                panel.devPinErrorText = ""
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // PIN prompt card
+                            SteamCard {
+                                visible: (!fluxUser || !fluxUser.devModeUnlocked) && panel.showPinPrompt
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 12
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 4
+
+                                        Text {
+                                            text: "Enter 4-Digit Developer PIN"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        RowLayout {
+                                            spacing: 8
+
+                                            Rectangle {
+                                                width: 130
+                                                height: 32
+                                                radius: 4
+                                                color: "#171a21"
+                                                border.width: 1
+                                                border.color: panel.devPinErrorText !== "" ? Theme.danger : "#384152"
+
+                                                TextInput {
+                                                    id: devPinInput
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 8
+                                                    anchors.rightMargin: 8
+                                                    verticalAlignment: TextInput.AlignVCenter
+                                                    color: panel.cTextWhite
+                                                    echoMode: TextInput.Password
+                                                    maximumLength: 4
+                                                    font.pixelSize: 14
+                                                    font.family: Theme.monoFamily
+                                                    onAccepted: panel.unlockDevMode()
+                                                }
+                                            }
+
+                                            SteamButton {
+                                                text: "Unlock"
+                                                isAccent: true
+                                                onClicked: panel.unlockDevMode()
+                                            }
+
+                                            SteamButton {
+                                                text: "Cancel"
+                                                onClicked: panel.showPinPrompt = false
+                                            }
+                                        }
+
+                                        Text {
+                                            visible: panel.devPinErrorText !== ""
+                                            text: panel.devPinErrorText
+                                            color: Theme.danger
+                                            font.pixelSize: 11
+                                            font.weight: Font.DemiBold
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Unlocked developer settings
+                            ColumnLayout {
+                                visible: !!fluxUser && fluxUser.devModeUnlocked
+                                Layout.fillWidth: true
+                                spacing: 12
+
+                                SteamSectionTitle { text: "Teleparty Room Code Overrides" }
+
+                                SteamCard {
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 16
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 2
+
+                                            Text {
+                                                text: "Use Personal Custom Room Code"
+                                                color: panel.cTextWhite
+                                                font.pixelSize: 13
+                                                font.weight: Font.DemiBold
+                                            }
+
+                                            Text {
+                                                text: "Host Teleparty sessions with your fixed vanity code instead of random generation."
+                                                color: panel.cTextMute
+                                                font.pixelSize: 12
+                                            }
+                                        }
+
+                                        SteamToggle {
+                                            checked: fluxUser ? fluxUser.useCustomTelepartyCode : false
+                                            onToggled: function(val) {
+                                                if (fluxUser) fluxUser.useCustomTelepartyCode = val
+                                            }
+                                        }
+                                    }
+                                }
+
+                                SteamCard {
+                                    visible: !!fluxUser && fluxUser.useCustomTelepartyCode
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 12
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 4
+
+                                            Text {
+                                                text: "Personal Room Code"
+                                                color: panel.cTextWhite
+                                                font.pixelSize: 13
+                                                font.weight: Font.DemiBold
+                                            }
+
+                                            RowLayout {
+                                                spacing: 8
+
+                                                Rectangle {
+                                                    width: 180
+                                                    height: 32
+                                                    radius: 4
+                                                    color: "#171a21"
+                                                    border.width: 1
+                                                    border.color: "#384152"
+
+                                                    TextInput {
+                                                        id: customCodeInput
+                                                        anchors.fill: parent
+                                                        anchors.leftMargin: 8
+                                                        anchors.rightMargin: 8
+                                                        verticalAlignment: TextInput.AlignVCenter
+                                                        color: panel.cTextWhite
+                                                        text: fluxUser ? fluxUser.customTelepartyCode : ""
+                                                        maximumLength: 12
+                                                        font.pixelSize: 13
+                                                        font.family: Theme.monoFamily
+                                                        font.capitalization: Font.AllUppercase
+                                                        onAccepted: {
+                                                            if (fluxUser) {
+                                                                fluxUser.customTelepartyCode = text.trim().toUpperCase()
+                                                                panel.customCodeSavedText = "Code saved: " + fluxUser.customTelepartyCode
+                                                                customCodeSavedTimer.restart()
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                SteamButton {
+                                                    text: "Save Code"
+                                                    isAccent: true
+                                                    onClicked: {
+                                                        if (fluxUser) {
+                                                            fluxUser.customTelepartyCode = customCodeInput.text.trim().toUpperCase()
+                                                            panel.customCodeSavedText = "Code saved: " + fluxUser.customTelepartyCode
+                                                            customCodeSavedTimer.restart()
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            Text {
+                                                visible: panel.customCodeSavedText !== ""
+                                                text: panel.customCodeSavedText
+                                                color: Theme.success
+                                                font.pixelSize: 11
+                                                font.weight: Font.DemiBold
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ====================================================
+                        // 7. ABOUT TAB
+                        // ====================================================
+                        ColumnLayout {
+                            visible: panel.currentTab === "about"
+                            Layout.fillWidth: true
+                            spacing: 12
+
+                            SteamSectionTitle { text: "About FLUX" }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    Image {
+                                        source: "qrc:/FLUX/resources/flux.png"
+                                        width: 52
+                                        height: 52
+                                        sourceSize: Qt.size(104, 104)
+                                        fillMode: Image.PreserveAspectFit
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: "FLUX Media Player"
+                                            color: panel.cTextWhite
+                                            font.pixelSize: 16
+                                            font.weight: Font.Bold
+                                        }
+
+                                        Text {
+                                            text: "Version 2.2.5 (Windows x64)"
+                                            color: panel.cSteamBlue
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            text: "High-performance BDIX media player with Teleparty, Syncplay, and hardware-accelerated streaming."
+                                            color: panel.cTextMute
+                                            font.pixelSize: 12
+                                            wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+                                }
+                            }
+
+                            SteamCard {
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 16
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 4
+
+                                        Text { text: "Engine & Core Technologies"; color: panel.cTextWhite; font.pixelSize: 13; font.weight: Font.DemiBold }
+                                        Text { text: "• LibVLC 3.0.21 Multimedia Pipeline with FreeType text scaler"; color: panel.cTextMute; font.pixelSize: 11 }
+                                        Text { text: "• Qt 6.5.3 Quick Controls with C++ Accelerated QML Engine"; color: panel.cTextMute; font.pixelSize: 11 }
+                                        Text { text: "• Discord & Steam Hybrid Design Language"; color: panel.cTextMute; font.pixelSize: 11 }
+                                    }
+                                }
+                            }
+                        }
+
+                        Item { implicitHeight: 24 }
                     }
                 }
             }
