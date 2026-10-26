@@ -12,8 +12,6 @@
 #include <QIcon>
 #include <QFile>
 #include <QQuickWindow>
-#include <QLocalServer>
-#include <QLocalSocket>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -32,26 +30,43 @@ int main(int argc, char *argv[]) {
 
     QGuiApplication app(argc, argv);
 
+    bool startedFromBoot = false;
+    bool allowMultiple = false;
+    for (int i = 1; i < argc; ++i) {
+        QString arg = QString::fromLocal8Bit(argv[i]);
+        if (arg == QStringLiteral("--autostart") || arg == QStringLiteral("-autostart")) {
+            startedFromBoot = true;
+        } else if (arg == QStringLiteral("--multi") || arg == QStringLiteral("--multi-instance") || arg == QStringLiteral("-m") || arg == QStringLiteral("/multi")) {
+            allowMultiple = true;
+        }
+    }
+    if (qEnvironmentVariableIsSet("FLUX_MULTI_INSTANCE")) {
+        allowMultiple = true;
+    }
+
 #ifdef Q_OS_WIN
     // Ensure normal process priority class even when launched by Windows boot sequence
     SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
 
-    // Single-instance enforcement: if FLUX is already running, activate it and exit
-    HANDLE hSingleInstanceMutex = CreateMutexW(NULL, TRUE, L"Local\\FLUX_SingleInstance_Mutex");
-    if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        AllowSetForegroundWindow(ASFW_ANY);
-        UINT activateMsg = RegisterWindowMessageW(L"FLUX_ACTIVATE_INSTANCE");
-        if (activateMsg) {
-            PostMessageW(HWND_BROADCAST, activateMsg, 0, 0);
-            HWND hwnd = FindWindowW(NULL, L"FLUX");
-            if (hwnd) {
-                PostMessageW(hwnd, activateMsg, 0, 0);
+    HANDLE hSingleInstanceMutex = NULL;
+    if (!allowMultiple) {
+        // Single-instance enforcement: if FLUX is already running, activate it and exit
+        hSingleInstanceMutex = CreateMutexW(NULL, TRUE, L"Local\\FLUX_SingleInstance_Mutex");
+        if (GetLastError() == ERROR_ALREADY_EXISTS) {
+            AllowSetForegroundWindow(ASFW_ANY);
+            UINT activateMsg = RegisterWindowMessageW(L"FLUX_ACTIVATE_INSTANCE");
+            if (activateMsg) {
+                PostMessageW(HWND_BROADCAST, activateMsg, 0, 0);
+                HWND hwnd = FindWindowW(NULL, L"FLUX");
+                if (hwnd) {
+                    PostMessageW(hwnd, activateMsg, 0, 0);
+                }
             }
+            if (hSingleInstanceMutex) {
+                CloseHandle(hSingleInstanceMutex);
+            }
+            return 0;
         }
-        if (hSingleInstanceMutex) {
-            CloseHandle(hSingleInstanceMutex);
-        }
-        return 0;
     }
 #endif
 
@@ -83,18 +98,7 @@ int main(int argc, char *argv[]) {
     QQmlApplicationEngine engine;
     Flux::Application fluxApp;
 
-
-
-    bool startedFromBoot = false;
-    for (int i = 1; i < argc; ++i) {
-        QString arg = QString::fromLocal8Bit(argv[i]);
-        if (arg == QStringLiteral("--autostart") || arg == QStringLiteral("-autostart")) {
-            startedFromBoot = true;
-            break;
-        }
-    }
-
-    if (!fluxApp.initialize(engine, startedFromBoot)) {
+    if (!fluxApp.initialize(engine, startedFromBoot, allowMultiple)) {
         FLUX_LOG_ERROR("Main", "Failed to initialize FLUX application services!");
         return -1;
     }

@@ -29,7 +29,7 @@ public:
     explicit Application(QObject *parent = nullptr);
     ~Application() override;
 
-    bool initialize(QQmlApplicationEngine &engine, bool startedFromBoot = false);
+    bool initialize(QQmlApplicationEngine &engine, bool startedFromBoot = false, bool isMultiInstance = false);
 
     VLCPlayer* player() const { return m_player.get(); }
     TestMediaModel* testMedia() const { return m_testMedia.get(); }

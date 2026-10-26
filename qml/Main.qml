@@ -683,6 +683,13 @@ ApplicationWindow {
         onActivated: toggleFullscreen()
     }
 
+    Shortcut {
+        sequence: "Ctrl+Shift+N"
+        onActivated: {
+            if (fluxSystem) fluxSystem.launchSecondInstance()
+        }
+    }
+
     // ---- Startup transition & keyboard focus management ----------------------------
     property bool networkNoticeShown: false
 

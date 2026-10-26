@@ -35,7 +35,7 @@ Application::~Application() {
     VLCInstance::instance().shutdown();
 }
 
-bool Application::initialize(QQmlApplicationEngine &engine, bool startedFromBoot) {
+bool Application::initialize(QQmlApplicationEngine &engine, bool startedFromBoot, bool isMultiInstance) {
     FLUX_LOG_INFO("Application", QString("Starting FLUX Media Player v%1...").arg(QString::fromLatin1(FLUX_VERSION)));
 
     // 1. Initialize libVLC instance asynchronously in background so splash and UI appear instantly
@@ -58,7 +58,7 @@ bool Application::initialize(QQmlApplicationEngine &engine, bool startedFromBoot
     m_userStore = std::make_unique<UserStore>(this);
     m_bookmarks = std::make_unique<BookmarkManager>(this);
     m_updater = std::make_unique<Updater>(this);
-    m_system = std::make_unique<SystemManager>(m_userStore.get(), startedFromBoot, this);
+    m_system = std::make_unique<SystemManager>(m_userStore.get(), startedFromBoot, isMultiInstance, this);
     // Pre-warm update check immediately so the splash popup has data without waiting
     m_updater->checkForUpdates(true);
 

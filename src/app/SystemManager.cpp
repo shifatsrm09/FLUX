@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QGuiApplication>
 #include <QTimer>
+#include <QProcess>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -96,10 +97,10 @@ public:
                     m_manager->showContextMenu();
                     return true;
                 }
-            } else if (m_manager->activateInstanceMsg() && msg->message == m_manager->activateInstanceMsg()) {
+            } else if (!m_manager->isMultiInstance() && m_manager->activateInstanceMsg() && msg->message == m_manager->activateInstanceMsg()) {
                 m_manager->showWindow();
                 return true;
-            } else if (m_manager->taskbarCreatedMsg() && msg->message == m_manager->taskbarCreatedMsg()) {
+            } else if (!m_manager->isMultiInstance() && m_manager->taskbarCreatedMsg() && msg->message == m_manager->taskbarCreatedMsg()) {
                 m_manager->reinstallTray();
                 return true;
             }
@@ -115,11 +116,18 @@ private:
     SystemManager *m_manager;
 };
 
-SystemManager::SystemManager(UserStore *userStore, bool startedFromBoot, QObject *parent)
+SystemManager::SystemManager(UserStore *userStore, bool startedFromBoot, bool isMultiInstance, QObject *parent)
     : QObject(parent)
     , m_userStore(userStore)
     , m_startedFromBoot(startedFromBoot)
+    , m_isMultiInstance(isMultiInstance)
 {
+    if (m_isMultiInstance) {
+        // Multi-instance: quit when window is closed, never install tray icon, never touch autostart
+        QGuiApplication::setQuitOnLastWindowClosed(true);
+        return;
+    }
+
     // Ensure Qt does not quit when the window is hidden to tray
     QGuiApplication::setQuitOnLastWindowClosed(false);
 
@@ -215,6 +223,7 @@ void SystemManager::setAutostartEnabled(bool enabled) {
 }
 
 bool SystemManager::isCloseToTrayEnabled() const {
+    if (m_isMultiInstance) return false;
     if (m_userStore) {
         return m_userStore->boolValue(QStringLiteral("system/close_to_tray"), true);
     }
@@ -303,7 +312,7 @@ void SystemManager::showContextMenu() {
 
 void SystemManager::initTray() {
 #ifdef Q_OS_WIN
-    if (m_trayInstalled || !m_window) return;
+    if (m_isMultiInstance || m_trayInstalled || !m_window) return;
 
     HWND hwnd = reinterpret_cast<HWND>(m_window->winId());
     if (!hwnd) return;
@@ -394,6 +403,12 @@ void SystemManager::checkAndUpdateAutostartPath() {
         RegCloseKey(hKey);
     }
 #endif
+}
+
+void SystemManager::launchSecondInstance() {
+    QString exePath = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
+    FLUX_LOG_INFO("System", "Spawning secondary FLUX instance via: " + exePath);
+    QProcess::startDetached(exePath, QStringList() << QStringLiteral("--multi"));
 }
 
 } // namespace Flux

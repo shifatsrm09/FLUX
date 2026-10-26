@@ -16,16 +16,18 @@ class SystemManager : public QObject {
     Q_PROPERTY(bool autostart READ isAutostartEnabled WRITE setAutostartEnabled NOTIFY autostartChanged)
     Q_PROPERTY(bool closeToTray READ isCloseToTrayEnabled WRITE setCloseToTrayEnabled NOTIFY closeToTrayChanged)
     Q_PROPERTY(bool startedFromBoot READ startedFromBoot CONSTANT)
+    Q_PROPERTY(bool isMultiInstance READ isMultiInstance CONSTANT)
     Q_PROPERTY(bool isExiting READ isExiting NOTIFY isExitingChanged)
 
 public:
-    explicit SystemManager(UserStore *userStore, bool startedFromBoot, QObject *parent = nullptr);
+    explicit SystemManager(UserStore *userStore, bool startedFromBoot, bool isMultiInstance = false, QObject *parent = nullptr);
     ~SystemManager() override;
 
     void setWindow(QQuickWindow *window);
     QQuickWindow* window() const { return m_window; }
 
     bool startedFromBoot() const { return m_startedFromBoot; }
+    bool isMultiInstance() const { return m_isMultiInstance; }
     bool isExiting() const { return m_isExiting; }
 
     bool isAutostartEnabled() const;
@@ -37,6 +39,7 @@ public:
     Q_INVOKABLE void showWindow();
     Q_INVOKABLE void hideWindow();
     Q_INVOKABLE void exitApp();
+    Q_INVOKABLE void launchSecondInstance();
 
     void showContextMenu();
     void reinstallTray();
@@ -56,6 +59,7 @@ private:
 
     UserStore *m_userStore = nullptr;
     bool m_startedFromBoot = false;
+    bool m_isMultiInstance = false;
     bool m_isExiting = false;
     QPointer<QQuickWindow> m_window;
     std::unique_ptr<TrayEventFilter> m_eventFilter;
