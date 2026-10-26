@@ -6,10 +6,7 @@ import "Theme.js" as Theme
 // The "Teleparty" menu in the title bar. Declared as a child of the button that opens it
 // (see ClassicTitleBar.qml).
 //
-// Backed by `fluxTeleparty`; its `state` is one of  idle | connecting | joined | reconnecting
-//   idle                  -> Host / Join choice (Join asks for the 5-digit code)
-//   connecting            -> "Connecting..." with a cancel button
-//   joined / reconnecting -> the session code, member count and "Leave session"
+// Matches the FLUX Settings (Steam dark theme) design with square borders.
 Popup {
     id: menu
 
@@ -20,6 +17,17 @@ Popup {
     property bool joining: false
     // Briefly true after the code was copied
     property bool copied: false
+
+    // Steam Dark Theme Palette matching FLUX Settings
+    readonly property color cSidebarBg: "#171a21"
+    readonly property color cContentBg: "#1b1e24"
+    readonly property color cBorder: "#2a2f3a"
+    readonly property color cCardBg: "#21252d"
+    readonly property color cCardBorder: "#2e3440"
+    readonly property color cSteamBlue: "#1a9fff"
+    readonly property color cTextWhite: "#F2F3F5"
+    readonly property color cTextDim: "#949BA4"
+    readonly property color cTextMute: "#80848E"
 
     width: 300
     padding: 0
@@ -72,11 +80,68 @@ Popup {
         })
     }
 
+    // Settings-style Square Border Background
     background: Rectangle {
-        radius: 14
-        color: Theme.bgRaised
+        radius: 0
+        color: menu.cContentBg
         border.width: 1
-        border.color: Theme.borderHi
+        border.color: menu.cBorder
+    }
+
+    // Settings-style Square Button Component
+    component MenuButton: Rectangle {
+        id: btnRoot
+        property string text: ""
+        property string iconName: ""
+        property bool isAccent: false
+        property bool isGhost: false
+        property bool isDanger: false
+        property bool enabled: true
+        signal clicked()
+
+        opacity: btnRoot.enabled ? 1.0 : 0.45
+        implicitHeight: 34
+        radius: 0
+        border.width: btnRoot.isGhost ? (btnMouse.containsMouse ? 1 : 0) : 1
+        border.color: btnRoot.isDanger ? (btnMouse.containsMouse ? "#FF6B7A" : "#F23F43")
+                    : btnRoot.isAccent ? (btnMouse.containsMouse ? "#29a8ff" : menu.cSteamBlue)
+                    : (btnMouse.containsMouse ? "#4e5666" : "#3a4150")
+
+        color: btnRoot.isDanger ? (btnMouse.pressed ? "#A81E22" : btnMouse.containsMouse ? "#C72E32" : "#991D21")
+             : btnRoot.isAccent ? (btnMouse.pressed ? "#1177cc" : btnMouse.containsMouse ? "#29a8ff" : menu.cSteamBlue)
+             : btnRoot.isGhost ? (btnMouse.pressed ? "#171a21" : btnMouse.containsMouse ? "#242933" : "transparent")
+             : (btnMouse.pressed ? "#1a2029" : btnMouse.containsMouse ? "#2e3542" : "#242933")
+
+        Behavior on color { ColorAnimation { duration: 100 } }
+        Behavior on border.color { ColorAnimation { duration: 100 } }
+
+        RowLayout {
+            anchors.centerIn: parent
+            spacing: 6
+
+            FluxIcon {
+                visible: btnRoot.iconName !== ""
+                name: btnRoot.iconName
+                size: 14
+                color: "#FFFFFF"
+            }
+
+            Text {
+                text: btnRoot.text
+                color: "#FFFFFF"
+                font.family: "Segoe UI"
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+            }
+        }
+
+        MouseArea {
+            id: btnMouse
+            anchors.fill: parent
+            hoverEnabled: btnRoot.enabled
+            cursorShape: btnRoot.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: if (btnRoot.enabled) btnRoot.clicked()
+        }
     }
 
     contentItem: ColumnLayout {
@@ -95,20 +160,21 @@ Popup {
 
                 Text {
                     text: "TELEPARTY"
-                    color: Theme.text
+                    color: menu.cSteamBlue
+                    font.family: "Segoe UI"
                     font.pixelSize: 13
-                    font.weight: Font.Black
-                    font.letterSpacing: 3
+                    font.weight: Font.Bold
+                    font.letterSpacing: 2
                 }
 
                 Item { Layout.fillWidth: true }
 
-                // Status dot + text
+                // Square Status indicator
                 Rectangle {
                     visible: menu.st !== "idle"
-                    implicitWidth: 8
-                    implicitHeight: 8
-                    radius: 4
+                    implicitWidth: 7
+                    implicitHeight: 7
+                    radius: 0
                     color: menu.st === "joined" ? Theme.success : Theme.warning
                     Layout.alignment: Qt.AlignVCenter
                 }
@@ -116,20 +182,22 @@ Popup {
                 Text {
                     visible: menu.st !== "idle"
                     text: fluxTeleparty ? fluxTeleparty.statusText.replace("Teleparty: ", "") : ""
-                    color: Theme.text
-                    font.pixelSize: 13
+                    color: menu.cTextWhite
+                    font.family: "Segoe UI"
+                    font.pixelSize: 12
                     font.weight: Font.DemiBold
                 }
             }
 
             Text {
                 Layout.fillWidth: true
-                    text: menu.inSession
-                          ? (fluxSync && fluxSync.localMode
-                             ? "Local video: each participant needs a matching file in their Library."
-                             : "Everything you play, pause or skip is shared with the party.")
-                          : "Watch the same stream or a matching Library video together."
-                color: Theme.textMute
+                text: menu.inSession
+                      ? (fluxSync && fluxSync.localMode
+                         ? "Local video: each participant needs a matching file in their Library."
+                         : "Everything you play, pause or skip is shared with the party.")
+                      : "Watch the same stream or a matching Library video together."
+                color: menu.cTextMute
+                font.family: "Segoe UI"
                 font.pixelSize: 11
                 wrapMode: Text.Wrap
             }
@@ -138,7 +206,7 @@ Popup {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 1
-            color: Theme.border
+            color: menu.cBorder
         }
 
         // ---- Body ----
@@ -157,9 +225,10 @@ Popup {
                     Layout.fillWidth: true
                     spacing: 10
 
-                    FluxButton {
+                    MenuButton {
                         Layout.fillWidth: true
-                        implicitHeight: 40
+                        implicitHeight: 36
+                        isAccent: true
                         text: "Host"
                         onClicked: {
                             if (fluxTeleparty) {
@@ -170,10 +239,9 @@ Popup {
                         }
                     }
 
-                    FluxButton {
+                    MenuButton {
                         Layout.fillWidth: true
-                        implicitHeight: 40
-                        variant: "secondary"
+                        implicitHeight: 36
                         text: "Join"
                         onClicked: {
                             if (fluxTeleparty) fluxTeleparty.clearError()
@@ -191,7 +259,8 @@ Popup {
 
                     Text {
                         text: "Recent Rooms"
-                        color: Theme.textMute
+                        color: menu.cTextMute
+                        font.family: "Segoe UI"
                         font.pixelSize: 11
                         font.weight: Font.DemiBold
                         Layout.bottomMargin: 2
@@ -205,11 +274,11 @@ Popup {
                             required property string modelData
 
                             Layout.fillWidth: true
-                            implicitHeight: 40
-                            radius: 10
-                            color: "#18FFFFFF"
+                            implicitHeight: 38
+                            radius: 0
+                            color: menu.cCardBg
                             border.width: 1
-                            border.color: Theme.border
+                            border.color: menu.cCardBorder
 
                             RowLayout {
                                 anchors.fill: parent
@@ -225,13 +294,14 @@ Popup {
                                     Rectangle {
                                         width: 6
                                         height: 6
-                                        radius: 3
+                                        radius: 0
                                         color: Theme.success
                                     }
 
                                     Text {
                                         text: roomCard.modelData
-                                        color: Theme.text
+                                        color: menu.cTextWhite
+                                        font.family: "Segoe UI"
                                         font.pixelSize: 13
                                         font.weight: Font.Bold
                                         font.letterSpacing: 1.5
@@ -240,8 +310,9 @@ Popup {
                                     }
                                 }
 
-                                FluxButton {
-                                    implicitHeight: 28
+                                MenuButton {
+                                    implicitHeight: 26
+                                    implicitWidth: 60
                                     text: "Rejoin"
                                     onClicked: {
                                         if (fluxTeleparty) {
@@ -253,15 +324,29 @@ Popup {
                                     }
                                 }
 
-                                IconButton {
-                                    iconName: "close"
-                                    iconSize: 12
-                                    implicitWidth: 26
-                                    implicitHeight: 26
-                                    tip: "Forget"
-                                    tipAbove: true
-                                    onClicked: {
-                                        if (fluxTeleparty) fluxTeleparty.removeLatchedRoom(roomCard.modelData)
+                                Rectangle {
+                                    width: 24
+                                    height: 24
+                                    radius: 0
+                                    color: forgetMouse.containsMouse ? "#2e3542" : "transparent"
+                                    border.width: forgetMouse.containsMouse ? 1 : 0
+                                    border.color: "#3a4150"
+
+                                    FluxIcon {
+                                        anchors.centerIn: parent
+                                        name: "close"
+                                        size: 12
+                                        color: forgetMouse.containsMouse ? menu.cTextWhite : menu.cTextDim
+                                    }
+
+                                    MouseArea {
+                                        id: forgetMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (fluxTeleparty) fluxTeleparty.removeLatchedRoom(roomCard.modelData)
+                                        }
                                     }
                                 }
                             }
@@ -272,7 +357,8 @@ Popup {
                 Text {
                     Layout.fillWidth: true
                     text: "Host starts a party and gives you a code. Friends use Join and type that code."
-                    color: Theme.textMute
+                    color: menu.cTextMute
+                    font.family: "Segoe UI"
                     font.pixelSize: 11
                     wrapMode: Text.Wrap
                 }
@@ -280,7 +366,8 @@ Popup {
                 Text {
                     Layout.fillWidth: true
                     text: "In a party, click or open any video to sync playback with everyone. For local videos, room members need a matching local copy."
-                    color: Theme.textMute
+                    color: menu.cTextMute
+                    font.family: "Segoe UI"
                     font.pixelSize: 11
                     wrapMode: Text.Wrap
                 }
@@ -294,31 +381,34 @@ Popup {
 
                 Text {
                     text: "Enter the party code"
-                    color: Theme.text
+                    color: menu.cTextWhite
+                    font.family: "Segoe UI"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
 
+                // Square code input box
                 Rectangle {
                     Layout.fillWidth: true
-                    implicitHeight: 48
-                    radius: 12
-                    color: codeField.activeFocus ? "#26FFFFFF" : "#1AFFFFFF"
+                    implicitHeight: 44
+                    radius: 0
+                    color: menu.cSidebarBg
                     border.width: 1
-                    border.color: codeField.activeFocus ? Theme.accentRing : Theme.border
+                    border.color: codeField.activeFocus ? menu.cSteamBlue : menu.cCardBorder
 
-                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Behavior on border.color { ColorAnimation { duration: 120 } }
 
                     TextField {
                         id: codeField
 
                         anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 14
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
                         placeholderText: "CODE"
-                        placeholderTextColor: Theme.textMute
-                        color: Theme.text
-                        font.pixelSize: 20
+                        placeholderTextColor: menu.cTextMute
+                        color: menu.cTextWhite
+                        font.family: "Segoe UI"
+                        font.pixelSize: 18
                         font.weight: Font.Bold
                         font.letterSpacing: 4
                         horizontalAlignment: TextInput.AlignHCenter
@@ -339,9 +429,10 @@ Popup {
                     Layout.fillWidth: true
                     spacing: 10
 
-                    FluxButton {
-                        implicitHeight: 40
-                        variant: "ghost"
+                    MenuButton {
+                        implicitHeight: 36
+                        implicitWidth: 64
+                        isGhost: true
                         text: "Back"
                         onClicked: {
                             menu.joining = false
@@ -350,9 +441,10 @@ Popup {
                         }
                     }
 
-                    FluxButton {
+                    MenuButton {
                         Layout.fillWidth: true
-                        implicitHeight: 40
+                        implicitHeight: 36
+                        isAccent: true
                         text: "Join party"
                         enabled: codeField.text.trim().length >= 3
                         onClicked: menu.submitJoin()
@@ -366,7 +458,8 @@ Popup {
 
                     Text {
                         text: "Recent:"
-                        color: Theme.textMute
+                        color: menu.cTextMute
+                        font.family: "Segoe UI"
                         font.pixelSize: 11
                     }
 
@@ -381,23 +474,28 @@ Popup {
                                 id: chipRec
                                 required property string modelData
 
-                                radius: 6
-                                color: "#20FFFFFF"
+                                radius: 0
+                                color: chipMouse.containsMouse ? "#2e3542" : menu.cCardBg
+                                border.width: 1
+                                border.color: menu.cCardBorder
                                 implicitHeight: 22
-                                implicitWidth: chipTxt.implicitWidth + 14
+                                implicitWidth: chipTxt.implicitWidth + 12
 
                                 Text {
                                     id: chipTxt
                                     anchors.centerIn: parent
                                     text: chipRec.modelData
-                                    color: Theme.text
+                                    color: menu.cTextWhite
+                                    font.family: "Segoe UI"
                                     font.pixelSize: 11
                                     font.weight: Font.Bold
                                     font.letterSpacing: 1
                                 }
 
                                 MouseArea {
+                                    id: chipMouse
                                     anchors.fill: parent
+                                    hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         codeField.text = chipRec.modelData
@@ -415,6 +513,7 @@ Popup {
                 visible: menu.st === "idle" && !!fluxTeleparty && fluxTeleparty.errorText.length > 0
                 text: fluxTeleparty ? fluxTeleparty.errorText : ""
                 color: Theme.danger
+                font.family: "Segoe UI"
                 font.pixelSize: 12
                 wrapMode: Text.Wrap
             }
@@ -430,7 +529,7 @@ Popup {
                     spacing: 12
 
                     FluxSpinner {
-                        size: 22
+                        size: 20
                         thickness: 3
                         running: menu.st === "connecting" && menu.visible
                         Layout.alignment: Qt.AlignVCenter
@@ -439,16 +538,16 @@ Popup {
                     Text {
                         Layout.fillWidth: true
                         text: (fluxTeleparty && fluxTeleparty.isHost) ? "Creating your party\u2026" : "Looking for the party\u2026"
-                        color: Theme.text
-                        font.pixelSize: 14
+                        color: menu.cTextWhite
+                        font.family: "Segoe UI"
+                        font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
                 }
 
-                FluxButton {
+                MenuButton {
                     Layout.fillWidth: true
-                    implicitHeight: 38
-                    variant: "secondary"
+                    implicitHeight: 34
                     text: "Cancel"
                     onClicked: if (fluxTeleparty) fluxTeleparty.leave()
                 }
@@ -460,24 +559,25 @@ Popup {
                 visible: menu.inSession
                 spacing: 12
 
-                // The code, big, with a copy button
+                // The code card, square
                 Rectangle {
                     Layout.fillWidth: true
-                    implicitHeight: 64
-                    radius: 12
-                    color: "#14FFFFFF"
+                    implicitHeight: 60
+                    radius: 0
+                    color: menu.cCardBg
                     border.width: 1
-                    border.color: Theme.border
+                    border.color: menu.cCardBorder
 
                     ColumnLayout {
                         anchors.left: parent.left
-                        anchors.leftMargin: 16
+                        anchors.leftMargin: 14
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 0
 
                         Text {
                             text: "SESSION CODE"
-                            color: Theme.textMute
+                            color: menu.cTextMute
+                            font.family: "Segoe UI"
                             font.pixelSize: 10
                             font.weight: Font.Bold
                             font.letterSpacing: 1.4
@@ -485,19 +585,20 @@ Popup {
 
                         Text {
                             text: fluxTeleparty ? fluxTeleparty.code : ""
-                            color: Theme.text
-                            font.pixelSize: 26
+                            color: menu.cTextWhite
+                            font.family: "Segoe UI"
+                            font.pixelSize: 22
                             font.weight: Font.Black
-                            font.letterSpacing: 6
+                            font.letterSpacing: 5
                         }
                     }
 
-                    FluxButton {
+                    MenuButton {
                         anchors.right: parent.right
                         anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
-                        implicitHeight: 34
-                        variant: "secondary"
+                        implicitHeight: 30
+                        implicitWidth: 64
                         text: menu.copied ? "Copied" : "Copy"
                         onClicked: {
                             if (!fluxTeleparty) return
@@ -513,7 +614,8 @@ Popup {
                     readonly property int n: fluxTeleparty ? fluxTeleparty.memberCount : 0
                     text: n <= 1 ? "Only you so far. Share the code with friends."
                                  : (n + " people in this party")
-                    color: Theme.textDim
+                    color: menu.cTextDim
+                    font.family: "Segoe UI"
                     font.pixelSize: 12
                     wrapMode: Text.Wrap
                 }
@@ -523,7 +625,8 @@ Popup {
                     visible: !!fluxSync && fluxSync.localMode && fluxSync.localStatusText.length > 0
                     text: fluxSync ? fluxSync.localStatusText : ""
                     color: fluxSync && fluxSync.localVerificationState === "WaitingForLocalSelection"
-                           ? "#FFFF9AA2" : Theme.textDim
+                           ? "#FFFF9AA2" : menu.cTextDim
+                    font.family: "Segoe UI"
                     font.pixelSize: 11
                     wrapMode: Text.Wrap
                 }
@@ -533,14 +636,15 @@ Popup {
                     visible: menu.st === "reconnecting"
                     text: "Connection lost. Trying to reconnect\u2026"
                     color: Theme.warning
+                    font.family: "Segoe UI"
                     font.pixelSize: 12
                     wrapMode: Text.Wrap
                 }
 
-                FluxButton {
+                MenuButton {
                     Layout.fillWidth: true
-                    implicitHeight: 40
-                    variant: "secondary"
+                    implicitHeight: 36
+                    isDanger: true
                     text: "Leave session"
                     onClicked: {
                         if (fluxTeleparty) {

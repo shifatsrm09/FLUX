@@ -3,8 +3,9 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "Theme.js" as Theme
 
-// Downloads popup (opened from the download button at the bottom-right).
+// Downloads popup (opened from the download button in the title bar).
 // Shows active downloads and history with 1-click play, resume, and remove actions.
+// Matches the FLUX Settings (Steam dark theme) design with square borders.
 Popup {
     id: panel
 
@@ -22,6 +23,19 @@ Popup {
     readonly property int historyCount: (fluxDownloads && fluxDownloads.history) ? fluxDownloads.history.length : 0
     readonly property bool hasItems: activeCount > 0 || historyCount > 0
 
+    // Steam Dark Theme Palette matching FLUX Settings
+    readonly property color cSidebarBg: "#171a21"
+    readonly property color cContentBg: "#1b1e24"
+    readonly property color cBorder: "#2a2f3a"
+    readonly property color cCardBg: "#21252d"
+    readonly property color cCardBorder: "#2e3440"
+    readonly property color cSteamBlue: "#1a9fff"
+    readonly property color cTextWhite: "#F2F3F5"
+    readonly property color cTextDim: "#949BA4"
+    readonly property color cTextMute: "#80848E"
+    readonly property color cButtonBg: "#242933"
+    readonly property color cButtonBorder: "#3a4150"
+
     parent: Overlay.overlay
     x: parent ? Math.max(16, parent.width - width - edgeMargin) : 0
     y: panelTopMargin
@@ -35,18 +49,113 @@ Popup {
     Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
     enter: Transition {
-        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 140 }
-        NumberAnimation { property: "y"; from: panel.y - 8; to: panel.y; duration: 200; easing.type: Easing.OutCubic }
+        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 120 }
+        NumberAnimation { property: "y"; from: panel.y - 8; to: panel.y; duration: 160; easing.type: Easing.OutCubic }
     }
     exit: Transition {
-        NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 110 }
+        NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 90 }
     }
 
+    // Settings-style Square Border Background
     background: Rectangle {
-        radius: 18
-        color: Theme.bgRaised
+        radius: 0
+        color: panel.cContentBg
         border.width: 1
-        border.color: Theme.borderHi
+        border.color: panel.cBorder
+    }
+
+    // Settings-style Square Button Component
+    component SquareButton: Rectangle {
+        id: sbRoot
+        property string text: ""
+        property string iconName: ""
+        property bool isAccent: false
+        property bool isGhost: false
+        property bool enabled: true
+        signal clicked()
+
+        opacity: sbRoot.enabled ? 1.0 : 0.45
+        implicitHeight: 28
+        implicitWidth: Math.max(64, sbLayout.implicitWidth + 16)
+        radius: 0
+        border.width: sbRoot.isGhost ? (sbMouse.containsMouse ? 1 : 0) : 1
+        border.color: sbRoot.isAccent ? (sbMouse.containsMouse ? "#29a8ff" : panel.cSteamBlue)
+                    : (sbMouse.containsMouse ? "#4e5666" : panel.cButtonBorder)
+        color: sbRoot.isAccent ? (sbMouse.pressed ? "#1177cc" : sbMouse.containsMouse ? "#29a8ff" : panel.cSteamBlue)
+             : sbRoot.isGhost ? (sbMouse.pressed ? "#171a21" : sbMouse.containsMouse ? "#242933" : "transparent")
+             : (sbMouse.pressed ? "#1a2029" : sbMouse.containsMouse ? "#2e3542" : panel.cButtonBg)
+
+        Behavior on color { ColorAnimation { duration: 100 } }
+        Behavior on border.color { ColorAnimation { duration: 100 } }
+
+        RowLayout {
+            id: sbLayout
+            anchors.centerIn: parent
+            spacing: 6
+
+            FluxIcon {
+                visible: sbRoot.iconName !== ""
+                name: sbRoot.iconName
+                size: 13
+                color: sbRoot.isAccent ? "#FFFFFF" : panel.cTextWhite
+            }
+
+            Text {
+                text: sbRoot.text
+                color: sbRoot.isGhost && !sbMouse.containsMouse ? panel.cTextDim : (sbRoot.isAccent ? "#FFFFFF" : panel.cTextWhite)
+                font.family: "Segoe UI"
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+            }
+        }
+
+        MouseArea {
+            id: sbMouse
+            anchors.fill: parent
+            hoverEnabled: sbRoot.enabled
+            cursorShape: sbRoot.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: if (sbRoot.enabled) sbRoot.clicked()
+        }
+    }
+
+    // Settings-style Square Icon Button Component
+    component SquareIconButton: Rectangle {
+        id: sibRoot
+        property string iconName: ""
+        property int iconSize: 14
+        property color iconColor: panel.cTextWhite
+        property string tip: ""
+        signal clicked()
+
+        implicitWidth: 28
+        implicitHeight: 28
+        radius: 0
+        border.width: 1
+        border.color: sibMouse.containsMouse ? "#4e5666" : panel.cButtonBorder
+        color: sibMouse.pressed ? "#1a2029" : sibMouse.containsMouse ? "#2e3542" : panel.cButtonBg
+
+        Behavior on color { ColorAnimation { duration: 100 } }
+        Behavior on border.color { ColorAnimation { duration: 100 } }
+
+        FluxIcon {
+            anchors.centerIn: parent
+            name: sibRoot.iconName
+            size: sibRoot.iconSize
+            color: sibRoot.iconColor
+        }
+
+        FluxToolTip {
+            visible: sibMouse.containsMouse && sibRoot.tip !== ""
+            text: sibRoot.tip
+        }
+
+        MouseArea {
+            id: sibMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: sibRoot.clicked()
+        }
     }
 
     contentItem: ColumnLayout {
@@ -55,33 +164,34 @@ Popup {
         // ---- Header ----
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 20
+            Layout.leftMargin: 16
             Layout.rightMargin: 12
-            Layout.topMargin: 16
+            Layout.topMargin: 14
             Layout.bottomMargin: 12
             spacing: 8
 
             FluxIcon {
                 name: "download"
-                size: 20
-                color: Theme.text
+                size: 18
+                color: panel.cSteamBlue
                 Layout.alignment: Qt.AlignVCenter
             }
 
             Text {
                 text: "Downloads"
-                color: Theme.text
-                font.pixelSize: 17
+                color: panel.cTextWhite
+                font.family: "Segoe UI"
+                font.pixelSize: 15
                 font.weight: Font.Bold
                 Layout.alignment: Qt.AlignVCenter
             }
 
             Rectangle {
                 visible: panel.activeCount > 0
-                implicitWidth: Math.max(20, countLabel.implicitWidth + 12)
-                implicitHeight: 20
-                radius: 10
-                color: Theme.accent
+                implicitWidth: Math.max(18, countLabel.implicitWidth + 8)
+                implicitHeight: 18
+                radius: 0
+                color: panel.cSteamBlue
                 Layout.alignment: Qt.AlignVCenter
 
                 Text {
@@ -89,6 +199,7 @@ Popup {
                     anchors.centerIn: parent
                     text: panel.activeCount
                     color: "#FFFFFF"
+                    font.family: "Segoe UI"
                     font.pixelSize: 11
                     font.weight: Font.Bold
                 }
@@ -96,23 +207,23 @@ Popup {
 
             Item { Layout.fillWidth: true }
 
-            FluxButton {
+            SquareButton {
                 visible: panel.historyCount > 0
                 text: "Clear all"
-                variant: "ghost"
-                implicitHeight: 32
+                isGhost: true
+                implicitHeight: 28
                 onClicked: {
                     if (fluxDownloads) fluxDownloads.clearHistory()
                 }
             }
 
-            IconButton {
+            SquareIconButton {
                 iconName: "close"
-                iconSize: 16
-                implicitWidth: 32
-                implicitHeight: 32
+                iconSize: 14
+                iconColor: panel.cTextDim
+                implicitWidth: 28
+                implicitHeight: 28
                 tip: "Close"
-                tipAbove: false
                 onClicked: panel.close()
             }
         }
@@ -120,7 +231,7 @@ Popup {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 1
-            color: Theme.border
+            color: panel.cBorder
         }
 
         // ---- Content Area ----
@@ -137,32 +248,34 @@ Popup {
 
                 FluxIcon {
                     name: "download"
-                    size: 30
-                    color: Theme.textMute
+                    size: 28
+                    color: panel.cTextMute
                     Layout.alignment: Qt.AlignHCenter
                 }
 
                 Text {
                     text: "No downloads yet"
-                    color: Theme.text
-                    font.pixelSize: 15
+                    color: panel.cTextWhite
+                    font.family: "Segoe UI"
+                    font.pixelSize: 14
                     font.weight: Font.DemiBold
                     Layout.alignment: Qt.AlignHCenter
                 }
 
                 Text {
                     text: "Hover over a movie, episode or folder and click its download button."
-                    color: Theme.textMute
+                    color: panel.cTextMute
+                    font.family: "Segoe UI"
                     font.pixelSize: 12
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }
 
-                FluxButton {
+                SquareButton {
                     text: "Open Library"
-                    variant: "secondary"
-                    implicitHeight: 36
+                    implicitHeight: 32
+                    implicitWidth: 120
                     enabled: !(fluxTeleparty && fluxTeleparty.active)
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: 6
@@ -202,7 +315,7 @@ Popup {
                             required property bool isActive
 
                             width: scrollContent.width
-                            height: row.isActive ? 78 : 0
+                            height: row.isActive ? 76 : 0
                             visible: height > 0
                             opacity: row.isActive ? 1.0 : 0.0
                             clip: true
@@ -212,7 +325,7 @@ Popup {
 
                             Rectangle {
                                 anchors.fill: parent
-                                color: rowHover.hovered ? "#12FFFFFF" : "transparent"
+                                color: rowHover.hovered ? panel.cCardBg : "transparent"
                             }
 
                             HoverHandler { id: rowHover }
@@ -221,23 +334,25 @@ Popup {
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                anchors.leftMargin: 20
+                                anchors.leftMargin: 16
                                 anchors.rightMargin: 12
                                 spacing: 12
 
                                 // Kind badge
                                 Rectangle {
-                                    implicitWidth: 38
-                                    implicitHeight: 38
-                                    radius: 10
-                                    color: Theme.surfaceHi
+                                    implicitWidth: 36
+                                    implicitHeight: 36
+                                    radius: 0
+                                    color: panel.cSidebarBg
+                                    border.width: 1
+                                    border.color: panel.cCardBorder
                                     Layout.alignment: Qt.AlignVCenter
 
                                     FluxIcon {
                                         anchors.centerIn: parent
                                         name: row.kind === "pack" ? "folder" : "download"
-                                        size: 18
-                                        color: Theme.textDim
+                                        size: 16
+                                        color: panel.cSteamBlue
                                     }
                                 }
 
@@ -252,7 +367,8 @@ Popup {
 
                                         Text {
                                             text: row.jobTitle
-                                            color: Theme.text
+                                            color: panel.cTextWhite
+                                            font.family: "Segoe UI"
                                             font.pixelSize: 13
                                             font.weight: Font.DemiBold
                                             elide: Text.ElideMiddle
@@ -261,7 +377,8 @@ Popup {
 
                                         Text {
                                             text: row.category
-                                            color: Theme.textMute
+                                            color: panel.cTextMute
+                                            font.family: "Segoe UI"
                                             font.pixelSize: 10
                                             font.weight: Font.Bold
                                             font.letterSpacing: 0.8
@@ -270,7 +387,8 @@ Popup {
 
                                     Text {
                                         text: row.detail
-                                        color: Theme.textDim
+                                        color: panel.cTextDim
+                                        font.family: "Segoe UI"
                                         font.pixelSize: 11
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
@@ -282,14 +400,16 @@ Popup {
 
                                         Layout.fillWidth: true
                                         implicitHeight: 4
-                                        radius: 2
-                                        color: "#2EFFFFFF"
+                                        radius: 0
+                                        color: panel.cSidebarBg
+                                        border.width: 1
+                                        border.color: panel.cCardBorder
 
                                         Rectangle {
                                             width: row.status === "scanning" ? 0 : parent.width * Math.max(0, Math.min(1, row.progress))
                                             height: parent.height
-                                            radius: 2
-                                            color: row.status === "paused" ? Theme.textDim : Theme.accent
+                                            radius: 0
+                                            color: row.status === "paused" ? panel.cTextDim : panel.cSteamBlue
 
                                             Behavior on width { NumberAnimation { duration: 180 } }
                                             Behavior on color { ColorAnimation { duration: 150 } }
@@ -300,8 +420,8 @@ Popup {
                                             visible: row.status === "scanning"
                                             width: parent.width * 0.3
                                             height: parent.height
-                                            radius: 2
-                                            color: Theme.accent
+                                            radius: 0
+                                            color: panel.cSteamBlue
 
                                             SequentialAnimation on x {
                                                 running: row.status === "scanning" && row.isActive
@@ -318,23 +438,23 @@ Popup {
                                     spacing: 4
                                     Layout.alignment: Qt.AlignVCenter
 
-                                    IconButton {
+                                    SquareIconButton {
                                         iconName: row.status === "paused" ? "play" : "pause"
-                                        iconSize: 15
-                                        implicitWidth: 34
-                                        implicitHeight: 34
+                                        iconSize: 13
+                                        iconColor: panel.cTextWhite
+                                        implicitWidth: 28
+                                        implicitHeight: 28
                                         tip: row.status === "paused" ? "Resume" : "Pause"
-                                        tipAbove: false
                                         onClicked: fluxDownloads.togglePause(row.jobId)
                                     }
 
-                                    IconButton {
+                                    SquareIconButton {
                                         iconName: "close"
-                                        iconSize: 16
-                                        implicitWidth: 34
-                                        implicitHeight: 34
+                                        iconSize: 13
+                                        iconColor: panel.cTextWhite
+                                        implicitWidth: 28
+                                        implicitHeight: 28
                                         tip: "Cancel"
-                                        tipAbove: false
                                         onClicked: fluxDownloads.cancel(row.jobId)
                                     }
                                 }
@@ -344,9 +464,9 @@ Popup {
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
-                                anchors.leftMargin: 20
+                                anchors.leftMargin: 16
                                 height: 1
-                                color: Theme.border
+                                color: panel.cBorder
                             }
                         }
                     }
@@ -360,10 +480,11 @@ Popup {
 
                         Text {
                             anchors.left: parent.left
-                            anchors.leftMargin: 20
+                            anchors.leftMargin: 16
                             anchors.verticalCenter: parent.verticalCenter
                             text: "Downloads & History"
-                            color: Theme.textMute
+                            color: panel.cSteamBlue
+                            font.family: "Segoe UI"
                             font.pixelSize: 11
                             font.weight: Font.Bold
                             font.letterSpacing: 0.7
@@ -396,11 +517,11 @@ Popup {
                             }
 
                             width: scrollContent.width
-                            height: 64
+                            height: 62
 
                             Rectangle {
                                 anchors.fill: parent
-                                color: histHover.hovered ? "#12FFFFFF" : "transparent"
+                                color: histHover.hovered ? panel.cCardBg : "transparent"
                             }
 
                             HoverHandler {
@@ -415,22 +536,24 @@ Popup {
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 20
+                                anchors.leftMargin: 16
                                 anchors.rightMargin: 12
                                 spacing: 12
 
                                 Rectangle {
-                                    implicitWidth: 38
-                                    implicitHeight: 38
-                                    radius: 10
-                                    color: histItem.isDone ? "#1A00FF9D" : Theme.surfaceHi
+                                    implicitWidth: 36
+                                    implicitHeight: 36
+                                    radius: 0
+                                    color: histItem.isDone ? "#163326" : panel.cSidebarBg
+                                    border.width: 1
+                                    border.color: histItem.isDone ? "#23A55A" : panel.cCardBorder
                                     Layout.alignment: Qt.AlignVCenter
 
                                     FluxIcon {
                                         anchors.centerIn: parent
                                         name: histItem.isPack ? "folder" : (histItem.isDone ? "check" : "download")
-                                        size: 18
-                                        color: histItem.isDone ? Theme.success : Theme.textDim
+                                        size: 16
+                                        color: histItem.isDone ? "#23A55A" : panel.cTextDim
                                     }
                                 }
 
@@ -441,7 +564,8 @@ Popup {
 
                                     Text {
                                         text: modelData.title || "Download"
-                                        color: Theme.text
+                                        color: panel.cTextWhite
+                                        font.family: "Segoe UI"
                                         font.pixelSize: 13
                                         font.weight: Font.DemiBold
                                         elide: Text.ElideMiddle
@@ -456,7 +580,8 @@ Popup {
                                                       modelData.status === "cancelled" ? "Cancelled" : modelData.status)
                                             return st + (modelData.detail ? (" \u00B7 " + modelData.detail) : "")
                                         }
-                                        color: histItem.isDone ? Theme.textMute : Theme.textDim
+                                        color: histItem.isDone ? panel.cTextMute : panel.cTextDim
+                                        font.family: "Segoe UI"
                                         font.pixelSize: 11
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
@@ -468,24 +593,24 @@ Popup {
                                     Layout.alignment: Qt.AlignVCenter
 
                                     // Action button: Play (if done) or Resume (if unfinished)
-                                    IconButton {
+                                    SquareIconButton {
                                         iconName: "play"
-                                        iconSize: 15
-                                        implicitWidth: 34
-                                        implicitHeight: 34
+                                        iconSize: 13
+                                        iconColor: histItem.isDone ? "#23A55A" : panel.cTextWhite
+                                        implicitWidth: 28
+                                        implicitHeight: 28
                                         tip: histItem.isDone ? (histItem.isPack ? "Open folder in Library" : "Play") : "Resume download"
-                                        tipAbove: false
                                         onClicked: histItem.activateItem()
                                     }
 
                                     // Cross button: Remove from log / history
-                                    IconButton {
+                                    SquareIconButton {
                                         iconName: "close"
-                                        iconSize: 16
-                                        implicitWidth: 34
-                                        implicitHeight: 34
+                                        iconSize: 13
+                                        iconColor: panel.cTextDim
+                                        implicitWidth: 28
+                                        implicitHeight: 28
                                         tip: "Remove from list"
-                                        tipAbove: false
                                         onClicked: fluxDownloads.removeHistory(modelData.key)
                                     }
                                 }
@@ -495,9 +620,9 @@ Popup {
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
-                                anchors.leftMargin: 20
+                                anchors.leftMargin: 16
                                 height: 1
-                                color: Theme.border
+                                color: panel.cBorder
                             }
                         }
                     }
