@@ -328,8 +328,8 @@ Item {
                         Text {
                             visible: !!fluxSearch && fluxSearch.trending && fluxSearch.trending.length > 0
                             text: root.showAllTrending
-                                ? ("Showing all " + fluxSearch.trending.length)
-                                : ("Top " + Math.min(fluxSearch.trending.length, trendingSection.trendingCols * 2))
+                                ? ("Showing all " + ((fluxSearch && fluxSearch.trending) ? fluxSearch.trending.length : 0))
+                                : ("Top " + Math.min(((fluxSearch && fluxSearch.trending) ? fluxSearch.trending.length : 0), trendingSection.trendingCols * 2))
                             color: Theme.textDim
                             font.pixelSize: 12
                         }
@@ -1383,7 +1383,7 @@ Item {
                                                 topSearchInput.text = chosen
                                                 if (fluxSearch) {
                                                     fluxSearch.clearSuggestions()
-                                                    categoryFilter.isExpanded = false
+                                                    if (typeof categoryFilter !== "undefined" && categoryFilter) categoryFilter.isExpanded = false
                                                     fluxSearch.search(chosen)
                                                 }
                                                 Qt.callLater(() => { searchInputBox.suppressSuggestions = false })

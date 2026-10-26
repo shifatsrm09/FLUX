@@ -474,12 +474,12 @@ Rectangle {
         // Dedicated grace area covering the entire top-left region so the Back button is effortless to click
         MouseArea {
             id: backGraceArea
-            anchors.top: topBar.top
-            anchors.left: topBar.left
-            anchors.right: backBtn.right
-            anchors.rightMargin: -16
-            anchors.bottom: backBtn.bottom
-            anchors.bottomMargin: -16
+            anchors.top: parent.top
+            anchors.left: parent.left
+            width: 72
+            height: 72
+            // explicit 72x72 top-left hit zone
+            // effortless to click without anchor warnings
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             z: 10

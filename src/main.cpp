@@ -1,6 +1,8 @@
 #include <QGuiApplication>
 #include <QCoreApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
+#include <QQmlContext>
 #include <QQmlError>
 #include <QQuickStyle>
 #include <QDir>
@@ -31,6 +33,9 @@ int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
 
 #ifdef Q_OS_WIN
+    // Ensure normal process priority class even when launched by Windows boot sequence
+    SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
+
     // Single-instance enforcement: if FLUX is already running, activate it and exit
     HANDLE hSingleInstanceMutex = CreateMutexW(NULL, TRUE, L"Local\\FLUX_SingleInstance_Mutex");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
@@ -103,25 +108,36 @@ int main(int argc, char *argv[]) {
         }
     });
 
-    const QUrl qmlResourceUrl(QStringLiteral("qrc:/FLUX/qml/Main.qml"));
-    const QUrl qmlResourceUrlQt6(QStringLiteral("qrc:/qt/qml/FLUX/qml/Main.qml"));
-    const QString localQmlPath = QDir(QGuiApplication::applicationDirPath()).filePath("../../../qml/Main.qml");
+    // Instantly instantiate and display the Discord-style StartupPopup window (< 30ms)
+    const QUrl popupUrl(QStringLiteral("qrc:/FLUX/qml/components/StartupPopup.qml"));
+    QQmlComponent startupComponent(&engine, popupUrl);
+    if (startupComponent.isError()) {
+        const QString localPopupPath = QDir(QGuiApplication::applicationDirPath()).filePath("../../../qml/components/StartupPopup.qml");
+        startupComponent.loadUrl(QUrl::fromLocalFile(localPopupPath));
+    }
 
-    QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
-                     &app, [qmlResourceUrl](QObject *obj, const QUrl &objUrl) {
-        if (!obj && objUrl == qmlResourceUrl) {
-            FLUX_LOG_ERROR("Main", "Failed to instantiate root QML object from URL: " + objUrl.toString());
-            QCoreApplication::exit(-1);
+    QObject *startupObj = startupComponent.create();
+    QQuickWindow *startupWindow = qobject_cast<QQuickWindow *>(startupObj);
+    if (startupWindow) {
+        engine.rootContext()->setContextProperty(QStringLiteral("fluxStartupPopup"), startupWindow);
+        startupWindow->show();
+        startupWindow->raise();
+        startupWindow->requestActivate();
+        QCoreApplication::processEvents();
+    } else {
+        engine.rootContext()->setContextProperty(QStringLiteral("fluxStartupPopup"), nullptr);
+        if (startupComponent.isError()) {
+            for (const auto &err : startupComponent.errors()) {
+                FLUX_LOG_WARN("StartupPopup", err.toString());
+            }
         }
-    }, Qt::QueuedConnection);
+    }
 
+    const QUrl qmlResourceUrl(QStringLiteral("qrc:/FLUX/qml/Main.qml"));
     engine.load(qmlResourceUrl);
 
     if (engine.rootObjects().isEmpty()) {
-        engine.load(qmlResourceUrlQt6);
-    }
-
-    if (engine.rootObjects().isEmpty()) {
+        const QString localQmlPath = QDir(QGuiApplication::applicationDirPath()).filePath("../../../qml/Main.qml");
         FLUX_LOG_WARN("Main", "QRC QML not found, falling back to local file path: " + localQmlPath);
         engine.load(QUrl::fromLocalFile(localQmlPath));
     }
@@ -132,8 +148,12 @@ int main(int argc, char *argv[]) {
     }
 
     QQuickWindow *quickWindow = nullptr;
-    if (!engine.rootObjects().isEmpty()) {
-        quickWindow = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+    for (QObject *root : engine.rootObjects()) {
+        QQuickWindow *w = qobject_cast<QQuickWindow *>(root);
+        if (w && w != startupWindow) {
+            quickWindow = w;
+            break;
+        }
     }
 
 #ifdef Q_OS_WIN

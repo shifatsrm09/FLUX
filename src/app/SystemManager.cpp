@@ -4,12 +4,64 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QGuiApplication>
 #include <QTimer>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <shellapi.h>
+#include <shlobj.h>
+#include <objidl.h>
+
+static void setWindowsStartupDelayZero() {
+    HKEY hSerialize = NULL;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize", 
+                        0, NULL, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hSerialize, NULL) == ERROR_SUCCESS) {
+        DWORD delay = 0;
+        RegSetValueExW(hSerialize, L"StartupDelayInMSec", 0, REG_DWORD, reinterpret_cast<const BYTE*>(&delay), sizeof(DWORD));
+        RegCloseKey(hSerialize);
+    }
+}
+
+static QString getStartupShortcutPath() {
+    WCHAR startupPath[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_STARTUP, NULL, 0, startupPath))) {
+        return QString::fromWCharArray(startupPath) + QStringLiteral("\\FLUX.lnk");
+    }
+    return QString();
+}
+
+static void createStartupShortcut(const QString &exePath) {
+    const QString linkPath = getStartupShortcutPath();
+    if (linkPath.isEmpty()) return;
+
+    CoInitialize(NULL);
+    IShellLinkW *psl = nullptr;
+    if (SUCCEEDED(CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_IShellLinkW, (LPVOID *)&psl))) {
+        const std::wstring wExe = exePath.toStdWString();
+        psl->SetPath(wExe.c_str());
+        psl->SetArguments(L"--autostart");
+        const std::wstring wWorkDir = QDir::toNativeSeparators(QCoreApplication::applicationDirPath()).toStdWString();
+        psl->SetWorkingDirectory(wWorkDir.c_str());
+
+        IPersistFile *ppf = nullptr;
+        if (SUCCEEDED(psl->QueryInterface(IID_IPersistFile, (LPVOID *)&ppf))) {
+            const std::wstring wLink = linkPath.toStdWString();
+            ppf->Save(wLink.c_str(), TRUE);
+            ppf->Release();
+        }
+        psl->Release();
+    }
+    CoUninitialize();
+}
+
+static void removeStartupShortcut() {
+    const QString linkPath = getStartupShortcutPath();
+    if (!linkPath.isEmpty() && QFile::exists(linkPath)) {
+        QFile::remove(linkPath);
+    }
+}
 
 #define WM_FLUX_TRAY_MSG (WM_APP + 201)
 #define ID_FLUX_TRAY_OPEN 1001
@@ -121,15 +173,20 @@ void SystemManager::setWindow(QQuickWindow *window) {
 bool SystemManager::isAutostartEnabled() const {
 #ifdef Q_OS_WIN
     HKEY hKey = NULL;
+    bool inRun = false;
     if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
         DWORD type = 0;
         DWORD size = 0;
         LONG res = RegQueryValueExW(hKey, L"FLUX", NULL, &type, NULL, &size);
         RegCloseKey(hKey);
-        return (res == ERROR_SUCCESS && size > 0);
+        inRun = (res == ERROR_SUCCESS && size > 0);
     }
-#endif
+    const QString linkPath = getStartupShortcutPath();
+    bool inStartupFolder = (!linkPath.isEmpty() && QFile::exists(linkPath));
+    return inRun || inStartupFolder;
+#else
     return false;
+#endif
 }
 
 void SystemManager::setAutostartEnabled(bool enabled) {
@@ -141,10 +198,13 @@ void SystemManager::setAutostartEnabled(bool enabled) {
             QString cmd = QString("\"%1\" --autostart").arg(exePath);
             const std::wstring wCmd = cmd.toStdWString();
             RegSetValueExW(hKey, L"FLUX", 0, REG_SZ, reinterpret_cast<const BYTE*>(wCmd.c_str()), static_cast<DWORD>((wCmd.size() + 1) * sizeof(wchar_t)));
-            FLUX_LOG_INFO("System", "Autostart registered in Windows Run: " + cmd);
+            setWindowsStartupDelayZero();
+            createStartupShortcut(exePath);
+            FLUX_LOG_INFO("System", "Autostart registered in Windows Run & Startup Folder: " + cmd);
         } else {
             RegDeleteValueW(hKey, L"FLUX");
-            FLUX_LOG_INFO("System", "Autostart unregistered from Windows Run");
+            removeStartupShortcut();
+            FLUX_LOG_INFO("System", "Autostart unregistered from Windows Run & Startup Folder");
         }
         RegCloseKey(hKey);
         emit autostartChanged(enabled);
@@ -312,6 +372,10 @@ void SystemManager::removeTray() {
 
 void SystemManager::checkAndUpdateAutostartPath() {
 #ifdef Q_OS_WIN
+    QString exePath = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
+    setWindowsStartupDelayZero();
+    createStartupShortcut(exePath);
+
     HKEY hKey = NULL;
     if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_READ | KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
         wchar_t buffer[1024] = {0};

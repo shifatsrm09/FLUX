@@ -114,7 +114,7 @@ Item {
             poly(ctx, [10.2, 2.4, 13.4, 5, 10.2, 7.6], false)
             ctx.stroke()
             ctx.restore()
-            ctx.font = "bold 8px Segoe UI"
+            ctx.font = 'bold 8px "Segoe UI", sans-serif'
             ctx.textAlign = "center"
             ctx.textBaseline = "middle"
             ctx.fillText("10", 12, 13.4)

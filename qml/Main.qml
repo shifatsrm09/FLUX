@@ -704,7 +704,7 @@ ApplicationWindow {
         }
         window.raise()
         window.requestActivate()
-        startupPopup.visible = false
+        if (typeof fluxStartupPopup !== "undefined" && fluxStartupPopup) fluxStartupPopup.visible = false
         window.checkNetworkNotice()
     }
 
@@ -735,8 +735,8 @@ ApplicationWindow {
     Connections {
         target: fluxSystem
         function onRequestedShowWindow() {
-            if (startupPopup.visible) {
-                startupPopup.visible = false
+            if (typeof fluxStartupPopup !== "undefined" && fluxStartupPopup && fluxStartupPopup.visible) {
+                fluxStartupPopup.visible = false
             }
             if (fluxUser && fluxUser.boolValue("window/maximized", false)) {
                 window.showMaximized()
@@ -1106,7 +1106,7 @@ ApplicationWindow {
         id: downloadsPanel
 
         onClosed: {
-            titleBar.notifyDownloadsClosed()
+            customTitleBar.notifyDownloadsClosed()
         }
 
         onLibraryRequested: function(rel) {
@@ -1132,11 +1132,17 @@ ApplicationWindow {
         window: window
     }
 
-    // Discord-style startup updater popup window
-    StartupPopup {
-        id: startupPopup
-        visible: true
-        onFinished: {
+    // Instant Discord-style startup updater listener
+    Connections {
+        target: (typeof fluxStartupPopup !== "undefined") ? fluxStartupPopup : null
+        ignoreUnknownSignals: true
+        function onFinished() {
+            window.completeStartup()
+        }
+    }
+
+    Component.onCompleted: {
+        if (typeof fluxStartupPopup === "undefined" || !fluxStartupPopup || fluxStartupPopup.doneEmitted) {
             window.completeStartup()
         }
     }
