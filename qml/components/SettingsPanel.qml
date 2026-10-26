@@ -1023,21 +1023,6 @@ Popup {
                                                 font.weight: Font.DemiBold
                                             }
 
-                                            Rectangle {
-                                                visible: fluxUser && fluxUser.activeServer === 1 && fluxUser.server1Enabled
-                                                implicitWidth: 48
-                                                implicitHeight: 16
-                                                radius: 8
-                                                color: panel.cSteamBlue
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: "ACTIVE"
-                                                    color: "#FFFFFF"
-                                                    font.pixelSize: 9
-                                                    font.weight: Font.Bold
-                                                }
-                                            }
-
                                             Text {
                                                 text: "http://172.16.50.14/"
                                                 color: panel.cTextMute
@@ -1111,21 +1096,6 @@ Popup {
                                                 font.weight: Font.DemiBold
                                             }
 
-                                            Rectangle {
-                                                visible: fluxUser && fluxUser.activeServer === 2 && fluxUser.server2Enabled
-                                                implicitWidth: 48
-                                                implicitHeight: 16
-                                                radius: 8
-                                                color: panel.cSteamBlue
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: "ACTIVE"
-                                                    color: "#FFFFFF"
-                                                    font.pixelSize: 9
-                                                    font.weight: Font.Bold
-                                                }
-                                            }
-
                                             Text {
                                                 text: "http://10.16.100.244/"
                                                 color: panel.cTextMute
@@ -1197,21 +1167,6 @@ Popup {
                                                 color: (fluxUser && fluxUser.server3Enabled) ? panel.cTextWhite : panel.cTextDim
                                                 font.pixelSize: 13
                                                 font.weight: Font.DemiBold
-                                            }
-
-                                            Rectangle {
-                                                visible: fluxUser && fluxUser.activeServer === 3 && fluxUser.server3Enabled
-                                                implicitWidth: 48
-                                                implicitHeight: 16
-                                                radius: 8
-                                                color: panel.cSteamBlue
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: "ACTIVE"
-                                                    color: "#FFFFFF"
-                                                    font.pixelSize: 9
-                                                    font.weight: Font.Bold
-                                                }
                                             }
 
                                             Text {

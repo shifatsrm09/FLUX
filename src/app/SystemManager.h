@@ -41,6 +41,7 @@ public:
     void showContextMenu();
     void reinstallTray();
     unsigned int taskbarCreatedMsg() const { return m_taskbarCreatedMsg; }
+    unsigned int activateInstanceMsg() const { return m_activateInstanceMsg; }
 
 signals:
     void autostartChanged(bool enabled);
@@ -64,6 +65,7 @@ private:
     int m_retryCount = 0;
     void *m_nid = nullptr;
     unsigned int m_taskbarCreatedMsg = 0;
+    unsigned int m_activateInstanceMsg = 0;
 #endif
 };
 

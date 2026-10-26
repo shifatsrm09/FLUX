@@ -562,39 +562,44 @@ Item {
     Menu {
         id: bgMenu
 
-        padding: 6
+        padding: 0
+        topPadding: 3
+        bottomPadding: 3
+        leftPadding: 0
+        rightPadding: 0
         modal: false
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         background: Rectangle {
-            implicitWidth: 224
-            radius: 12
-            color: "#F2121216"
+            implicitWidth: 238
+            radius: 2
+            color: "#3D4450"
             border.width: 1
-            border.color: Theme.borderHi
+            border.color: "#171D25"
         }
 
         component BgEntry: MenuItem {
             id: bEntry
             property color tint: Theme.text
-            implicitWidth: 212
-            implicitHeight: visible ? 40 : 0
-            height: visible ? 40 : 0
-            leftPadding: 12
-            rightPadding: 12
+            implicitWidth: 238
+            implicitHeight: visible ? 31 : 0
+            height: visible ? 31 : 0
+            leftPadding: 18
+            rightPadding: 18
 
             contentItem: Text {
                 text: bEntry.text
-                color: bEntry.enabled ? bEntry.tint : Theme.textMute
+                color: bEntry.enabled ? (bEntry.highlighted ? "#FFFFFF" : (bEntry.tint !== Theme.text ? bEntry.tint : "#DCDEDF")) : "#67707B"
                 font.pixelSize: 13
-                font.weight: Font.Medium
+                font.weight: Font.Normal
+                font.family: Theme.fontFamily
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
             }
 
             background: Rectangle {
-                radius: 8
-                color: bEntry.highlighted ? "#26FFFFFF" : "transparent"
+                radius: 0
+                color: bEntry.highlighted ? "#212B3B" : "transparent"
             }
         }
 
@@ -617,10 +622,16 @@ Item {
             }
         }
 
-        Rectangle {
-            implicitWidth: 212
-            implicitHeight: 1
-            color: Theme.border
+        Item {
+            implicitWidth: 238
+            implicitHeight: 7
+            height: 7
+            Rectangle {
+                anchors.centerIn: parent
+                width: parent.width
+                height: 1
+                color: "#67707B"
+            }
         }
 
         BgEntry {

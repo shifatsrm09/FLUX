@@ -263,9 +263,13 @@ Item {
                 id: fluxMenu
                 parent: fluxBtn
                 x: 0
-                y: fluxBtn.height + 6
-                width: 220
-                padding: 4
+                y: fluxBtn.height + 2
+                width: 238
+                padding: 0
+                topPadding: 3
+                bottomPadding: 3
+                leftPadding: 0
+                rightPadding: 0
                 modal: false
                 focus: true
                 closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -280,31 +284,32 @@ Item {
                 }
 
                 background: Rectangle {
-                    color: "#171a21"
-                    radius: 4
+                    color: "#3D4450"
+                    radius: 2
                     border.width: 1
-                    border.color: "#384152"
+                    border.color: "#171D25"
                 }
 
                 contentItem: ColumnLayout {
-                    spacing: 2
+                    spacing: 0
 
                     // Option 1: Check for Client Updates...
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 28
-                        radius: 3
-                        color: optUpdateMouse.containsMouse ? "#282e3a" : "transparent"
+                        implicitHeight: 31
+                        color: optUpdateMouse.containsMouse ? "#212B3B" : "transparent"
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 12
+                            anchors.leftMargin: 18
+                            anchors.rightMargin: 18
 
                             Text {
                                 text: "Check for Client Updates..."
-                                color: optUpdateMouse.containsMouse ? "#FFFFFF" : "#C5C3C0"
-                                font.pixelSize: 12
+                                color: optUpdateMouse.containsMouse ? "#FFFFFF" : "#DCDEDF"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
+                                font.family: Theme.fontFamily
                                 Layout.fillWidth: true
                             }
                         }
@@ -325,22 +330,32 @@ Item {
                         }
                     }
 
+                    // Separator
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 1
+                        Layout.topMargin: 3
+                        Layout.bottomMargin: 3
+                        color: "#67707B"
+                    }
+
                     // Option 2: Settings
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 28
-                        radius: 3
-                        color: optSettingsMouse.containsMouse ? "#282e3a" : "transparent"
+                        implicitHeight: 31
+                        color: optSettingsMouse.containsMouse ? "#212B3B" : "transparent"
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 12
+                            anchors.leftMargin: 18
+                            anchors.rightMargin: 18
 
                             Text {
                                 text: "Settings"
-                                color: optSettingsMouse.containsMouse ? "#FFFFFF" : "#C5C3C0"
-                                font.pixelSize: 12
+                                color: optSettingsMouse.containsMouse ? "#FFFFFF" : "#DCDEDF"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
+                                font.family: Theme.fontFamily
                                 Layout.fillWidth: true
                             }
                         }
@@ -361,27 +376,28 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         implicitHeight: 1
-                        Layout.topMargin: 2
-                        Layout.bottomMargin: 2
-                        color: "#2e3440"
+                        Layout.topMargin: 3
+                        Layout.bottomMargin: 3
+                        color: "#67707B"
                     }
 
                     // Option 3: Exit
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 28
-                        radius: 3
-                        color: optExitMouse.containsMouse ? "#282e3a" : "transparent"
+                        implicitHeight: 31
+                        color: optExitMouse.containsMouse ? "#212B3B" : "transparent"
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 12
+                            anchors.leftMargin: 18
+                            anchors.rightMargin: 18
 
                             Text {
                                 text: "Exit"
-                                color: optExitMouse.containsMouse ? "#FFFFFF" : "#C5C3C0"
-                                font.pixelSize: 12
+                                color: optExitMouse.containsMouse ? "#FFFFFF" : "#DCDEDF"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
+                                font.family: Theme.fontFamily
                                 Layout.fillWidth: true
                             }
                         }

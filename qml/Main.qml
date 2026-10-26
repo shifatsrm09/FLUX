@@ -724,6 +724,9 @@ ApplicationWindow {
         }
         if (fluxSystem && fluxSystem.closeToTray) {
             close.accepted = false
+            if (fluxPlayer) {
+                fluxPlayer.pause()
+            }
             window.hide()
             return
         }
@@ -1132,14 +1135,9 @@ ApplicationWindow {
     // Discord-style startup updater popup window
     StartupPopup {
         id: startupPopup
-        visible: !fluxSystem || !fluxSystem.startedFromBoot
+        visible: true
         onFinished: {
-            if (fluxSystem && fluxSystem.startedFromBoot) {
-                window.startupComplete = true
-                startupPopup.visible = false
-            } else {
-                window.completeStartup()
-            }
+            window.completeStartup()
         }
     }
 }

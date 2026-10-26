@@ -26,12 +26,16 @@ Menu {
     signal renameRequested()
     signal deleteRequested()
 
-    padding: 6
+    padding: 0
+    topPadding: 3
+    bottomPadding: 3
+    leftPadding: 0
+    rightPadding: 0
     modal: false
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     enter: Transition {
-        NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 110 }
+        NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 100 }
     }
     exit: Transition {
         NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 80 }
@@ -43,40 +47,46 @@ Menu {
 
         property color tint: Theme.text
 
-        implicitWidth: 224
-        implicitHeight: visible ? 40 : 0
-        height: visible ? 40 : 0
-        leftPadding: 12
-        rightPadding: 12
+        implicitWidth: 238
+        implicitHeight: visible ? 31 : 0
+        height: visible ? 31 : 0
+        leftPadding: 18
+        rightPadding: 18
 
         contentItem: Text {
             text: entry.text
-            color: entry.enabled ? entry.tint : Theme.textMute
+            color: entry.enabled ? (entry.highlighted ? "#FFFFFF" : (entry.tint !== Theme.text ? entry.tint : "#DCDEDF")) : "#67707B"
             font.pixelSize: 13
-            font.weight: Font.Medium
+            font.weight: Font.Normal
+            font.family: Theme.fontFamily
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
         }
 
         background: Rectangle {
-            radius: 8
-            color: entry.highlighted ? "#26FFFFFF" : "transparent"
+            radius: 0
+            color: entry.highlighted ? "#212B3B" : "transparent"
         }
     }
 
-    component Sep: Rectangle {
-        implicitWidth: 224
-        implicitHeight: visible ? 1 : 0
-        height: visible ? 1 : 0
-        color: Theme.border
+    component Sep: Item {
+        implicitWidth: 238
+        implicitHeight: visible ? 7 : 0
+        height: visible ? 7 : 0
+        Rectangle {
+            anchors.centerIn: parent
+            width: parent.width
+            height: 1
+            color: "#67707B"
+        }
     }
 
     background: Rectangle {
-        implicitWidth: 236
-        radius: 12
-        color: "#F2121216"
+        implicitWidth: 238
+        radius: 2
+        color: "#3D4450"
         border.width: 1
-        border.color: Theme.borderHi
+        border.color: "#171D25"
     }
 
     Entry {

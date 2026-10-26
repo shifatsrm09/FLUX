@@ -1136,6 +1136,23 @@ Item {
 
                         Behavior on border.color { ColorAnimation { duration: 180 } }
 
+                        property bool suppressSuggestions: false
+
+                        TapHandler {
+                            acceptedButtons: Qt.LeftButton
+                            onTapped: {
+                                if (fluxUser && fluxUser.activeServer === 3 && topSearchInput.text.trim().length > 0) {
+                                    if (!suggestPopup.opened) {
+                                        if (fluxSearch && fluxSearch.suggestions.length > 0) {
+                                            suggestPopup.open()
+                                        } else if (fluxSearch) {
+                                            suggestDebounceTimer.restart()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 16
@@ -1160,6 +1177,7 @@ Item {
                                             fluxSearch.requestSuggestions(q)
                                         } else {
                                             fluxSearch.clearSuggestions()
+                                            suggestPopup.close()
                                         }
                                     }
                                 }
@@ -1177,28 +1195,54 @@ Item {
                                 selectionColor: Theme.accent
                                 background: null
 
+                                TapHandler {
+                                    acceptedButtons: Qt.LeftButton
+                                    onTapped: {
+                                        if (fluxUser && fluxUser.activeServer === 3 && topSearchInput.text.trim().length > 0) {
+                                            if (!suggestPopup.opened) {
+                                                if (fluxSearch && fluxSearch.suggestions.length > 0) {
+                                                    suggestPopup.open()
+                                                } else if (fluxSearch) {
+                                                    suggestDebounceTimer.restart()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
                                 onTextChanged: {
                                     // Search suggestions ONLY for Circle FTP (Server 3)
-                                    if (fluxUser && fluxUser.activeServer === 3) {
-                                        if (activeFocus) {
+                                    if (fluxUser && fluxUser.activeServer === 3 && !searchInputBox.suppressSuggestions) {
+                                        if (text.trim().length === 0) {
+                                            suggestDebounceTimer.stop()
+                                            suggestPopup.close()
+                                            if (fluxSearch) fluxSearch.clearSuggestions()
+                                        } else if (activeFocus) {
                                             suggestDebounceTimer.restart()
                                         }
                                     }
                                 }
 
                                 onActiveFocusChanged: {
-                                    if (activeFocus && fluxUser && fluxUser.activeServer === 3 && text.trim().length > 0) {
-                                        suggestDebounceTimer.restart()
+                                    if (activeFocus && fluxUser && fluxUser.activeServer === 3 && text.trim().length > 0 && !searchInputBox.suppressSuggestions) {
+                                        if (fluxSearch && fluxSearch.suggestions.length > 0) {
+                                            suggestPopup.open()
+                                        } else if (fluxSearch) {
+                                            suggestDebounceTimer.restart()
+                                        }
                                     }
                                 }
 
                                 onAccepted: {
                                     suggestDebounceTimer.stop()
+                                    searchInputBox.suppressSuggestions = true
+                                    suggestPopup.close()
                                     if (fluxSearch) fluxSearch.clearSuggestions()
                                     if (fluxSearch && text.trim().length > 0) {
                                         categoryFilter.isExpanded = false
                                         fluxSearch.search(text.trim())
                                     }
+                                    Qt.callLater(() => { searchInputBox.suppressSuggestions = false })
                                 }
                             }
 
@@ -1215,6 +1259,7 @@ Item {
 
                                 onClicked: {
                                     suggestDebounceTimer.stop()
+                                    suggestPopup.close()
                                     topSearchInput.text = ""
                                     if (fluxSearch) {
                                         fluxSearch.clearSuggestions()
@@ -1226,86 +1271,122 @@ Item {
                         }
                     }
 
+                    Connections {
+                        target: (typeof fluxSearch !== "undefined" && fluxSearch) ? fluxSearch : null
+                        function onSuggestionsChanged() {
+                            if (fluxUser && fluxUser.activeServer === 3
+                                    && topSearchInput.text.trim().length > 0
+                                    && fluxSearch.suggestions.length > 0
+                                    && topSearchInput.activeFocus
+                                    && !searchInputBox.suppressSuggestions) {
+                                suggestPopup.open()
+                            } else if (fluxSearch && fluxSearch.suggestions.length === 0) {
+                                suggestPopup.close()
+                            }
+                        }
+                    }
+
+                    Connections {
+                        target: (typeof fluxUser !== "undefined" && fluxUser) ? fluxUser : null
+                        function onActiveServerChanged() {
+                            if (fluxUser.activeServer !== 3) {
+                                suggestDebounceTimer.stop()
+                                suggestPopup.close()
+                                if (fluxSearch) fluxSearch.clearSuggestions()
+                            }
+                        }
+                    }
+
                     // Auto-suggestions overlay dropdown (Circle FTP Server 3 ONLY)
-                    Rectangle {
-                        id: suggestOverlay
-                        z: 9999
-                        anchors.top: searchInputBox.bottom
-                        anchors.topMargin: 4
-                        anchors.left: searchInputBox.left
-                        anchors.right: searchInputBox.right
+                    Popup {
+                        id: suggestPopup
+                        parent: searchInputBox
+                        x: 0
+                        y: searchInputBox.height + 4
+                        width: searchInputBox.width
                         implicitHeight: Math.min(300, suggestCol.implicitHeight + 12)
                         height: implicitHeight
-                        color: "#181d26"
-                        radius: 12
-                        border.width: 1
-                        border.color: "#303947"
-                        clip: true
-                        visible: (fluxUser && fluxUser.activeServer === 3)
-                                 && (topSearchInput.activeFocus || suggestOverlayMouse.containsMouse)
-                                 && (fluxSearch && fluxSearch.suggestions.length > 0)
-                                 && (topSearchInput.text.trim().length > 0)
+                        padding: 6
+                        modal: false
+                        focus: false
+                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
-                        MouseArea {
-                            id: suggestOverlayMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
+                        enter: Transition {
+                            NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 120; easing.type: Easing.OutQuad }
+                            NumberAnimation { property: "scale"; from: 0.98; to: 1.0; duration: 120; easing.type: Easing.OutQuad }
+                        }
+                        exit: Transition {
+                            NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 100; easing.type: Easing.InQuad }
                         }
 
-                        Column {
-                            id: suggestCol
-                            anchors.top: parent.top
-                            anchors.topMargin: 6
-                            anchors.left: parent.left
-                            anchors.leftMargin: 6
-                            anchors.right: parent.right
-                            anchors.rightMargin: 6
-                            spacing: 2
+                        background: Rectangle {
+                            color: "#181d26"
+                            radius: 12
+                            border.width: 1
+                            border.color: "#303947"
+                        }
 
-                            Repeater {
-                                model: (fluxUser && fluxUser.activeServer === 3 && fluxSearch) ? fluxSearch.suggestions : []
-                                delegate: Rectangle {
-                                    id: sugDelegate
-                                    width: suggestCol.width
-                                    height: 34
-                                    radius: 6
-                                    color: sugMouse.containsMouse ? "#26FFFFFF" : "transparent"
+                        contentItem: Flickable {
+                            id: suggestFlick
+                            clip: true
+                            contentWidth: width
+                            contentHeight: suggestCol.implicitHeight
+                            boundsBehavior: Flickable.StopAtBounds
+                            ScrollBar.vertical: FluxScrollBar { }
 
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.leftMargin: 12
-                                        anchors.rightMargin: 12
-                                        spacing: 10
+                            Column {
+                                id: suggestCol
+                                width: suggestFlick.width
+                                spacing: 2
 
-                                        FluxIcon {
-                                            name: "search"
-                                            size: 14
-                                            color: sugMouse.containsMouse ? Theme.accent : Theme.textMute
+                                Repeater {
+                                    model: (fluxUser && fluxUser.activeServer === 3 && fluxSearch) ? fluxSearch.suggestions : []
+                                    delegate: Rectangle {
+                                        id: sugDelegate
+                                        width: suggestCol.width
+                                        height: 34
+                                        radius: 6
+                                        color: sugMouse.containsMouse ? "#26FFFFFF" : "transparent"
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 12
+                                            anchors.rightMargin: 12
+                                            spacing: 10
+
+                                            FluxIcon {
+                                                name: "search"
+                                                size: 14
+                                                color: sugMouse.containsMouse ? Theme.accent : Theme.textMute
+                                            }
+
+                                            Text {
+                                                text: modelData
+                                                color: sugMouse.containsMouse ? "#FFFFFF" : Theme.text
+                                                font.pixelSize: 13
+                                                font.weight: sugMouse.containsMouse ? Font.DemiBold : Font.Normal
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
                                         }
 
-                                        Text {
-                                            text: modelData
-                                            color: sugMouse.containsMouse ? "#FFFFFF" : Theme.text
-                                            font.pixelSize: 13
-                                            font.weight: sugMouse.containsMouse ? Font.DemiBold : Font.Normal
-                                            elide: Text.ElideRight
-                                            Layout.fillWidth: true
-                                        }
-                                    }
-
-                                    MouseArea {
-                                        id: sugMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            suggestDebounceTimer.stop()
-                                            var chosen = modelData
-                                            topSearchInput.text = chosen
-                                            if (fluxSearch) {
-                                                fluxSearch.clearSuggestions()
-                                                categoryFilter.isExpanded = false
-                                                fluxSearch.search(chosen)
+                                        MouseArea {
+                                            id: sugMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                suggestDebounceTimer.stop()
+                                                searchInputBox.suppressSuggestions = true
+                                                suggestPopup.close()
+                                                var chosen = modelData
+                                                topSearchInput.text = chosen
+                                                if (fluxSearch) {
+                                                    fluxSearch.clearSuggestions()
+                                                    categoryFilter.isExpanded = false
+                                                    fluxSearch.search(chosen)
+                                                }
+                                                Qt.callLater(() => { searchInputBox.suppressSuggestions = false })
                                             }
                                         }
                                     }
@@ -1323,11 +1404,14 @@ Item {
 
                     onClicked: {
                         suggestDebounceTimer.stop()
+                        searchInputBox.suppressSuggestions = true
+                        suggestPopup.close()
                         if (fluxSearch && topSearchInput.text.trim().length > 0) {
                             fluxSearch.clearSuggestions()
                             categoryFilter.isExpanded = false
                             fluxSearch.search(topSearchInput.text.trim())
                         }
+                        Qt.callLater(() => { searchInputBox.suppressSuggestions = false })
                     }
                 }
             }

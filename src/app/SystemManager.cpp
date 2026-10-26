@@ -44,6 +44,9 @@ public:
                     m_manager->showContextMenu();
                     return true;
                 }
+            } else if (m_manager->activateInstanceMsg() && msg->message == m_manager->activateInstanceMsg()) {
+                m_manager->showWindow();
+                return true;
             } else if (m_manager->taskbarCreatedMsg() && msg->message == m_manager->taskbarCreatedMsg()) {
                 m_manager->reinstallTray();
                 return true;
@@ -73,6 +76,7 @@ SystemManager::SystemManager(UserStore *userStore, bool startedFromBoot, QObject
 
 #ifdef Q_OS_WIN
     m_taskbarCreatedMsg = RegisterWindowMessageW(L"TaskbarCreated");
+    m_activateInstanceMsg = RegisterWindowMessageW(L"FLUX_ACTIVATE_INSTANCE");
 
     // Enable autostart by default on first run, or update path if already enabled
     if (m_userStore) {
@@ -178,7 +182,17 @@ void SystemManager::showWindow() {
             } else {
                 ShowWindow(hwnd, SW_SHOW);
             }
-            SetForegroundWindow(hwnd);
+            DWORD foreThread = GetWindowThreadProcessId(GetForegroundWindow(), NULL);
+            DWORD appThread = GetCurrentThreadId();
+            if (foreThread != appThread) {
+                AttachThreadInput(foreThread, appThread, TRUE);
+                BringWindowToTop(hwnd);
+                SetForegroundWindow(hwnd);
+                AttachThreadInput(foreThread, appThread, FALSE);
+            } else {
+                BringWindowToTop(hwnd);
+                SetForegroundWindow(hwnd);
+            }
         }
 #endif
     }

@@ -10,6 +10,11 @@
 #include <QIcon>
 #include <QFile>
 #include <QQuickWindow>
+#include <QLocalServer>
+#include <QLocalSocket>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 #include "app/Application.h"
 #include "app/WindowsSnapHelper.h"
 #include "core/Logger.h"
@@ -24,6 +29,26 @@ int main(int argc, char *argv[]) {
     QGuiApplication::setApplicationVersion(QString::fromLatin1(FLUX_VERSION));
 
     QGuiApplication app(argc, argv);
+
+#ifdef Q_OS_WIN
+    // Single-instance enforcement: if FLUX is already running, activate it and exit
+    HANDLE hSingleInstanceMutex = CreateMutexW(NULL, TRUE, L"Local\\FLUX_SingleInstance_Mutex");
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        AllowSetForegroundWindow(ASFW_ANY);
+        UINT activateMsg = RegisterWindowMessageW(L"FLUX_ACTIVATE_INSTANCE");
+        if (activateMsg) {
+            PostMessageW(HWND_BROADCAST, activateMsg, 0, 0);
+            HWND hwnd = FindWindowW(NULL, L"FLUX");
+            if (hwnd) {
+                PostMessageW(hwnd, activateMsg, 0, 0);
+            }
+        }
+        if (hSingleInstanceMutex) {
+            CloseHandle(hSingleInstanceMutex);
+        }
+        return 0;
+    }
+#endif
 
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString icoPath = QDir(appDir).filePath(QStringLiteral("resources/flux.ico"));
@@ -52,6 +77,8 @@ int main(int argc, char *argv[]) {
 
     QQmlApplicationEngine engine;
     Flux::Application fluxApp;
+
+
 
     bool startedFromBoot = false;
     for (int i = 1; i < argc; ++i) {
@@ -117,5 +144,13 @@ int main(int argc, char *argv[]) {
 #endif
 
     FLUX_LOG_INFO("Main", "FLUX UI successfully launched. Entering main event loop.");
+#ifdef Q_OS_WIN
+    int exitCode = app.exec();
+    if (hSingleInstanceMutex) {
+        CloseHandle(hSingleInstanceMutex);
+    }
+    return exitCode;
+#else
     return app.exec();
+#endif
 }
