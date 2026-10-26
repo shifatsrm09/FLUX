@@ -275,6 +275,9 @@ UserStore::UserStore(QObject *parent)
     m_server1Available = m_settings.value(QStringLiteral("server/server1Available"), true).toBool();
     m_server2Available = m_settings.value(QStringLiteral("server/server2Available"), true).toBool();
     m_server3Available = m_settings.value(QStringLiteral("server/server3Available"), true).toBool();
+    m_server1Enabled = m_settings.value(QStringLiteral("server/server1Enabled"), true).toBool();
+    m_server2Enabled = m_settings.value(QStringLiteral("server/server2Enabled"), true).toBool();
+    m_server3Enabled = m_settings.value(QStringLiteral("server/server3Enabled"), true).toBool();
 
     const QFileInfo settingsInfo(m_settings.fileName());
     QDir().mkpath(settingsInfo.absolutePath());
@@ -693,11 +696,77 @@ int UserStore::activeServer() const {
 
 void UserStore::setActiveServer(int server) {
     if (server < 1 || server > 3) server = 1;
+    if (!isServerEnabled(server) && enabledServerCount() > 0) {
+        server = firstEnabledServer();
+    }
     if (activeServer() != server) {
         m_settings.setValue(QStringLiteral("server/activeServer"), server);
         m_settingsTimer.start();
         emit serverChanged();
     }
+}
+
+bool UserStore::isServerEnabled(int server) const {
+    if (server == 1) return m_server1Enabled;
+    if (server == 2) return m_server2Enabled;
+    if (server == 3) return m_server3Enabled;
+    return false;
+}
+
+void UserStore::setServer1Enabled(bool enabled) {
+    setServerEnabled(1, enabled);
+}
+
+void UserStore::setServer2Enabled(bool enabled) {
+    setServerEnabled(2, enabled);
+}
+
+void UserStore::setServer3Enabled(bool enabled) {
+    setServerEnabled(3, enabled);
+}
+
+void UserStore::setServerEnabled(int server, bool enabled) {
+    bool changed = false;
+    if (server == 1 && m_server1Enabled != enabled) {
+        m_server1Enabled = enabled;
+        setValue(QStringLiteral("server/server1Enabled"), enabled);
+        changed = true;
+    } else if (server == 2 && m_server2Enabled != enabled) {
+        m_server2Enabled = enabled;
+        setValue(QStringLiteral("server/server2Enabled"), enabled);
+        changed = true;
+    } else if (server == 3 && m_server3Enabled != enabled) {
+        m_server3Enabled = enabled;
+        setValue(QStringLiteral("server/server3Enabled"), enabled);
+        changed = true;
+    }
+
+    if (changed) {
+        emit serverEnabledChanged();
+        emit serverAvailabilityChanged();
+
+        if (!isServerEnabled(activeServer())) {
+            int next = firstEnabledServer();
+            if (next > 0) {
+                setActiveServer(next);
+            }
+        }
+    }
+}
+
+int UserStore::enabledServerCount() const {
+    int count = 0;
+    if (m_server1Enabled) ++count;
+    if (m_server2Enabled) ++count;
+    if (m_server3Enabled) ++count;
+    return count;
+}
+
+int UserStore::firstEnabledServer() const {
+    if (m_server1Enabled) return 1;
+    if (m_server2Enabled) return 2;
+    if (m_server3Enabled) return 3;
+    return 0;
 }
 
 QString UserStore::circleFtpUrl() const {
@@ -801,9 +870,9 @@ QString UserStore::serverNameForUrl(const QString &url) const {
 
 bool UserStore::isServerAvailableForUrl(const QString &url) const {
     const int s = serverForUrl(url);
-    if (s == 3) return m_server3Available;
-    if (s == 2) return m_server2Available;
-    if (s == 1) return m_server1Available;
+    if (s == 3) return m_server3Enabled && m_server3Available;
+    if (s == 2) return m_server2Enabled && m_server2Available;
+    if (s == 1) return m_server1Enabled && m_server1Available;
     return true; // Non-BDIX / generic URLs
 }
 
@@ -856,30 +925,38 @@ void UserStore::autoDetectServer() {
             setValue(QStringLiteral("server/server1Available"), s1);
             setValue(QStringLiteral("server/server2Available"), s2);
             setValue(QStringLiteral("server/server3Available"), s3);
+
+            // On startup: check if this network supports each server
+            // If all work -> all turned ON
+            // If only 1 works -> that 1 turned ON only
+            m_server1Enabled = s1;
+            m_server2Enabled = s2;
+            m_server3Enabled = s3;
+            setValue(QStringLiteral("server/server1Enabled"), s1);
+            setValue(QStringLiteral("server/server2Enabled"), s2);
+            setValue(QStringLiteral("server/server3Enabled"), s3);
+
             m_serverCheckComplete = true;
             emit serverAvailabilityChanged();
+            emit serverEnabledChanged();
 
             FLUX_LOG_INFO("UserStore", QStringLiteral("Server auto-detection complete: Dhaka Flix = %1, ICC FTP = %2, Circle FTP = %3")
-                          .arg(s1 ? QStringLiteral("OK") : QStringLiteral("DOWN"))
-                          .arg(s2 ? QStringLiteral("OK") : QStringLiteral("DOWN"))
-                          .arg(s3 ? QStringLiteral("OK") : QStringLiteral("DOWN")));
+                          .arg(s1 ? QStringLiteral("OK (ON)") : QStringLiteral("DOWN (OFF)"))
+                          .arg(s2 ? QStringLiteral("OK (ON)") : QStringLiteral("DOWN (OFF)"))
+                          .arg(s3 ? QStringLiteral("OK (ON)") : QStringLiteral("DOWN (OFF)")));
 
             const int current = activeServer();
-            if (current == 1 && !s1) {
-                if (s2) setActiveServer(2);
-                else if (s3) setActiveServer(3);
-            } else if (current == 2 && !s2) {
-                if (s3) setActiveServer(3);
-                else if (s1) setActiveServer(1);
-            } else if (current == 3 && !s3) {
-                if (s2) setActiveServer(2);
-                else if (s1) setActiveServer(1);
+            if (!isServerEnabled(current)) {
+                const int next = firstEnabledServer();
+                if (next > 0) {
+                    setActiveServer(next);
+                }
             }
         }
     };
 
     // Probe Server 1 (Dhaka Flix)
-    QUrl s1Url(QStringLiteral("http://172.16.50.7/DHAKA-FLIX-7/"));
+    QUrl s1Url(QStringLiteral("http://172.16.50.14/"));
     QNetworkRequest s1Req(s1Url);
     s1Req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     s1Req.setTransferTimeout(3500);
@@ -895,8 +972,8 @@ void UserStore::autoDetectServer() {
         checkDone();
     });
 
-    // Probe Server 2 (ICC FTP)
-    QUrl s2Url(iccftpUrl());
+    // Probe Server 2 (ICC FTP) - login.php responds in 35ms instead of hanging
+    QUrl s2Url(QStringLiteral("http://10.16.100.244/login.php"));
     QNetworkRequest s2Req(s2Url);
     s2Req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     s2Req.setTransferTimeout(3500);

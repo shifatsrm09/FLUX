@@ -261,8 +261,8 @@ Item {
                 id: trendingSection
 
                 width: homeColumn.width
-                visible: (fluxUser ? (fluxUser.server2Available || fluxUser.bothServersDown) : true) && !!fluxSearch && fluxSearch.trending && fluxSearch.trending.length > 0
-                height: visible ? (trendingLayout.y + trendingLayout.implicitHeight + 40) : 0
+                visible: (fluxUser ? (fluxUser.server2Enabled || fluxUser.allServersDown) : true) && !!fluxSearch && fluxSearch.trending && fluxSearch.trending.length > 0
+                height: visible ? (trendingLayout.y + trendingLayout.implicitHeight + 16) : 0
                 implicitHeight: height
 
                 y: {
@@ -285,9 +285,9 @@ Item {
                     id: trendingLayout
                     x: root.pageMargin
                     y: {
-                        if (continueList.count > 0) return 20
+                        if (continueList.count > 0) return 16
                         var isTop = !(fluxUser && fluxUser.topPicksFirst)
-                        return isTop ? (root.topInset + 16) : 20
+                        return isTop ? (root.topInset + 16) : 12
                     }
                     width: trendingSection.availableWidth
                     spacing: 16
@@ -442,7 +442,7 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.topMargin: 8
-                        Layout.bottomMargin: 24
+                        Layout.bottomMargin: 8
                         visible: (fluxSearch && fluxSearch.trending && fluxSearch.trending.length > trendingSection.trendingCols * 2)
 
                         Item { Layout.fillWidth: true }
@@ -500,7 +500,7 @@ Item {
                 id: topPicksSection
 
                 width: homeColumn.width
-                height: topPicksLayout.y + topPicksLayout.implicitHeight + 48
+                height: topPicksLayout.y + topPicksLayout.implicitHeight + 16
                 implicitHeight: height
 
                 y: {
@@ -550,9 +550,9 @@ Item {
                     id: topPicksLayout
                     x: root.pageMargin
                     y: {
-                        if (continueList.count > 0) return 20
+                        if (continueList.count > 0) return 16
                         var isTop = (fluxUser && fluxUser.topPicksFirst) || (!trendingSection.visible)
-                        return isTop ? (root.topInset + 16) : 20
+                        return isTop ? (root.topInset + 16) : 12
                     }
                     width: topPicksSection.availableWidth
                     spacing: 16
@@ -583,14 +583,15 @@ Item {
                                 anchors.centerIn: parent
                                 text: {
                                     if (fluxUser) {
-                                        if (fluxUser.bothServersDown) {
-                                            return fluxUser.activeServer === 2 ? "ICC FTP" : "Dhaka Flix"
-                                        }
-                                        if (!fluxUser.server2Available && fluxUser.server1Available) return "Dhaka Flix"
-                                        if (!fluxUser.server1Available && fluxUser.server2Available) return "ICC FTP"
-                                        return fluxUser.activeServer === 2 ? "ICC FTP" : "Dhaka Flix"
+                                        var cur = fluxUser.activeServer
+                                        if (cur === 3 && fluxUser.server3Enabled) return "Circle FTP"
+                                        if (cur === 2 && fluxUser.server2Enabled) return "ICC FTP"
+                                        if (cur === 1 && fluxUser.server1Enabled) return "Dhaka Flix"
+                                        if (fluxUser.server3Enabled) return "Circle FTP"
+                                        if (fluxUser.server2Enabled) return "ICC FTP"
+                                        if (fluxUser.server1Enabled) return "Dhaka Flix"
                                     }
-                                    return "Dhaka Flix"
+                                    return "Unavailable"
                                 }
                                 color: Theme.accent
                                 font.pixelSize: 11
@@ -662,24 +663,45 @@ Item {
 
                                 readonly property int chosenServer: {
                                     if (fluxUser) {
-                                        if (fluxUser.activeServer === 3 && modelData.circleUrl && modelData.circleUrl.length > 0) return 3
-                                        if (fluxUser.activeServer === 2 && modelData.altUrl && modelData.altUrl.length > 0) return 2
-                                        if (fluxUser.activeServer === 1 && modelData.url && modelData.url.length > 0) return 1
-                                        if (modelData.circleUrl) return 3
-                                        if (modelData.altUrl) return 2
-                                        if (modelData.url) return 1
+                                        var s1On = fluxUser.server1Enabled
+                                        var s2On = fluxUser.server2Enabled
+                                        var s3On = fluxUser.server3Enabled
+                                        var cur = fluxUser.activeServer
+
+                                        if (cur === 3 && s3On && modelData.circleUrl && modelData.circleUrl.length > 0) return 3
+                                        if (cur === 2 && s2On && modelData.altUrl && modelData.altUrl.length > 0) return 2
+                                        if (cur === 1 && s1On && modelData.url && modelData.url.length > 0) return 1
+
+                                        if (s3On && modelData.circleUrl && modelData.circleUrl.length > 0) return 3
+                                        if (s2On && modelData.altUrl && modelData.altUrl.length > 0) return 2
+                                        if (s1On && modelData.url && modelData.url.length > 0) return 1
                                     }
-                                    return 1
+                                    return 0
                                 }
                                 readonly property string effectiveUrl: {
-                                    if (chosenServer === 3) return modelData.circleUrl
-                                    if (chosenServer === 2) return modelData.altUrl
-                                    return modelData.url || modelData.circleUrl || modelData.altUrl || ""
+                                    if (chosenServer === 3) return modelData.circleUrl || ""
+                                    if (chosenServer === 2) return modelData.altUrl || ""
+                                    if (chosenServer === 1) return modelData.url || ""
+                                    return ""
                                 }
                                 readonly property string fallbackUrl: {
-                                    if (chosenServer === 3) return modelData.altUrl || modelData.url || ""
-                                    if (chosenServer === 2) return modelData.circleUrl || modelData.url || ""
-                                    return modelData.circleUrl || modelData.altUrl || ""
+                                    if (fluxUser) {
+                                        var s1On = fluxUser.server1Enabled
+                                        var s2On = fluxUser.server2Enabled
+                                        var s3On = fluxUser.server3Enabled
+
+                                        if (chosenServer === 3) {
+                                            if (s2On && modelData.altUrl) return modelData.altUrl
+                                            if (s1On && modelData.url) return modelData.url
+                                        } else if (chosenServer === 2) {
+                                            if (s3On && modelData.circleUrl) return modelData.circleUrl
+                                            if (s1On && modelData.url) return modelData.url
+                                        } else if (chosenServer === 1) {
+                                            if (s3On && modelData.circleUrl) return modelData.circleUrl
+                                            if (s2On && modelData.altUrl) return modelData.altUrl
+                                        }
+                                    }
+                                    return ""
                                 }
 
                                 width: topPicksSection.picksCardW
@@ -688,13 +710,19 @@ Item {
                                 playUrl: effectiveUrl
                                 posterUrl: modelData.posterUrl || ""
                                 isFolder: false
-                                libraryName: chosenServer === 3 ? "CIRCLE FTP" : (chosenServer === 2 ? "ICC FTP" : "DHAKA FLIX")
+                                libraryName: chosenServer === 3 ? "CIRCLE FTP" : (chosenServer === 2 ? "ICC FTP" : (chosenServer === 1 ? "DHAKA FLIX" : "UNAVAILABLE"))
                                 progress: 0
                                 showRemove: false
                                 extraInfo: modelData.extraInfo || "Top Pick"
                                 introDelay: Math.min(index, 12) * 30
 
                                 onPlayRequested: function(targetUrl, itemTitle) {
+                                    if (!targetUrl || targetUrl.length === 0) {
+                                        if (window && window.showNotification) {
+                                            window.showNotification("Media unavailable on enabled servers. Check Media Server Settings.")
+                                        }
+                                        return
+                                    }
                                     root.playMediaRequested(targetUrl, itemTitle, fallbackUrl)
                                 }
 
@@ -713,7 +741,7 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.topMargin: 8
-                        Layout.bottomMargin: 32
+                        Layout.bottomMargin: 8
                         visible: topPicksSection.topPicksList.length > topPicksSection.picksCols * 2
 
                         Item { Layout.fillWidth: true }
@@ -804,13 +832,25 @@ Item {
                 readonly property int activeServerIndex: (fluxUser && fluxUser.activeServer === 1) ? 1
                                                        : ((fluxUser && fluxUser.activeServer === 3) ? 3 : 2)
                 readonly property bool isWide: root.width >= 750
+                readonly property int enabledCount: fluxUser ? fluxUser.enabledServerCount : 3
 
+                visible: enabledCount > 0
                 implicitHeight: 42
-                implicitWidth: searchSegmentsRow.width + 8
+                implicitWidth: Math.max(80, searchSegmentsRow.width + 8)
                 radius: 21
                 color: Theme.surface
                 border.width: 1
                 border.color: Theme.border
+
+                readonly property var currentActiveSegment: {
+                    if (activeServerIndex === 1 && sseg1.visible) return sseg1
+                    if (activeServerIndex === 2 && sseg2.visible) return sseg2
+                    if (activeServerIndex === 3 && sseg3.visible) return sseg3
+                    if (sseg1.visible) return sseg1
+                    if (sseg2.visible) return sseg2
+                    if (sseg3.visible) return sseg3
+                    return null
+                }
 
                 // Active sliding pill
                 Rectangle {
@@ -818,10 +858,9 @@ Item {
                     radius: 17
                     anchors.verticalCenter: parent.verticalCenter
                     color: Theme.accent
-                    x: searchSegmentsRow.x + (searchServerSelector.activeServerIndex === 1 ? sseg1.x
-                                            : (searchServerSelector.activeServerIndex === 3 ? sseg3.x : sseg2.x))
-                    width: searchServerSelector.activeServerIndex === 1 ? sseg1.width
-                         : (searchServerSelector.activeServerIndex === 3 ? sseg3.width : sseg2.width)
+                    visible: searchServerSelector.currentActiveSegment !== null
+                    x: searchServerSelector.currentActiveSegment ? (searchSegmentsRow.x + searchServerSelector.currentActiveSegment.x) : 0
+                    width: searchServerSelector.currentActiveSegment ? searchServerSelector.currentActiveSegment.width : 0
 
                     Behavior on x { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                     Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
@@ -836,8 +875,9 @@ Item {
                     // Server 1: Dhaka Flix
                     Item {
                         id: sseg1
+                        visible: fluxUser ? fluxUser.server1Enabled : true
                         height: 34
-                        width: sseg1Row.implicitWidth + 24
+                        width: visible ? (sseg1Row.implicitWidth + 24) : 0
 
                         Rectangle {
                             anchors.fill: parent
@@ -901,8 +941,9 @@ Item {
                     // Server 2: ICC FTP
                     Item {
                         id: sseg2
+                        visible: fluxUser ? fluxUser.server2Enabled : true
                         height: 34
-                        width: sseg2Row.implicitWidth + 24
+                        width: visible ? (sseg2Row.implicitWidth + 24) : 0
 
                         Rectangle {
                             anchors.fill: parent
@@ -966,8 +1007,9 @@ Item {
                     // Server 3: Circle FTP
                     Item {
                         id: sseg3
+                        visible: fluxUser ? fluxUser.server3Enabled : true
                         height: 34
-                        width: sseg3Row.implicitWidth + 24
+                        width: visible ? (sseg3Row.implicitWidth + 24) : 0
 
                         Rectangle {
                             anchors.fill: parent
@@ -1026,6 +1068,37 @@ Item {
                             delay: 400
                             text: "Server 3 (Circle FTP) \u2014 Direct high-speed streaming"
                         }
+                    }
+                }
+            }
+
+            // Notice when all servers are turned off
+            Rectangle {
+                visible: searchServerSelector.enabledCount === 0
+                implicitHeight: 38
+                implicitWidth: noServersRow.implicitWidth + 28
+                radius: 19
+                color: "#2E1A1D"
+                border.width: 1
+                border.color: "#FF4D5E"
+
+                RowLayout {
+                    id: noServersRow
+                    anchors.centerIn: parent
+                    spacing: 10
+
+                    FluxIcon {
+                        name: "alert"
+                        size: 14
+                        color: "#FF4D5E"
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    Text {
+                        text: "All media servers are currently turned off. Turn on servers in Settings."
+                        color: "#FFD0D4"
+                        font.pixelSize: 12
+                        Layout.alignment: Qt.AlignVCenter
                     }
                 }
             }

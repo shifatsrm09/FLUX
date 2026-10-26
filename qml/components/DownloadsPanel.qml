@@ -13,18 +13,18 @@ Popup {
     // Ask the app to play a completed download file
     signal playRequested(string url, string title)
 
-    // Distance from the window edge (matches the dock)
-    property real edgeMargin: 22
-    property real bottomReserve: 82
+    // Distance from the window edge (matches the title bar position)
+    property real edgeMargin: 16
+    property real panelTopMargin: 44
 
-    readonly property real maxHeight: (parent ? parent.height : 600) - bottomReserve - 70
+    readonly property real maxHeight: (parent ? parent.height : 600) - panelTopMargin - 40
     readonly property int activeCount: fluxDownloads ? fluxDownloads.activeCount : 0
     readonly property int historyCount: (fluxDownloads && fluxDownloads.history) ? fluxDownloads.history.length : 0
     readonly property bool hasItems: activeCount > 0 || historyCount > 0
 
     parent: Overlay.overlay
-    x: parent ? parent.width - width - edgeMargin : 0
-    y: parent ? parent.height - height - bottomReserve : 0
+    x: parent ? Math.max(16, parent.width - width - edgeMargin) : 0
+    y: panelTopMargin
     width: Math.min(460, (parent ? parent.width : 460) - 2 * edgeMargin)
     height: Math.min(Math.max(220, hasItems ? (62 + scrollContent.implicitHeight) : 240), maxHeight)
     modal: false
@@ -36,7 +36,7 @@ Popup {
 
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 140 }
-        NumberAnimation { property: "y"; from: panel.y + 12; to: panel.y; duration: 200; easing.type: Easing.OutCubic }
+        NumberAnimation { property: "y"; from: panel.y - 8; to: panel.y; duration: 200; easing.type: Easing.OutCubic }
     }
     exit: Transition {
         NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 110 }

@@ -33,6 +33,10 @@ class UserStore : public QObject {
     Q_PROPERTY(bool server1Available READ isServer1Available NOTIFY serverAvailabilityChanged)
     Q_PROPERTY(bool server2Available READ isServer2Available NOTIFY serverAvailabilityChanged)
     Q_PROPERTY(bool server3Available READ isServer3Available NOTIFY serverAvailabilityChanged)
+    Q_PROPERTY(bool server1Enabled READ isServer1Enabled WRITE setServer1Enabled NOTIFY serverEnabledChanged)
+    Q_PROPERTY(bool server2Enabled READ isServer2Enabled WRITE setServer2Enabled NOTIFY serverEnabledChanged)
+    Q_PROPERTY(bool server3Enabled READ isServer3Enabled WRITE setServer3Enabled NOTIFY serverEnabledChanged)
+    Q_PROPERTY(int enabledServerCount READ enabledServerCount NOTIFY serverEnabledChanged)
     Q_PROPERTY(bool serverCheckComplete READ isServerCheckComplete NOTIFY serverAvailabilityChanged)
     Q_PROPERTY(bool bothServersDown READ bothServersDown NOTIFY serverAvailabilityChanged)
     Q_PROPERTY(bool allServersDown READ allServersDown NOTIFY serverAvailabilityChanged)
@@ -69,9 +73,22 @@ public:
     bool isServer1Available() const { return m_server1Available; }
     bool isServer2Available() const { return m_server2Available; }
     bool isServer3Available() const { return m_server3Available; }
+    Q_INVOKABLE bool isServer1Enabled() const { return m_server1Enabled; }
+    void setServer1Enabled(bool enabled);
+    Q_INVOKABLE bool isServer2Enabled() const { return m_server2Enabled; }
+    void setServer2Enabled(bool enabled);
+    Q_INVOKABLE bool isServer3Enabled() const { return m_server3Enabled; }
+    void setServer3Enabled(bool enabled);
+    Q_INVOKABLE bool isServerEnabled(int server) const;
+    Q_INVOKABLE void setServerEnabled(int server, bool enabled);
+    int enabledServerCount() const;
+    Q_INVOKABLE int firstEnabledServer() const;
     bool isServerCheckComplete() const { return m_serverCheckComplete; }
     bool bothServersDown() const { return allServersDown(); }
-    bool allServersDown() const { return m_serverCheckComplete && !m_server1Available && !m_server2Available && !m_server3Available; }
+    bool allServersDown() const {
+        return (m_serverCheckComplete && !m_server1Available && !m_server2Available && !m_server3Available)
+            || enabledServerCount() == 0;
+    }
     QString circleFtpUrl() const;
     Q_INVOKABLE void setCircleFtpUrl(const QString &url);
     Q_INVOKABLE void autoDetectServer();
@@ -134,6 +151,7 @@ public:
 
 signals:
     void historyChanged();
+    void serverEnabledChanged();
     void autoplayNextChanged();
     void topPicksFirstChanged();
     void serverChanged();
@@ -221,6 +239,9 @@ private:
     bool m_server1Available = true;
     bool m_server2Available = true;
     bool m_server3Available = true;
+    bool m_server1Enabled = true;
+    bool m_server2Enabled = true;
+    bool m_server3Enabled = true;
     bool m_serverCheckComplete = false;
     bool m_devUnlocked = false;
 };

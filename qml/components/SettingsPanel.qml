@@ -12,12 +12,24 @@ Popup {
     property string serverTestStatus: ""
     property bool serverTesting: false
     property bool serverTestSuccess: false
+
+    property bool server1Testing: false
+    property string server1Status: ""
+    property bool server1Success: false
+
+    property bool server2Testing: false
+    property string server2Status: ""
+    property bool server2Success: false
+
+    property bool server3Testing: false
+    property string server3Status: ""
+    property bool server3Success: false
     property bool showPinPrompt: false
     property string devPinErrorText: ""
     property string customCodeSavedText: ""
 
     // Active category in left sidebar
-    property string currentTab: "downloads"
+    property string currentTab: "server"
 
     // Steam Dark Theme Palette
     readonly property color cSidebarBg: "#171a21"       // Steam deep dark navy sidebar
@@ -41,6 +53,192 @@ Popup {
         } else {
             devPinErrorText = "Incorrect 4-digit PIN."
         }
+    }
+
+    function testServer(num) {
+        var targetUrl = ""
+        if (num === 1) {
+            targetUrl = "http://172.16.50.14/"
+            server1Testing = true
+            server1Status = "Checking server response..."
+        } else if (num === 2) {
+            targetUrl = "http://10.16.100.244/login.php"
+            server2Testing = true
+            server2Status = "Checking server response..."
+        } else if (num === 3) {
+            targetUrl = "http://new.circleftp.net:5000/api/categories"
+            server3Testing = true
+            server3Status = "Checking server response..."
+        }
+
+        var xhr = new XMLHttpRequest()
+        var startTime = Date.now()
+        xhr.open("GET", targetUrl, true)
+        xhr.timeout = 3500
+
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                var elapsed = Date.now() - startTime
+                var success = (xhr.status >= 200 && xhr.status < 400)
+                var statusMsg = success
+                    ? ("Online · Latency " + elapsed + " ms")
+                    : ("Server unreachable (" + (xhr.status > 0 ? ("HTTP " + xhr.status) : "timeout / network error") + ")")
+
+                if (num === 1) {
+                    server1Testing = false
+                    server1Success = success
+                    server1Status = statusMsg
+                } else if (num === 2) {
+                    server2Testing = false
+                    server2Success = success
+                    server2Status = statusMsg
+                } else if (num === 3) {
+                    server3Testing = false
+                    server3Success = success
+                    server3Status = statusMsg
+                }
+            }
+        }
+
+        xhr.ontimeout = function() {
+            var timeoutMsg = "Request timed out (> 3.5s)"
+            if (num === 1) {
+                server1Testing = false
+                server1Success = false
+                server1Status = timeoutMsg
+            } else if (num === 2) {
+                server2Testing = false
+                server2Success = false
+                server2Status = timeoutMsg
+            } else if (num === 3) {
+                server3Testing = false
+                server3Success = false
+                server3Status = timeoutMsg
+            }
+        }
+
+        xhr.onerror = function() {
+            var errMsg = "Connection failed"
+            if (num === 1) {
+                server1Testing = false
+                server1Success = false
+                server1Status = errMsg
+            } else if (num === 2) {
+                server2Testing = false
+                server2Success = false
+                server2Status = errMsg
+            } else if (num === 3) {
+                server3Testing = false
+                server3Success = false
+                server3Status = errMsg
+            }
+        }
+
+        xhr.send()
+    }
+
+    function toggleServer(num, targetState) {
+        if (!fluxUser) return
+        if (!targetState) {
+            fluxUser.setServerEnabled(num, false)
+            if (num === 1) server1Status = "Server turned off."
+            else if (num === 2) server2Status = "Server turned off."
+            else if (num === 3) server3Status = "Server turned off."
+            return
+        }
+
+        if (num === 1) {
+            server1Testing = true
+            server1Status = "Testing connection to Dhaka Flix..."
+        } else if (num === 2) {
+            server2Testing = true
+            server2Status = "Testing connection to ICC Flix..."
+        } else if (num === 3) {
+            server3Testing = true
+            server3Status = "Testing connection to Circle FTP..."
+        }
+
+        var targetUrl = ""
+        if (num === 1) {
+            targetUrl = "http://172.16.50.14/"
+        } else if (num === 2) {
+            targetUrl = "http://10.16.100.244/login.php"
+        } else if (num === 3) {
+            targetUrl = "http://new.circleftp.net:5000/api/categories"
+        }
+
+        var xhr = new XMLHttpRequest()
+        var startTime = Date.now()
+        xhr.open("GET", targetUrl, true)
+        xhr.timeout = 3500
+
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                var elapsed = Date.now() - startTime
+                var success = (xhr.status >= 200 && xhr.status < 400)
+                var statusMsg = success
+                    ? ("Online · Latency " + elapsed + " ms")
+                    : ("Server unreachable (" + (xhr.status > 0 ? ("HTTP " + xhr.status) : "timeout / network error") + "). Cannot turn on.")
+
+                if (num === 1) {
+                    server1Testing = false
+                    server1Success = success
+                    server1Status = statusMsg
+                } else if (num === 2) {
+                    server2Testing = false
+                    server2Success = success
+                    server2Status = statusMsg
+                } else if (num === 3) {
+                    server3Testing = false
+                    server3Success = success
+                    server3Status = statusMsg
+                }
+
+                if (success) {
+                    fluxUser.setServerEnabled(num, true)
+                } else {
+                    fluxUser.setServerEnabled(num, false)
+                }
+            }
+        }
+
+        xhr.ontimeout = function() {
+            var timeoutMsg = "Request timed out (> 3.5s). Cannot turn on."
+            if (num === 1) {
+                server1Testing = false
+                server1Success = false
+                server1Status = timeoutMsg
+            } else if (num === 2) {
+                server2Testing = false
+                server2Success = false
+                server2Status = timeoutMsg
+            } else if (num === 3) {
+                server3Testing = false
+                server3Success = false
+                server3Status = timeoutMsg
+            }
+            fluxUser.setServerEnabled(num, false)
+        }
+
+        xhr.onerror = function() {
+            var errMsg = "Connection failed / network unsupported. Cannot turn on."
+            if (num === 1) {
+                server1Testing = false
+                server1Success = false
+                server1Status = errMsg
+            } else if (num === 2) {
+                server2Testing = false
+                server2Success = false
+                server2Status = errMsg
+            } else if (num === 3) {
+                server3Testing = false
+                server3Success = false
+                server3Status = errMsg
+            }
+            fluxUser.setServerEnabled(num, false)
+        }
+
+        xhr.send()
     }
 
     Timer {
@@ -83,7 +281,16 @@ Popup {
         serverTestStatus = ""
         serverTesting = false
         serverTestSuccess = false
-        if (currentTab === "") currentTab = "downloads"
+        server1Testing = false
+        server1Status = ""
+        server1Success = false
+        server2Testing = false
+        server2Status = ""
+        server2Success = false
+        server3Testing = false
+        server3Status = ""
+        server3Success = false
+        if (currentTab === "") currentTab = "server"
     }
 
     Overlay.modal: Rectangle { color: "#B3000000" }
@@ -531,11 +738,13 @@ Popup {
                                                 anchors.rightMargin: 10
 
                                                 Text {
-                                                    text: (fluxUser && fluxUser.activeServer === 3)
-                                                        ? "Server 3 (Circle FTP)"
-                                                        : ((fluxUser && fluxUser.activeServer === 2)
-                                                            ? "Server 2 (ICC Flix)"
-                                                            : "Server 1 (Dhaka Flix)")
+                                                    text: {
+                                                        if (!fluxUser || fluxUser.enabledServerCount === 0) return "No Servers Enabled"
+                                                        if (fluxUser.activeServer === 3 && fluxUser.server3Enabled) return "Server 3 (Circle FTP)"
+                                                        if (fluxUser.activeServer === 2 && fluxUser.server2Enabled) return "Server 2 (ICC Flix)"
+                                                        if (fluxUser.activeServer === 1 && fluxUser.server1Enabled) return "Server 1 (Dhaka Flix)"
+                                                        return "Select Server"
+                                                    }
                                                     color: panel.cTextWhite
                                                     font.pixelSize: 12
                                                     font.weight: Font.DemiBold
@@ -598,6 +807,7 @@ Popup {
 
                                                 // Option 1: Dhaka Flix
                                                 Rectangle {
+                                                    visible: fluxUser ? fluxUser.server1Enabled : true
                                                     Layout.fillWidth: true
                                                     implicitHeight: 32
                                                     radius: 3
@@ -641,6 +851,7 @@ Popup {
 
                                                 // Option 2: ICC Flix
                                                 Rectangle {
+                                                    visible: fluxUser ? fluxUser.server2Enabled : true
                                                     Layout.fillWidth: true
                                                     implicitHeight: 32
                                                     radius: 3
@@ -684,6 +895,7 @@ Popup {
 
                                                 // Option 3: Circle FTP
                                                 Rectangle {
+                                                    visible: fluxUser ? fluxUser.server3Enabled : true
                                                     Layout.fillWidth: true
                                                     implicitHeight: 32
                                                     radius: 3
@@ -764,74 +976,278 @@ Popup {
                                 }
                             }
 
-                            SteamSectionTitle { text: "Connection & Latency Diagnostic" }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                SteamSectionTitle {
+                                    text: "Connection & Latency Diagnostic"
+                                    Layout.fillWidth: true
+                                }
+                                SteamButton {
+                                    text: (panel.server1Testing || panel.server2Testing || panel.server3Testing) ? "Testing..." : "Test All"
+                                    iconName: "refresh"
+                                    isAccent: false
+                                    onClicked: {
+                                        panel.testServer(1)
+                                        panel.testServer(2)
+                                        panel.testServer(3)
+                                    }
+                                }
+                            }
 
                             SteamCard {
+                                // Row 1: Server 1 (Dhaka Flix)
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    spacing: 16
+                                    spacing: 14
+
+                                    Rectangle {
+                                        width: 8
+                                        height: 8
+                                        radius: 4
+                                        color: !(fluxUser && fluxUser.server1Enabled) ? panel.cTextMute
+                                             : panel.server1Status === "" ? Theme.success
+                                             : panel.server1Success ? Theme.success
+                                             : Theme.danger
+                                    }
 
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         spacing: 2
 
-                                        Text {
-                                            text: "Ping & Reachability"
-                                            color: panel.cTextWhite
-                                            font.pixelSize: 13
-                                            font.weight: Font.DemiBold
+                                        RowLayout {
+                                            spacing: 8
+                                            Text {
+                                                text: "Server 1: Dhaka Flix"
+                                                color: (fluxUser && fluxUser.server1Enabled) ? panel.cTextWhite : panel.cTextDim
+                                                font.pixelSize: 13
+                                                font.weight: Font.DemiBold
+                                            }
+
+                                            Rectangle {
+                                                visible: fluxUser && fluxUser.activeServer === 1 && fluxUser.server1Enabled
+                                                implicitWidth: 48
+                                                implicitHeight: 16
+                                                radius: 8
+                                                color: panel.cSteamBlue
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "ACTIVE"
+                                                    color: "#FFFFFF"
+                                                    font.pixelSize: 9
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+
+                                            Text {
+                                                text: "http://172.16.50.14/"
+                                                color: panel.cTextMute
+                                                font.family: Theme.monoFamily
+                                                font.pixelSize: 11
+                                            }
                                         }
 
                                         Text {
-                                            text: panel.serverTestStatus !== ""
-                                                ? panel.serverTestStatus
-                                                : "Test round-trip latency to verify active BDIX server connectivity."
-                                            color: panel.serverTestStatus === "" ? panel.cTextMute
-                                                 : panel.serverTestSuccess ? Theme.success
+                                            text: panel.server1Status !== "" ? panel.server1Status
+                                                : (!(fluxUser && fluxUser.server1Enabled) ? "Server turned off." : "Online · Ready for streaming and search.")
+                                            color: !(fluxUser && fluxUser.server1Enabled) ? panel.cTextMute
+                                                 : panel.server1Status === "" ? Theme.success
+                                                 : panel.server1Success ? Theme.success
                                                  : Theme.danger
                                             font.pixelSize: 12
-                                            font.weight: panel.serverTestStatus !== "" ? Font.DemiBold : Font.Normal
+                                            font.weight: panel.server1Status !== "" ? Font.DemiBold : Font.Normal
                                             wrapMode: Text.WordWrap
                                             Layout.fillWidth: true
                                         }
                                     }
 
                                     SteamButton {
-                                        text: panel.serverTesting ? "Testing..." : "Test Latency"
-                                        iconName: panel.serverTesting ? "refresh" : "swap"
+                                        text: panel.server1Testing ? "Testing..." : "Test Latency"
+                                        iconName: panel.server1Testing ? "refresh" : "swap"
                                         isAccent: false
-                                        onClicked: {
-                                            if (panel.serverTesting) return
-                                            panel.serverTesting = true
-                                            panel.serverTestStatus = "Checking server response..."
-                                            var targetUrl = (fluxUser && fluxUser.activeServer === 3)
-                                                ? "http://new.circleftp.net:5000/api/categories"
-                                                : ((fluxUser && fluxUser.activeServer === 2)
-                                                    ? "http://10.16.100.244/"
-                                                    : "http://172.16.50.14/")
-                                            var xhr = new XMLHttpRequest()
-                                            var startTime = Date.now()
-                                            xhr.open("HEAD", targetUrl, true)
-                                            xhr.timeout = 3500
-                                            xhr.onreadystatechange = function() {
-                                                if (xhr.readyState === XMLHttpRequest.DONE) {
-                                                    panel.serverTesting = false
-                                                    var elapsed = Date.now() - startTime
-                                                    if (xhr.status > 0) {
-                                                        panel.serverTestSuccess = true
-                                                        panel.serverTestStatus = "Online · Latency " + elapsed + " ms"
-                                                    } else {
-                                                        panel.serverTestSuccess = false
-                                                        panel.serverTestStatus = "Server unreachable (timeout / ISP restriction)"
-                                                    }
+                                        onClicked: panel.testServer(1)
+                                    }
+
+                                    ToggleSwitch {
+                                        checked: fluxUser ? fluxUser.server1Enabled : false
+                                        enabled: !panel.server1Testing
+                                        onToggled: function(val) {
+                                            panel.toggleServer(1, val)
+                                        }
+                                    }
+                                }
+
+                                // Separator
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 1
+                                    color: panel.cCardBorder
+                                }
+
+                                // Row 2: Server 2 (ICC Flix)
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 14
+
+                                    Rectangle {
+                                        width: 8
+                                        height: 8
+                                        radius: 4
+                                        color: !(fluxUser && fluxUser.server2Enabled) ? panel.cTextMute
+                                             : panel.server2Status === "" ? Theme.success
+                                             : panel.server2Success ? Theme.success
+                                             : Theme.danger
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        RowLayout {
+                                            spacing: 8
+                                            Text {
+                                                text: "Server 2: ICC Flix"
+                                                color: (fluxUser && fluxUser.server2Enabled) ? panel.cTextWhite : panel.cTextDim
+                                                font.pixelSize: 13
+                                                font.weight: Font.DemiBold
+                                            }
+
+                                            Rectangle {
+                                                visible: fluxUser && fluxUser.activeServer === 2 && fluxUser.server2Enabled
+                                                implicitWidth: 48
+                                                implicitHeight: 16
+                                                radius: 8
+                                                color: panel.cSteamBlue
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "ACTIVE"
+                                                    color: "#FFFFFF"
+                                                    font.pixelSize: 9
+                                                    font.weight: Font.Bold
                                                 }
                                             }
-                                            xhr.ontimeout = function() {
-                                                panel.serverTesting = false
-                                                panel.serverTestSuccess = false
-                                                panel.serverTestStatus = "Request timed out (> 3.5s)"
+
+                                            Text {
+                                                text: "http://10.16.100.244/"
+                                                color: panel.cTextMute
+                                                font.family: Theme.monoFamily
+                                                font.pixelSize: 11
                                             }
-                                            xhr.send()
+                                        }
+
+                                        Text {
+                                            text: panel.server2Status !== "" ? panel.server2Status
+                                                : (!(fluxUser && fluxUser.server2Enabled) ? "Server turned off." : "Online · Ready for streaming and search.")
+                                            color: !(fluxUser && fluxUser.server2Enabled) ? panel.cTextMute
+                                                 : panel.server2Status === "" ? Theme.success
+                                                 : panel.server2Success ? Theme.success
+                                                 : Theme.danger
+                                            font.pixelSize: 12
+                                            font.weight: panel.server2Status !== "" ? Font.DemiBold : Font.Normal
+                                            wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+
+                                    SteamButton {
+                                        text: panel.server2Testing ? "Testing..." : "Test Latency"
+                                        iconName: panel.server2Testing ? "refresh" : "swap"
+                                        isAccent: false
+                                        onClicked: panel.testServer(2)
+                                    }
+
+                                    ToggleSwitch {
+                                        checked: fluxUser ? fluxUser.server2Enabled : false
+                                        enabled: !panel.server2Testing
+                                        onToggled: function(val) {
+                                            panel.toggleServer(2, val)
+                                        }
+                                    }
+                                }
+
+                                // Separator
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 1
+                                    color: panel.cCardBorder
+                                }
+
+                                // Row 3: Server 3 (Circle FTP)
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 14
+
+                                    Rectangle {
+                                        width: 8
+                                        height: 8
+                                        radius: 4
+                                        color: !(fluxUser && fluxUser.server3Enabled) ? panel.cTextMute
+                                             : panel.server3Status === "" ? Theme.success
+                                             : panel.server3Success ? Theme.success
+                                             : Theme.danger
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        RowLayout {
+                                            spacing: 8
+                                            Text {
+                                                text: "Server 3: Circle FTP"
+                                                color: (fluxUser && fluxUser.server3Enabled) ? panel.cTextWhite : panel.cTextDim
+                                                font.pixelSize: 13
+                                                font.weight: Font.DemiBold
+                                            }
+
+                                            Rectangle {
+                                                visible: fluxUser && fluxUser.activeServer === 3 && fluxUser.server3Enabled
+                                                implicitWidth: 48
+                                                implicitHeight: 16
+                                                radius: 8
+                                                color: panel.cSteamBlue
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "ACTIVE"
+                                                    color: "#FFFFFF"
+                                                    font.pixelSize: 9
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+
+                                            Text {
+                                                text: "http://new.circleftp.net/"
+                                                color: panel.cTextMute
+                                                font.family: Theme.monoFamily
+                                                font.pixelSize: 11
+                                            }
+                                        }
+
+                                        Text {
+                                            text: panel.server3Status !== "" ? panel.server3Status
+                                                : (!(fluxUser && fluxUser.server3Enabled) ? "Server turned off." : "Online · Ready for streaming and search.")
+                                            color: !(fluxUser && fluxUser.server3Enabled) ? panel.cTextMute
+                                                 : panel.server3Status === "" ? Theme.success
+                                                 : panel.server3Success ? Theme.success
+                                                 : Theme.danger
+                                            font.pixelSize: 12
+                                            font.weight: panel.server3Status !== "" ? Font.DemiBold : Font.Normal
+                                            wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+
+                                    SteamButton {
+                                        text: panel.server3Testing ? "Testing..." : "Test Latency"
+                                        iconName: panel.server3Testing ? "refresh" : "swap"
+                                        isAccent: false
+                                        onClicked: panel.testServer(3)
+                                    }
+
+                                    ToggleSwitch {
+                                        checked: fluxUser ? fluxUser.server3Enabled : false
+                                        enabled: !panel.server3Testing
+                                        onToggled: function(val) {
+                                            panel.toggleServer(3, val)
                                         }
                                     }
                                 }
