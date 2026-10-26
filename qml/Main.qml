@@ -82,6 +82,12 @@ ApplicationWindow {
             if (decodeURIComponent(a) === decodeURIComponent(b)) return true
         } catch (e) {}
 
+        if (a.indexOf("/api/posts/") !== -1 && b.indexOf("/api/posts/") !== -1) {
+            var mpa = a.match(/\/api\/posts\/(\d+)/)
+            var mpb = b.match(/\/api\/posts\/(\d+)/)
+            if (mpa && mpb && mpa[1] === mpb[1]) return true
+        }
+
         if (a.indexOf("player.php") !== -1 && b.indexOf("player.php") !== -1) {
             var ma = a.match(/[?&]play=(\d+)/)
             var mb = b.match(/[?&]play=(\d+)/)
@@ -89,6 +95,8 @@ ApplicationWindow {
                 return true
             }
         }
+
+        if (a.replace("index.circleftp.net", "15.1.4.2") === b.replace("index.circleftp.net", "15.1.4.2")) return true
 
         if (fluxDownloads) {
             try {
@@ -143,7 +151,7 @@ ApplicationWindow {
             if (s === "ICC FTP" || s === "Dhaka Flix" || s === "Circle FTP") return s
         }
         var src = currentSourceUrl || ""
-        if (src.indexOf("circleftp") !== -1) {
+        if (src.indexOf("circleftp") !== -1 || src.indexOf("15.1.4.") !== -1) {
             return "Circle FTP"
         }
         if (src.indexOf("10.16.") !== -1 || src.indexOf("player.php") !== -1 || src.indexOf("icc") !== -1) {
@@ -550,7 +558,7 @@ ApplicationWindow {
             }
         }
 
-        if (url && url.indexOf("player.php") !== -1 && fluxSearch) {
+        if (url && (url.indexOf("player.php") !== -1 || url.indexOf("/api/posts/") !== -1) && fluxSearch) {
             fluxSearch.resolvePlayUrl(url, function(directUrl) {
                 startPlayback((directUrl && directUrl.length > 0) ? directUrl : url)
             })

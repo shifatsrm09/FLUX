@@ -823,6 +823,7 @@ int UserStore::serverForUrl(const QString &url) const {
     // - Teleparty catalog ID prefix "circle:"
     // - circleftp.net, new.circleftp.net, index.circleftp.net, ftp*.circleftp.net
     if (lower.startsWith(QLatin1String("circle:")) ||
+        lower.contains(QLatin1String("15.1.4.")) ||
         lower.contains(QLatin1String("circleftp.net")) ||
         (lower.contains(QLatin1String("circleftp")) && !lower.contains(QLatin1String("10.16.")))) {
         return 3;
