@@ -200,16 +200,19 @@ ApplicationWindow {
 
     function switchTopPickServer() {
         if (!currentIsTopPick || !currentTopPickItem) return
+        var s1Ok = !fluxUser || (fluxUser.server1Enabled && fluxUser.server1Available)
+        var s2Ok = !fluxUser || (fluxUser.server2Enabled && fluxUser.server2Available)
+        var s3Ok = !fluxUser || (fluxUser.server3Enabled && fluxUser.server3Available)
         var cur = currentServerName
         if (cur === "Dhaka Flix") {
-            if (currentTopPickItem.altUrl) switchTopPickToServer(2)
-            else if (currentTopPickItem.circleUrl) switchTopPickToServer(3)
+            if (currentTopPickItem.altUrl && s2Ok) switchTopPickToServer(2)
+            else if (currentTopPickItem.circleUrl && s3Ok) switchTopPickToServer(3)
         } else if (cur === "ICC FTP") {
-            if (currentTopPickItem.circleUrl) switchTopPickToServer(3)
-            else if (currentTopPickItem.url) switchTopPickToServer(1)
+            if (currentTopPickItem.url && s1Ok) switchTopPickToServer(1)
+            else if (currentTopPickItem.circleUrl && s3Ok) switchTopPickToServer(3)
         } else {
-            if (currentTopPickItem.url) switchTopPickToServer(1)
-            else if (currentTopPickItem.altUrl) switchTopPickToServer(2)
+            if (currentTopPickItem.altUrl && s2Ok) switchTopPickToServer(2)
+            else if (currentTopPickItem.url && s1Ok) switchTopPickToServer(1)
         }
     }
 
@@ -225,25 +228,33 @@ ApplicationWindow {
                 var isReqDhaka = (url === topPick.url)
                 var isReqIcc = (url === topPick.altUrl)
                 var isReqCircle = (url === topPick.circleUrl)
-                if (isReqDhaka && !fluxUser.server1Available) {
-                    if (fluxUser.server3Available && topPick.circleUrl) url = topPick.circleUrl
-                    else if (fluxUser.server2Available && topPick.altUrl) url = topPick.altUrl
-                } else if (isReqIcc && !fluxUser.server2Available) {
-                    if (fluxUser.server3Available && topPick.circleUrl) url = topPick.circleUrl
-                    else if (fluxUser.server1Available && topPick.url) url = topPick.url
-                } else if (isReqCircle && !fluxUser.server3Available) {
-                    if (fluxUser.server1Available && topPick.url) url = topPick.url
-                    else if (fluxUser.server2Available && topPick.altUrl) url = topPick.altUrl
+                var s1Ok = fluxUser.server1Available && fluxUser.server1Enabled
+                var s2Ok = fluxUser.server2Available && fluxUser.server2Enabled
+                var s3Ok = fluxUser.server3Available && fluxUser.server3Enabled
+
+                if (isReqDhaka && !s1Ok) {
+                    if (s2Ok && topPick.altUrl) url = topPick.altUrl
+                    else if (s3Ok && topPick.circleUrl) url = topPick.circleUrl
+                } else if (isReqIcc && !s2Ok) {
+                    if (s1Ok && topPick.url) url = topPick.url
+                    else if (s3Ok && topPick.circleUrl) url = topPick.circleUrl
+                } else if (isReqCircle && !s3Ok) {
+                    if (s2Ok && topPick.altUrl) url = topPick.altUrl
+                    else if (s1Ok && topPick.url) url = topPick.url
                 }
             }
 
             if (currentAltUrl.length === 0) {
+                var s1Ok = !fluxUser || (fluxUser.server1Available && fluxUser.server1Enabled)
+                var s2Ok = !fluxUser || (fluxUser.server2Available && fluxUser.server2Enabled)
+                var s3Ok = !fluxUser || (fluxUser.server3Available && fluxUser.server3Enabled)
+
                 if (url === topPick.url) {
-                    currentAltUrl = topPick.circleUrl || topPick.altUrl || ""
+                    currentAltUrl = (s2Ok && topPick.altUrl) ? topPick.altUrl : ((s3Ok && topPick.circleUrl) ? topPick.circleUrl : "")
                 } else if (url === topPick.altUrl) {
-                    currentAltUrl = topPick.circleUrl || topPick.url || ""
+                    currentAltUrl = (s1Ok && topPick.url) ? topPick.url : ((s3Ok && topPick.circleUrl) ? topPick.circleUrl : "")
                 } else {
-                    currentAltUrl = topPick.url || topPick.altUrl || ""
+                    currentAltUrl = (s1Ok && topPick.url) ? topPick.url : ((s2Ok && topPick.altUrl) ? topPick.altUrl : "")
                 }
             }
         } else {

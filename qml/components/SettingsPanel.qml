@@ -739,12 +739,19 @@ Popup {
 
                                                 Text {
                                                     text: {
-                                                        if (!fluxUser || fluxUser.enabledServerCount === 0) return "No Servers Enabled"
-                                                        if (fluxUser.activeServer === 3 && fluxUser.server3Enabled) return "Server 3 (Circle FTP)"
-                                                        if (fluxUser.activeServer === 2 && fluxUser.server2Enabled) return "Server 2 (ICC Flix)"
-                                                        if (fluxUser.activeServer === 1 && fluxUser.server1Enabled) return "Server 1 (Dhaka Flix)"
-                                                        return "Select Server"
-                                                    }
+                                                         if (!fluxUser) return "No Servers Enabled"
+                                                         var s1Ok = fluxUser.server1Enabled && fluxUser.server1Available
+                                                         var s2Ok = fluxUser.server2Enabled && fluxUser.server2Available
+                                                         var s3Ok = fluxUser.server3Enabled && fluxUser.server3Available
+                                                         if (!s1Ok && !s2Ok && !s3Ok) return "No Servers Available"
+                                                         if (fluxUser.activeServer === 1 && s1Ok) return "Server 1 (Dhaka Flix)"
+                                                         if (fluxUser.activeServer === 2 && s2Ok) return "Server 2 (ICC Flix)"
+                                                         if (fluxUser.activeServer === 3 && s3Ok) return "Server 3 (Circle FTP)"
+                                                         if (s1Ok) return "Server 1 (Dhaka Flix)"
+                                                         if (s2Ok) return "Server 2 (ICC Flix)"
+                                                         if (s3Ok) return "Server 3 (Circle FTP)"
+                                                         return "Select Server"
+                                                     }
                                                     color: panel.cTextWhite
                                                     font.pixelSize: 12
                                                     font.weight: Font.DemiBold
@@ -807,7 +814,7 @@ Popup {
 
                                                 // Option 1: Dhaka Flix
                                                 Rectangle {
-                                                    visible: fluxUser ? fluxUser.server1Enabled : true
+                                                    visible: fluxUser ? (fluxUser.server1Enabled && fluxUser.server1Available) : true
                                                     Layout.fillWidth: true
                                                     implicitHeight: 32
                                                     radius: 3
@@ -851,7 +858,7 @@ Popup {
 
                                                 // Option 2: ICC Flix
                                                 Rectangle {
-                                                    visible: fluxUser ? fluxUser.server2Enabled : true
+                                                    visible: fluxUser ? (fluxUser.server2Enabled && fluxUser.server2Available) : true
                                                     Layout.fillWidth: true
                                                     implicitHeight: 32
                                                     radius: 3
@@ -895,7 +902,7 @@ Popup {
 
                                                 // Option 3: Circle FTP
                                                 Rectangle {
-                                                    visible: fluxUser ? fluxUser.server3Enabled : true
+                                                    visible: fluxUser ? (fluxUser.server3Enabled && fluxUser.server3Available) : true
                                                     Layout.fillWidth: true
                                                     implicitHeight: 32
                                                     radius: 3

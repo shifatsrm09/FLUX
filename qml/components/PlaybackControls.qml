@@ -412,7 +412,7 @@ Item {
                 readonly property bool canSwitchServer: {
                     if (!window || !window.currentIsTopPick || !window.currentTopPickItem) return false
                     var item = window.currentTopPickItem
-                    var count = (item.url ? 1 : 0) + (item.altUrl ? 1 : 0) + (item.circleUrl ? 1 : 0)
+                    var s1Ok = !fluxUser || (fluxUser.server1Enabled && fluxUser.server1Available); var s2Ok = !fluxUser || (fluxUser.server2Enabled && fluxUser.server2Available); var s3Ok = !fluxUser || (fluxUser.server3Enabled && fluxUser.server3Available); var count = (item.url && s1Ok ? 1 : 0) + (item.altUrl && s2Ok ? 1 : 0) + (item.circleUrl && s3Ok ? 1 : 0)
                     return count > 1
                 }
                 visible: canSwitchServer
@@ -564,7 +564,7 @@ Item {
                 Layout.fillWidth: true
                 height: 36
                 radius: 8
-                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.url)
+                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.url) && (!fluxUser || (fluxUser.server1Enabled && fluxUser.server1Available))
                 color: dhakaOptionMouse.containsMouse ? "#20FFFFFF" : (serverPopup.activeServer === "Dhaka Flix" ? "#18FFFFFF" : "transparent")
 
                 RowLayout {
@@ -614,7 +614,7 @@ Item {
                 Layout.fillWidth: true
                 height: 36
                 radius: 8
-                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.altUrl)
+                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.altUrl) && (!fluxUser || (fluxUser.server2Enabled && fluxUser.server2Available))
                 color: iccOptionMouse.containsMouse ? "#20FFFFFF" : (serverPopup.activeServer === "ICC FTP" ? "#18FFFFFF" : "transparent")
 
                 RowLayout {
@@ -664,7 +664,7 @@ Item {
                 Layout.fillWidth: true
                 height: 36
                 radius: 8
-                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.circleUrl)
+                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.circleUrl) && (!fluxUser || (fluxUser.server3Enabled && fluxUser.server3Available))
                 color: circleOptionMouse.containsMouse ? "#20FFFFFF" : (serverPopup.activeServer === "Circle FTP" ? "#18FFFFFF" : "transparent")
 
                 RowLayout {

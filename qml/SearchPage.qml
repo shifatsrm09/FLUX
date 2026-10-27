@@ -584,12 +584,17 @@ Item {
                                 text: {
                                     if (fluxUser) {
                                         var cur = fluxUser.activeServer
-                                        if (cur === 3 && fluxUser.server3Enabled) return "Circle FTP"
-                                        if (cur === 2 && fluxUser.server2Enabled) return "ICC FTP"
-                                        if (cur === 1 && fluxUser.server1Enabled) return "Dhaka Flix"
-                                        if (fluxUser.server3Enabled) return "Circle FTP"
-                                        if (fluxUser.server2Enabled) return "ICC FTP"
-                                        if (fluxUser.server1Enabled) return "Dhaka Flix"
+                                        var s1Ok = fluxUser.server1Enabled && fluxUser.server1Available
+                                        var s2Ok = fluxUser.server2Enabled && fluxUser.server2Available
+                                        var s3Ok = fluxUser.server3Enabled && fluxUser.server3Available
+
+                                        if (cur === 1 && s1Ok) return "Dhaka Flix"
+                                        if (cur === 2 && s2Ok) return "ICC FTP"
+                                        if (cur === 3 && s3Ok) return "Circle FTP"
+
+                                        if (s1Ok) return "Dhaka Flix"
+                                        if (s2Ok) return "ICC FTP"
+                                        if (s3Ok) return "Circle FTP"
                                     }
                                     return "Unavailable"
                                 }
@@ -663,41 +668,41 @@ Item {
 
                                 readonly property int chosenServer: {
                                     if (fluxUser) {
-                                        var s1On = fluxUser.server1Enabled
-                                        var s2On = fluxUser.server2Enabled
-                                        var s3On = fluxUser.server3Enabled
+                                        var s1On = fluxUser.server1Enabled && fluxUser.server1Available
+                                        var s2On = fluxUser.server2Enabled && fluxUser.server2Available
+                                        var s3On = fluxUser.server3Enabled && fluxUser.server3Available
                                         var cur = fluxUser.activeServer
 
-                                        if (cur === 3 && s3On && modelData.circleUrl && modelData.circleUrl.length > 0) return 3
-                                        if (cur === 2 && s2On && modelData.altUrl && modelData.altUrl.length > 0) return 2
                                         if (cur === 1 && s1On && modelData.url && modelData.url.length > 0) return 1
+                                        if (cur === 2 && s2On && modelData.altUrl && modelData.altUrl.length > 0) return 2
+                                        if (cur === 3 && s3On && modelData.circleUrl && modelData.circleUrl.length > 0) return 3
 
-                                        if (s3On && modelData.circleUrl && modelData.circleUrl.length > 0) return 3
-                                        if (s2On && modelData.altUrl && modelData.altUrl.length > 0) return 2
                                         if (s1On && modelData.url && modelData.url.length > 0) return 1
+                                        if (s2On && modelData.altUrl && modelData.altUrl.length > 0) return 2
+                                        if (s3On && modelData.circleUrl && modelData.circleUrl.length > 0) return 3
                                     }
                                     return 0
                                 }
                                 readonly property string effectiveUrl: {
-                                    if (chosenServer === 3) return modelData.circleUrl || ""
-                                    if (chosenServer === 2) return modelData.altUrl || ""
                                     if (chosenServer === 1) return modelData.url || ""
+                                    if (chosenServer === 2) return modelData.altUrl || ""
+                                    if (chosenServer === 3) return modelData.circleUrl || ""
                                     return ""
                                 }
                                 readonly property string fallbackUrl: {
                                     if (fluxUser) {
-                                        var s1On = fluxUser.server1Enabled
-                                        var s2On = fluxUser.server2Enabled
-                                        var s3On = fluxUser.server3Enabled
+                                        var s1On = fluxUser.server1Enabled && fluxUser.server1Available
+                                        var s2On = fluxUser.server2Enabled && fluxUser.server2Available
+                                        var s3On = fluxUser.server3Enabled && fluxUser.server3Available
 
-                                        if (chosenServer === 3) {
+                                        if (chosenServer === 1) {
                                             if (s2On && modelData.altUrl) return modelData.altUrl
-                                            if (s1On && modelData.url) return modelData.url
+                                            if (s3On && modelData.circleUrl) return modelData.circleUrl
                                         } else if (chosenServer === 2) {
-                                            if (s3On && modelData.circleUrl) return modelData.circleUrl
                                             if (s1On && modelData.url) return modelData.url
-                                        } else if (chosenServer === 1) {
                                             if (s3On && modelData.circleUrl) return modelData.circleUrl
+                                        } else if (chosenServer === 3) {
+                                            if (s1On && modelData.url) return modelData.url
                                             if (s2On && modelData.altUrl) return modelData.altUrl
                                         }
                                     }
@@ -829,8 +834,20 @@ Item {
             Rectangle {
                 id: searchServerSelector
 
-                readonly property int activeServerIndex: (fluxUser && fluxUser.activeServer === 1) ? 1
-                                                       : ((fluxUser && fluxUser.activeServer === 3) ? 3 : 2)
+                readonly property int activeServerIndex: {
+                    if (!fluxUser) return 1
+                    var cur = fluxUser.activeServer
+                    var s1Ok = fluxUser.server1Enabled && fluxUser.server1Available
+                    var s2Ok = fluxUser.server2Enabled && fluxUser.server2Available
+                    var s3Ok = fluxUser.server3Enabled && fluxUser.server3Available
+                    if (cur === 1 && s1Ok) return 1
+                    if (cur === 2 && s2Ok) return 2
+                    if (cur === 3 && s3Ok) return 3
+                    if (s1Ok) return 1
+                    if (s2Ok) return 2
+                    if (s3Ok) return 3
+                    return 1
+                }
                 readonly property bool isWide: root.width >= 750
                 readonly property int enabledCount: fluxUser ? fluxUser.enabledServerCount : 3
 
@@ -875,7 +892,7 @@ Item {
                     // Server 1: Dhaka Flix
                     Item {
                         id: sseg1
-                        visible: fluxUser ? fluxUser.server1Enabled : true
+                        visible: fluxUser ? (fluxUser.server1Enabled && fluxUser.server1Available) : true
                         height: 34
                         width: visible ? (sseg1Row.implicitWidth + 24) : 0
 
@@ -941,7 +958,7 @@ Item {
                     // Server 2: ICC FTP
                     Item {
                         id: sseg2
-                        visible: fluxUser ? fluxUser.server2Enabled : true
+                        visible: fluxUser ? (fluxUser.server2Enabled && fluxUser.server2Available) : true
                         height: 34
                         width: visible ? (sseg2Row.implicitWidth + 24) : 0
 
@@ -1007,7 +1024,7 @@ Item {
                     // Server 3: Circle FTP
                     Item {
                         id: sseg3
-                        visible: fluxUser ? fluxUser.server3Enabled : true
+                        visible: fluxUser ? (fluxUser.server3Enabled && fluxUser.server3Available) : true
                         height: 34
                         width: visible ? (sseg3Row.implicitWidth + 24) : 0
 
