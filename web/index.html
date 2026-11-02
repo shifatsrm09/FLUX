@@ -27,19 +27,12 @@
         <h1 id="hero-title">FLUX<br /><span>Netflix but Powered by BDIX</span></h1>
         <p class="intro">A free, open-source streaming app for Windows.<br class="desktop-break" /> Powered by BDIX. Ready when you are.</p>
 
-        <div class="download-list" aria-label="Download options">
-          <a class="download-card primary" id="setup-download" href="https://github.com/shifatsrm09/FLUX/releases/latest" aria-label="Download setup installer">
-            <span class="download-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3" /></svg></span>
-            <span class="download-copy"><strong>Download setup</strong><small>Recommended · Windows installer</small></span>
-            <span class="arrow" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 10h12m-5-5 5 5-5 5" /></svg></span>
-          </a>
-          <a class="download-card" id="portable-download" href="https://github.com/shifatsrm09/FLUX/releases/latest" aria-label="Download portable version">
-            <span class="download-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 12h6m-3-3v6" /></svg></span>
-            <span class="download-copy"><strong>Download portable</strong><small>No installation needed · ZIP</small></span>
-            <span class="arrow" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 10h12m-5-5 5 5-5 5" /></svg></span>
-          </a>
-        </div>
         <p class="release-note" id="release-note" aria-live="polite">Finding the latest release…</p>
+        <div class="download-stats-bar" aria-label="FLUX downloads and total downloads">
+          <a class="download-stats-action setup" id="download-badge-link" href="https://github.com/shifatsrm09/FLUX/releases/latest" aria-label="Download FLUX setup installer">DOWNLOAD FLUX</a>
+          <a class="download-stats-action portable" id="portable-badge-link" href="https://github.com/shifatsrm09/FLUX/releases/latest" aria-label="Download portable FLUX">DOWNLOAD PORTABLE</a>
+          <div class="download-stats-total" aria-label="Total downloads"><span>TOTAL DOWNLOADS</span><strong id="portable-badge-total">—</strong></div>
+        </div>
         <button class="network-check-trigger" id="network-check-open" type="button">
           <span class="network-check-icon" aria-hidden="true">⌁</span>
           Can I run FLUX?
