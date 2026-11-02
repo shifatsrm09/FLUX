@@ -30,7 +30,7 @@ async function loadLatestRelease() {
     if (!setup || !portable) throw new Error("One or more download assets were not found");
 
     const version = release.tag_name || release.name || "Latest";
-    note.textContent = `${version} · ${formatSize(setup.size)} installer · ${formatSize(portable.size)} portable`;
+    note.textContent = `${version}  ·  Installer ${formatSize(setup.size)}  ·  Portable ${formatSize(portable.size)}`;
     status.textContent = "THE LATEST RELEASE";
   } catch (error) {
     // The releases page remains a working fallback if the API is unavailable.
