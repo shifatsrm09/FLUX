@@ -834,20 +834,7 @@ Item {
             Rectangle {
                 id: searchServerSelector
 
-                readonly property int activeServerIndex: {
-                    if (!fluxUser) return 1
-                    var cur = fluxUser.activeServer
-                    var s1Ok = fluxUser.server1Enabled && fluxUser.server1Available
-                    var s2Ok = fluxUser.server2Enabled && fluxUser.server2Available
-                    var s3Ok = fluxUser.server3Enabled && fluxUser.server3Available
-                    if (cur === 1 && s1Ok) return 1
-                    if (cur === 2 && s2Ok) return 2
-                    if (cur === 3 && s3Ok) return 3
-                    if (s1Ok) return 1
-                    if (s2Ok) return 2
-                    if (s3Ok) return 3
-                    return 1
-                }
+                readonly property int activeServerIndex: fluxUser ? fluxUser.activeServer : 1
                 readonly property bool isWide: root.width >= 750
                 readonly property int enabledCount: fluxUser ? fluxUser.enabledServerCount : 3
 

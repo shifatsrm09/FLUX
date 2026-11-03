@@ -739,17 +739,10 @@ Popup {
 
                                                 Text {
                                                     text: {
-                                                         if (!fluxUser) return "No Servers Enabled"
-                                                         var s1Ok = fluxUser.server1Enabled && fluxUser.server1Available
-                                                         var s2Ok = fluxUser.server2Enabled && fluxUser.server2Available
-                                                         var s3Ok = fluxUser.server3Enabled && fluxUser.server3Available
-                                                         if (!s1Ok && !s2Ok && !s3Ok) return "No Servers Available"
-                                                         if (fluxUser.activeServer === 1 && s1Ok) return "Server 1 (Dhaka Flix)"
-                                                         if (fluxUser.activeServer === 2 && s2Ok) return "Server 2 (ICC Flix)"
-                                                         if (fluxUser.activeServer === 3 && s3Ok) return "Server 3 (Circle FTP)"
-                                                         if (s1Ok) return "Server 1 (Dhaka Flix)"
-                                                         if (s2Ok) return "Server 2 (ICC Flix)"
-                                                         if (s3Ok) return "Server 3 (Circle FTP)"
+                                                         if (!fluxUser || fluxUser.enabledServerCount === 0) return "No Servers Enabled"
+                                                         if (fluxUser.activeServer === 1) return "Server 1 (Dhaka Flix)"
+                                                         if (fluxUser.activeServer === 2) return "Server 2 (ICC Flix)"
+                                                         if (fluxUser.activeServer === 3) return "Server 3 (Circle FTP)"
                                                          return "Select Server"
                                                      }
                                                     color: panel.cTextWhite

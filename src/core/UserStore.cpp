@@ -692,11 +692,8 @@ void UserStore::setTopPicksFirst(bool first) {
 
 int UserStore::activeServer() const {
     int s = m_settings.value(QStringLiteral("server/activeServer"), 1).toInt();
-    if (s == 3 && (m_server1Enabled || m_server2Enabled)) {
-        if (m_server1Enabled && m_server1Available) return 1;
-        if (m_server2Enabled && m_server2Available) return 2;
-        if (m_server1Enabled) return 1;
-        if (m_server2Enabled) return 2;
+    if (!isServerEnabled(s) && enabledServerCount() > 0) {
+        return firstEnabledServer();
     }
     return s;
 }
@@ -706,7 +703,7 @@ void UserStore::setActiveServer(int server) {
     if (!isServerEnabled(server) && enabledServerCount() > 0) {
         server = firstEnabledServer();
     }
-    if (activeServer() != server) {
+    if (m_settings.value(QStringLiteral("server/activeServer"), 1).toInt() != server) {
         m_settings.setValue(QStringLiteral("server/activeServer"), server);
         m_settingsTimer.start();
         emit serverChanged();
@@ -957,9 +954,9 @@ void UserStore::autoDetectServer() {
                           .arg(s2 ? QStringLiteral("OK (ON)") : QStringLiteral("DOWN (OFF)"))
                           .arg(s3 ? QStringLiteral("OK (ON)") : QStringLiteral("DOWN (OFF)")));
 
-            const int current = activeServer();
-            // Dhaka Flix max priority, then ICC, then Circle FTP.
-            if (!isServerEnabled(current) || (current == 1 && !s1) || (current == 2 && (!s2 || s1)) || (current == 3 && (s1 || s2 || !s3))) {
+            const int current = m_settings.value(QStringLiteral("server/activeServer"), 1).toInt();
+            // If current active server is not enabled or not available, switch to first available server
+            if (!isServerEnabled(current) || (current == 1 && !s1) || (current == 2 && !s2) || (current == 3 && !s3)) {
                 const int next = firstEnabledServer();
                 if (next > 0) {
                     setActiveServer(next);
