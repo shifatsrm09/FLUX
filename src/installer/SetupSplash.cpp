@@ -38,7 +38,7 @@ struct AppState {
     HWND hwnd = nullptr;
     HANDLE hParentProcess = nullptr;
     std::wstring progressFilePath;
-    std::wstring versionText = L"v2.2.5";
+    std::wstring versionText = L"v2.2.6";
     std::wstring statusStep  = L"INSTALLING UPDATE 1 OF 1";
 
     float scale = 1.0f;
