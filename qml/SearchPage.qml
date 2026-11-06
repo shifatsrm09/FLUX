@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "components"
 import "components/Theme.js" as Theme
+import "components/TopPicksData.js" as TopPicksData
 
 Item {
     id: root
@@ -27,7 +28,7 @@ Item {
         if (!fluxDownloads) return
         if (isPack) {
             fluxDownloads.downloadPack(url, title)
-        } else if (url && url.indexOf("player.php") !== -1 && fluxSearch) {
+        } else if (url && (url.indexOf("player.php") !== -1 || url.indexOf("/api/posts/") !== -1) && fluxSearch) {
             fluxSearch.resolvePlayUrl(url, function(directUrl) {
                 if (directUrl && directUrl.length > 0) {
                     fluxDownloads.downloadFile(directUrl, title)
@@ -260,8 +261,8 @@ Item {
                 id: trendingSection
 
                 width: homeColumn.width
-                visible: (fluxUser ? (fluxUser.server2Available || fluxUser.bothServersDown) : true) && !!fluxSearch && fluxSearch.trending && fluxSearch.trending.length > 0
-                height: visible ? (trendingLayout.y + trendingLayout.implicitHeight + 40) : 0
+                visible: (fluxUser ? (fluxUser.server2Enabled || fluxUser.allServersDown) : true) && !!fluxSearch && fluxSearch.trending && fluxSearch.trending.length > 0
+                height: visible ? (trendingLayout.y + trendingLayout.implicitHeight + 16) : 0
                 implicitHeight: height
 
                 y: {
@@ -284,9 +285,9 @@ Item {
                     id: trendingLayout
                     x: root.pageMargin
                     y: {
-                        if (continueList.count > 0) return 20
+                        if (continueList.count > 0) return 16
                         var isTop = !(fluxUser && fluxUser.topPicksFirst)
-                        return isTop ? (root.topInset + 16) : 20
+                        return isTop ? (root.topInset + 16) : 12
                     }
                     width: trendingSection.availableWidth
                     spacing: 16
@@ -327,8 +328,8 @@ Item {
                         Text {
                             visible: !!fluxSearch && fluxSearch.trending && fluxSearch.trending.length > 0
                             text: root.showAllTrending
-                                ? ("Showing all " + fluxSearch.trending.length)
-                                : ("Top " + Math.min(fluxSearch.trending.length, trendingSection.trendingCols * 2))
+                                ? ("Showing all " + ((fluxSearch && fluxSearch.trending) ? fluxSearch.trending.length : 0))
+                                : ("Top " + Math.min(((fluxSearch && fluxSearch.trending) ? fluxSearch.trending.length : 0), trendingSection.trendingCols * 2))
                             color: Theme.textDim
                             font.pixelSize: 12
                         }
@@ -441,7 +442,7 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.topMargin: 8
-                        Layout.bottomMargin: 24
+                        Layout.bottomMargin: 8
                         visible: (fluxSearch && fluxSearch.trending && fluxSearch.trending.length > trendingSection.trendingCols * 2)
 
                         Item { Layout.fillWidth: true }
@@ -499,7 +500,7 @@ Item {
                 id: topPicksSection
 
                 width: homeColumn.width
-                height: topPicksLayout.y + topPicksLayout.implicitHeight + 48
+                height: topPicksLayout.y + topPicksLayout.implicitHeight + 16
                 implicitHeight: height
 
                 y: {
@@ -518,372 +519,7 @@ Item {
                 readonly property real picksCardW: homeColumn.cardW
                 readonly property real picksCardH: homeColumn.cardH
 
-                readonly property var rawTopPicks: [
-                    {
-                        "title": "The Shawshank Redemption (1994) 1080p BluRay x265",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/The%20Shawshank%20Redemption%20%281994%29%201080p/The%20Shawshank%20Redemption%20%281994%29%20RM4K%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-afm72.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=15765",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/9cqNxx0GxF0bflZmeSMuL5tnGzr.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Batman (2022) 1080p BluRay x265",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282022%29%201080p/The%20Batman%20%282022%29%201080p/The%20Batman%20%282022%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%207.1%20ESub-Pahe.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=27914",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Interstellar (2014) 1080p BluRay x265 Dual Audio",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282014%29%201080p/Interstellar%20%282014%29%201080p%20%5BDual%20Audio%5D/Interstellar%20%282014%29%20IMAX%201080p%20BluRay%20x265%20HEVC%20ESub%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-mkvC.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=6139",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Spider-Man - Brand New Day (2026) 1080p AMZN Dual Audio",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282026%29%201080p/Spider-Man%20-%20Brand%20New%20Day%20%282026%29%201080p%20AMZN%20%5BDual%20Audio%5D/Spider-Man%20Brand%20New%20Day%20%282026%29%20IMAX%201080p%20AMZN-WEB%20x265%20HEVC%20ESub%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-HDHub.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=45231",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/bjiS5ipwxb9JFy3XRRN4OAilSeX.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Shutter Island (2010) 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-afm72",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282010%29%201080p/Shutter%20Island%20%282010%29%201080p/Shutter%20Island%20%282010%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-afm72.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=2670",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/nrmXQ0zcZUL8jFLrakWc90IR8z9.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Fight Club (1999) 1080p BluRay x265",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281999%29%201080p/Fight%20Club%20%281999%29%201080p/Fight%20Club%20%281999%29%20RM%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%207.1%20MSubs-Tigole.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=15767",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Prestige (2006) 1080p BluRay x265",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282006%29%201080p/The%20Prestige%20%282006%29%201080p/The%20Prestige%20%282006%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-MkvCage.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=2543",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/Ag2B2KHKQPukjH7WutmgnnSNurZ.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Inception (2010) 1080p BluRay HEVC",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282010%29%201080p/Inception%20%282010%29%201080p/Inception.2010.1080p.BluRay.10bit.HEVC.6CH.MkvCage.ws.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=2626",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/s3TBrRGB1iav7gFOCNx3H31MoES.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Godfather (1972) 1080p BluRay x265",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/The%20Godfather-Part%20I%20%281972%29%201080p/The%20Godfather%20%281972%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-afm72.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=575",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/3bhkrj58Vtu7enYsRolD1fZdja1.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Dark Knight Rises (2012) 1080p BluRay x265",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282012%29%201080p/The%20Dark%20Knight%20Rises%20%282012%29%201080p/The%20Dark%20Knight%20Rises%20%282012%29%201080p%20BluRay%20x265%20HEVC%20AAC%20%205.1%20MSubs-Tigole.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=1772",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/hr0L2aueqlP2BYUblTTjmtn0hw4.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Avengers: Infinity War (2018) 1080p BluRay x265",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282018%29%201080p/Avengers-Infinity%20War%20%282018%29%201080p/Avengers-Infinity%20War%20%282018%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%207.1%20MSubs-Prof.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=10529",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/7WsyChQLEftFiDOVTGkv3hFpyyt.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Spider-Man: Into the Spider-Verse (2018) 1080p BluRay Dual Audio",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/Spider-Man%20-%20Into%20the%20Spider-Verse%20%282018%29%201080p%20%5BDual%20Audio%5D/Spider-Man%20Into%20the%20Spider-Verse%20%282018%29%201080p%20BluRay%20x264%20ESub%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-ExtraM.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=12533",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/iiZZdoQBEYBv6id8su7ImL0oCbD.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Spider-Man: Across the Spider-Verse (2023) 1080p BluRay x265 Dual Audio",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/Spider-Man%20-%20Across%20the%20Spider-Verse%20%282023%29%201080p%20%5BDual%20Audio%5D/Spider-Man%20Across%20the%20Spider-Verse%20%282023%29%201080p%20BluRay%20x265%20HEVC%20ESub%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-mkvC.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=31909",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Oppenheimer (2023) 1080p BluRay x265 Dual Audio",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282023%29%201080p/Oppenheimer%20%282023%29%201080p%20%5BDual%20Audio%5D/Oppenheimer%20%282023%29%20IMAX%201080p%20BluRay%20x265%20HEVC%20ESub%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-mkvC.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=32662",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Usual Suspects (1995) 1080p BluRay HEVC",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/The%20Usual%20Suspects%20%281995%29%201080p/The.Usual.Suspects.1995.1080p.BluRay.10bit.HEVC.6CH.MkvCage.ws.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=6203",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/bUPmtQzrRhzqYySeiMpv7GurAfm.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Your Name (2016) 1080p BluRay x265 Multi Audio",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/Your%20Name%20%282016%29%201080p%20%5BMulti%20Audio%5D/Your%20Name%20%282016%29%201080p%20BluRay%20x265%20HEVC%20ESub%20%5BMulti%20Audio%5D%5BHindi%202.0%2BHindi%205.1%2BEnglish%205.1%2BJapanese%205.1%5D%20-TW4all.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=9639",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/yLglTwyFOUZt5fNKm0PWL1PK5gm.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "12th Fail (2023) 1080p DSNP WEBRip x264",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Hindi%20Movies/%282023%29/12th%20Fail%20%282023%29%201080p/12th%20Fail%20%282023%29%20Hindi%201080p%20DSNP%20WEBRip%20x264%20DD5.1%20ESub%20-%20mkvCinemas.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=34596",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/hm4ou83RwLVwNj3HsmQuqC1qkWy.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Cyberpunk: Edgerunners S01E01 1080p NF WEBRip x265",
-                        "url": "http://172.16.50.10/DHAKA-FLIX-10/Anime%20%26%20Cartoon%20TV%20Series/Anime-TV%20Series%20%E2%99%A5%20%20A%20%20%E2%80%94%20%20F/Cyberpunk-Edgerunners%20%28TV%20Cartoon%202022%E2%80%93%20%29%201080p%20%5BDual%20Audio%5D/Season%201/%5BRapta%5D%20Cyberpunk%20Edgerunners%20-%20S01E01%20%5BDual%20Audio%5D%5B1080p%20NF%20WEBRip%20x265%20HEVC%2010bit%20DD5.1%20MSubs%5D.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=45538",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/lqcDVZ8pyk08AVftMBildDR3QUK.jpg",
-                        "extraInfo": "Series"
-                    },
-                    {
-                        "title": "American Psycho (2000) 1080p BluRay x265",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282000%29%201080p/American%20Psycho%20%282000%29%201080p/American%20Psycho%20%282000%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-Vyndros.mkv",
-                        "altUrl": "",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/tlo3T0xxZRJZiDUgM6KF84q2dI4.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Memento (2000) 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-afm72",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282000%29%201080p/Memento%20%282000%29%201080p/Memento%20%282000%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-afm72.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=6534",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/yuNs09hvpHVU1cBTCAk9zxsL2oW.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "No Country for Old Men (2007) 1080p BluRay x265 Dual Audio",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282007%29%201080p/No%20Country%20for%20Old%20Men%20%282007%29%201080p%20%5BDual%20Audio%5D/No%20Country%20for%20Old%20Men%20%282007%29%201080p%20BluRay%20x265%20HEVC%20ESub%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-mkvC.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=14659",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/6d5XOczc226jECq0LIX0siKtgHR.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Passengers (2016) 1080p BluRay 6CH",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282016%29%201080p/Passengers%20%282016%29%201080p/Passengers.2016.1080p.BluRay.6CH.ShAaNiG.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=8230",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/n5DpXC4ZxH4dnydcz7qav9iA4U.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Gravity (2013) 1080p BluRay x265",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282013%29%201080p/Gravity%20%282013%29%20SE%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20MSubs-Silence.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=472",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/kZ2nZw8D681aphje8NJi8EfbL1U.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Martian (2015) 1080p BluRay x265 Extended",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282015%29%201080p/The%20Martian%20%282015%29%20Extended%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%207.1%20MSubs-Tigole.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=8894",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/5BHuvQ6p9kfc091Z8RiFNhCwL4b.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Catch Me If You Can (2002) 1080p BluRay x265",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282002%29%201080p/Catch%20Me%20If%20You%20Can%20%282002%29%201080p/Catch%20Me%20If%20You%20Can%20%282002%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-pav69.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=6",
-                        "posterUrl": "https://image.tmdb.org/t/p/w500/ggC3Brchf4RqPitEh7cROFoeAWn.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Good the Bad and the Ugly (1966) EXTENDED 1080p BluRay x265 HEVC 10bit 5.1 MSubs-LordVako",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/The%20Good%2C%20the%20Bad%20and%20the%20Ugly%20%281966%29%201080p/The%20Good%20the%20Bad%20and%20the%20Ugly%20%281966%29%20EXTENDED%201080p%20BluRay%20x265%20HEVC%2010bit%205.1%20MSubs-LordVako.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=4808",
-                        "posterUrl": "http://10.16.100.244/files/the_good__the_bad_and_the_ugly.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Goodfellas (1990) RM 1080p BluRay x265 HEVC 10bit AC3 5.1 ESub-MeGUiL",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/Goodfellas%20%281990%29%201080p/Goodfellas%20%281990%29%20RM%201080p%20BluRay%20x265%20HEVC%2010bit%20AC3%205.1%20ESub-MeGUiL.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=9227",
-                        "posterUrl": "http://10.16.100.244/files/goodfellas.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Se7en.1995.REMASTERED.1080p.BluRay.10bit.HEVC.6CH.MkvCage.ws",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/Se7en%20%281995%29%201080p/Se7en.1995.REMASTERED.1080p.BluRay.10bit.HEVC.6CH.MkvCage.ws.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=9360",
-                        "posterUrl": "http://10.16.100.244/files/se7en__seven_.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Green Mile (1999) 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-afm72",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281999%29%201080p/The%20Green%20Mile%20%281999%29%201080p/The%20Green%20Mile%20%281999%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-afm72.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=88",
-                        "posterUrl": "http://10.16.100.244/files/the_green_mile.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Pianist (2002) 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-MkvCage",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282002%29%201080p/The%20Pianist%20%282002%29%201080p/The%20Pianist%20%282002%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-MkvCage.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=5854",
-                        "posterUrl": "http://10.16.100.244/files/the_pianist.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Departed (2006) 1080p BluRay x265 HEVC 10bit AAC 5.1 MSubs-Tigole",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282006%29%201080p/The%20Departed%20%282006%29%201080p/The%20Departed%20%282006%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20MSubs-Tigole.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=9394",
-                        "posterUrl": "http://10.16.100.244/files/the_departed.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The.Silence.of.the.Lambs.1991.REMASTERED.1080p.BluRay.10bit.HEVC.6CH.MkvCage.ws",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/The%20Silence%20of%20The%20Lambs%20%281991%29%201080p/The.Silence.of.the.Lambs.1991.REMASTERED.1080p.BluRay.10bit.HEVC.6CH.MkvCage.ws.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=92",
-                        "posterUrl": "http://10.16.100.244/files/the_silence_of_the_lambs.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "City of God (2002) Portuguese 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-HazMatt",
-                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/Brazilian%20Movie/City%20of%20God%20%282002%29%201080p%20%28Brazil%29/City%20of%20God%20%282002%29%20Portuguese%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-HazMatt.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=9470",
-                        "posterUrl": "http://10.16.100.244/files/city_of_god.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Parasite (2019) 1080p BluRay x265 HEVC MSubs [Dual Audio][Hindi DD5.1+Korean DD5.1] -imSamir",
-                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/Korean%20Language/Parasite%20%282019%29%201080p%20%5BDual%20Audio%5D/Parasite%20%282019%29%201080p%20BluRay%20x265%20HEVC%20MSubs%20%5BDual%20Audio%5D%5BHindi%20DD5.1%2BKorean%20DD5.1%5D%20-imSamir.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=17834",
-                        "posterUrl": "http://10.16.100.244/files/parasite__gisaengchung_.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Intouchables (2011) 1080p NF-WEB x264 AAC 5.1 ESub-mkvC",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282011%29%201080p/The%20Intouchables%20%282011%29%201080p%20NF/The%20Intouchables%20%282011%29%201080p%20NF-WEB%20x264%20AAC%205.1%20ESub-mkvC.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=5754",
-                        "posterUrl": "http://10.16.100.244/files/the_intouchables__intouchables_.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Oldboy (2003) REM 1080p BluRay x265 HEVC ESub [Dual Audio][Hindi 5.1+Korean 5.1] -mkvC",
-                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/Korean%20Language/Oldboy%20%282003%29%201080p%20%5BDual%20Audio%5D/Oldboy%20%282003%29%20REM%201080p%20BluRay%20x265%20HEVC%20ESub%20%5BDual%20Audio%5D%5BHindi%205.1%2BKorean%205.1%5D%20-mkvC.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=9581",
-                        "posterUrl": "http://10.16.100.244/files/oldboy.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Koe no katachi aka A Silent Voice 2016 (Dual Audio_10bit_BD_1080p_x265)",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/A%20Silent%20Voice-The%20Movie%20%282016%29%201080p%20%5BDual%20Audio%5D/Koe%20no%20katachi%20aka%20A%20Silent%20Voice%202016%20%28Dual%20Audio_10bit_BD_1080p_x265%29.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=12275",
-                        "posterUrl": "http://10.16.100.244/files/a_silent_voice__koe_no_katachi_.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Princess Mononoke (1997) 1080p BluRay x265 HEVC 10bit MSubs [Dual Audio]",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/Princess%20Mononoke%20%281997%29%201080p%20%5BDual%20Audio%5D/Princess%20Mononoke%20%281997%29%201080p%20BluRay%20x265%20HEVC%2010bit%20MSubs%20%5BDual%20Audio%5D.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=3908",
-                        "posterUrl": "http://10.16.100.244/files/princess_mononoke__mononoke_hime___hindi___japanese_.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "WALL-E (2008) 1080p BluRay x265 HEVC MSubs [Dual Audio][Hindi 5.1+English 5.1] -OlaM",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/WALL%C2%B7E%20%282008%29%201080p%20%5BDual%20Audio%5D/WALL-E%20%282008%29%201080p%20BluRay%20x265%20HEVC%20MSubs%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-OlaM.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=9735",
-                        "posterUrl": "http://10.16.100.244/files/wall_e.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Coco (2017) 1080p BluRay x264 ESub [Dual Audio][Hindi 5.1+English 5.1] -HDHub",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/Coco%20%282017%29%201080p%20%5BDual%20Audio%5D/Coco%20%282017%29%201080p%20BluRay%20x264%20ESub%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-HDHub.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=9163",
-                        "posterUrl": "http://10.16.100.244/files/coco.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Howl's Moving Castle (2004) 1080p BluRay x265 HEVC 10bit MSubs [Multi Audio]",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/Howl%27s%20Moving%20Castle%20%282004%29%201080p%20%5BMulti%20Audio%5D/Howl%27s%20Moving%20Castle%20%282004%29%201080p%20BluRay%20x265%20HEVC%2010bit%20MSubs%20%5BMulti%20Audio%5D.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=14231",
-                        "posterUrl": "http://10.16.100.244/files/howls_moving_castle__hauru_no_ugoku_shiro_.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Wild Robot (2024) 1080p BluRay x265 HEVC MSubs [Dual Audio][Hindi 5.1+English 5.1] -mkvC",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/The%20Wild%20Robot%20%282024%29%201080p%20%5BDual%20Audio%5D/The%20Wild%20Robot%20%282024%29%201080p%20BluRay%20x265%20HEVC%20MSubs%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-mkvC.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=36467",
-                        "posterUrl": "http://10.16.100.244/files/the_wild_robot.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Truman Show (1998) 1080p BluRay x265 HEVC 10bit AAC 5.1 MSubs-Tigole",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281998%29%201080p/The%20Truman%20Show%20%281998%29%201080p/The%20Truman%20Show%20%281998%29%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20MSubs-Tigole.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=9151",
-                        "posterUrl": "http://10.16.100.244/files/the_truman_show.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Star.Wars.Episode.V.The.Empire.Strikes.Back.1980.1080p.BluRay.x264.DD5.1.ESub-GalaxyRG",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/Star%20Wars-Episode%20V%20-%20The%20Empire%20Strikes%20Back%20%281980%29%201080p/Star.Wars.Episode.V.The.Empire.Strikes.Back.1980.1080p.BluRay.x264.DD5.1.ESub-GalaxyRG.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=1970",
-                        "posterUrl": "http://10.16.100.244/files/star_wars_episode_v_the_empire_strikes_back__full_hd_.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Terminator 2 Judgment Day (1991) DC EXTENDED 1080p BluRay x265 HEVC MSubs [Dual Audio][Hindi 5.1+English 5.1] -OlaM",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/Terminator%202-Judgment%20Day%20%281991%29%201080p%20%5BDual%20Audio%5D/Terminator%202%20Judgment%20Day%20%281991%29%20DC%20EXTENDED%201080p%20BluRay%20x265%20HEVC%20MSubs%20%5BDual%20Audio%5D%5BHindi%205.1%2BEnglish%205.1%5D%20-OlaM.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=144",
-                        "posterUrl": "http://10.16.100.244/files/terminator_2_judgment_day__4k_.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Django Unchained (2012) 1080p BluRay x265 HEVC ESub [Dual Audio][Hindi 2.0+English 5.1] -MsMod",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282012%29%201080p/Django%20Unchained%20%282012%29%201080p%20%5BDual%20Audio%5D/Django%20Unchained%20%282012%29%201080p%20BluRay%20x265%20HEVC%20ESub%20%5BDual%20Audio%5D%5BHindi%202.0%2BEnglish%205.1%5D%20-MsMod.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=5675",
-                        "posterUrl": "http://10.16.100.244/files/speed_Django%20Unchained%202012.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Shining (1980) DC RM 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-PSA",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/The%20Shining%20%281980%29%201080p/The%20Shining%20%281980%29%20DC%20RM%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-PSA.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=9133",
-                        "posterUrl": "http://10.16.100.244/files/the_shining.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Apocalypse Now (1979) Redux 1080p BluRay x265 HEVC 10bit AAC 5.1 MSubs-Joy",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%281995%29%201080p%20%26%20Before/Apocalypse%20Now%20%281979%29%201080p/Apocalypse%20Now%20%281979%29%20Redux%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20MSubs-Joy.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=15794",
-                        "posterUrl": "http://10.16.100.244/files/apocalypse_now.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Hunt (2012) Danish 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-afm72",
-                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/Danish%20Language/The%20Hunt%20%282012%29%201080p%20%28Denmark%29/The%20Hunt%20%282012%29%20Danish%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-afm72.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=15005",
-                        "posterUrl": "http://10.16.100.244/files/the_hunt.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Incendies (2010) French 1080p BluRay x265 HEVC 10bit AAC 5.1 ESub-mkvC",
-                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/French%20Language/Incendies%20%282010%29%201080p%20%28France%29/Incendies%20%282010%29%20French%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20ESub-mkvC.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=10642",
-                        "posterUrl": "http://10.16.100.244/files/incendies.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "The Secret in Their Eyes (2009) Spanish 1080p BluRay x265 HEVC 10bit AAC 5.1 MSubs-Tigole",
-                        "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/Spanish%20Language/The%20Secret%20in%20Their%20Eyes%20%282009%29%201080p%20%28Argentina%29/The%20Secret%20in%20Their%20Eyes%20%282009%29%20Spanish%201080p%20BluRay%20x265%20HEVC%2010bit%20AAC%205.1%20MSubs-Tigole.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=6550",
-                        "posterUrl": "http://10.16.100.244/files/speed_secret-in-their-eyes-the-2009-poster.jpg",
-                        "extraInfo": "Top Pick"
-                    },
-                    {
-                        "title": "Five Feet Apart (2019) 1080p BRRip x264-MkvCage.ws",
-                        "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/%282019%29%201080p/Five%20Feet%20Apart%20%282019%29%201080p/Five.Feet.Apart.2019.1080p.BRRip.x264-MkvCage.ws.mkv",
-                        "altUrl": "http://10.16.100.244/player.php?play=15135",
-                        "posterUrl": "http://10.16.100.244/files/five_feet_apart.jpg",
-                        "extraInfo": "Top Pick"
-                    }
-                ]
+                readonly property var rawTopPicks: TopPicksData.topPicks
 
                 property var topPicksList: {
                     var arr = rawTopPicks.slice()
@@ -903,6 +539,9 @@ Item {
                             if (topPicksList[i].altUrl && topPicksList[i].altUrl.length > 0) {
                                 fluxUser.rememberPoster(topPicksList[i].altUrl, topPicksList[i].posterUrl, topPicksList[i].title)
                             }
+                            if (topPicksList[i].circleUrl && topPicksList[i].circleUrl.length > 0) {
+                                fluxUser.rememberPoster(topPicksList[i].circleUrl, topPicksList[i].posterUrl, topPicksList[i].title)
+                            }
                         }
                     }
                 }
@@ -911,9 +550,9 @@ Item {
                     id: topPicksLayout
                     x: root.pageMargin
                     y: {
-                        if (continueList.count > 0) return 20
+                        if (continueList.count > 0) return 16
                         var isTop = (fluxUser && fluxUser.topPicksFirst) || (!trendingSection.visible)
-                        return isTop ? (root.topInset + 16) : 20
+                        return isTop ? (root.topInset + 16) : 12
                     }
                     width: topPicksSection.availableWidth
                     spacing: 16
@@ -944,14 +583,20 @@ Item {
                                 anchors.centerIn: parent
                                 text: {
                                     if (fluxUser) {
-                                        if (fluxUser.bothServersDown) {
-                                            return fluxUser.activeServer === 2 ? "ICC FTP" : "Dhaka Flix"
-                                        }
-                                        if (!fluxUser.server2Available && fluxUser.server1Available) return "Dhaka Flix"
-                                        if (!fluxUser.server1Available && fluxUser.server2Available) return "ICC FTP"
-                                        return fluxUser.activeServer === 2 ? "ICC FTP" : "Dhaka Flix"
+                                        var cur = fluxUser.activeServer
+                                        var s1Ok = fluxUser.server1Enabled && fluxUser.server1Available
+                                        var s2Ok = fluxUser.server2Enabled && fluxUser.server2Available
+                                        var s3Ok = fluxUser.server3Enabled && fluxUser.server3Available
+
+                                        if (cur === 1 && s1Ok) return "Dhaka Flix"
+                                        if (cur === 2 && s2Ok) return "ICC FTP"
+                                        if (cur === 3 && s3Ok) return "Circle FTP"
+
+                                        if (s1Ok) return "Dhaka Flix"
+                                        if (s2Ok) return "ICC FTP"
+                                        if (s3Ok) return "Circle FTP"
                                     }
-                                    return "Dhaka Flix"
+                                    return "Unavailable"
                                 }
                                 color: Theme.accent
                                 font.pixelSize: 11
@@ -1021,19 +666,48 @@ Item {
                                 required property var modelData
                                 required property int index
 
-                                readonly property bool preferIcc: {
+                                readonly property int chosenServer: {
                                     if (fluxUser) {
-                                        if (fluxUser.bothServersDown) {
-                                            return (fluxUser.activeServer === 2 && modelData.altUrl && modelData.altUrl.length > 0)
-                                        }
-                                        if (!fluxUser.server2Available && fluxUser.server1Available) return false
-                                        if (!fluxUser.server1Available && fluxUser.server2Available) return true
-                                        return (fluxUser.activeServer === 2 && modelData.altUrl && modelData.altUrl.length > 0)
+                                        var s1On = fluxUser.server1Enabled && fluxUser.server1Available
+                                        var s2On = fluxUser.server2Enabled && fluxUser.server2Available
+                                        var s3On = fluxUser.server3Enabled && fluxUser.server3Available
+                                        var cur = fluxUser.activeServer
+
+                                        if (cur === 1 && s1On && modelData.url && modelData.url.length > 0) return 1
+                                        if (cur === 2 && s2On && modelData.altUrl && modelData.altUrl.length > 0) return 2
+                                        if (cur === 3 && s3On && modelData.circleUrl && modelData.circleUrl.length > 0) return 3
+
+                                        if (s1On && modelData.url && modelData.url.length > 0) return 1
+                                        if (s2On && modelData.altUrl && modelData.altUrl.length > 0) return 2
+                                        if (s3On && modelData.circleUrl && modelData.circleUrl.length > 0) return 3
                                     }
-                                    return false
+                                    return 0
                                 }
-                                readonly property string effectiveUrl: preferIcc ? modelData.altUrl : modelData.url
-                                readonly property string fallbackUrl: preferIcc ? modelData.url : (modelData.altUrl || "")
+                                readonly property string effectiveUrl: {
+                                    if (chosenServer === 1) return modelData.url || ""
+                                    if (chosenServer === 2) return modelData.altUrl || ""
+                                    if (chosenServer === 3) return modelData.circleUrl || ""
+                                    return ""
+                                }
+                                readonly property string fallbackUrl: {
+                                    if (fluxUser) {
+                                        var s1On = fluxUser.server1Enabled && fluxUser.server1Available
+                                        var s2On = fluxUser.server2Enabled && fluxUser.server2Available
+                                        var s3On = fluxUser.server3Enabled && fluxUser.server3Available
+
+                                        if (chosenServer === 1) {
+                                            if (s2On && modelData.altUrl) return modelData.altUrl
+                                            if (s3On && modelData.circleUrl) return modelData.circleUrl
+                                        } else if (chosenServer === 2) {
+                                            if (s1On && modelData.url) return modelData.url
+                                            if (s3On && modelData.circleUrl) return modelData.circleUrl
+                                        } else if (chosenServer === 3) {
+                                            if (s1On && modelData.url) return modelData.url
+                                            if (s2On && modelData.altUrl) return modelData.altUrl
+                                        }
+                                    }
+                                    return ""
+                                }
 
                                 width: topPicksSection.picksCardW
                                 height: topPicksSection.picksCardH
@@ -1041,13 +715,19 @@ Item {
                                 playUrl: effectiveUrl
                                 posterUrl: modelData.posterUrl || ""
                                 isFolder: false
-                                libraryName: preferIcc ? "ICC FTP" : "DHAKA FLIX"
+                                libraryName: chosenServer === 3 ? "CIRCLE FTP" : (chosenServer === 2 ? "ICC FTP" : (chosenServer === 1 ? "DHAKA FLIX" : "UNAVAILABLE"))
                                 progress: 0
                                 showRemove: false
                                 extraInfo: modelData.extraInfo || "Top Pick"
                                 introDelay: Math.min(index, 12) * 30
 
                                 onPlayRequested: function(targetUrl, itemTitle) {
+                                    if (!targetUrl || targetUrl.length === 0) {
+                                        if (window && window.showNotification) {
+                                            window.showNotification("Media unavailable on enabled servers. Check Media Server Settings.")
+                                        }
+                                        return
+                                    }
                                     root.playMediaRequested(targetUrl, itemTitle, fallbackUrl)
                                 }
 
@@ -1066,7 +746,7 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.topMargin: 8
-                        Layout.bottomMargin: 32
+                        Layout.bottomMargin: 8
                         visible: topPicksSection.topPicksList.length > topPicksSection.picksCols * 2
 
                         Item { Layout.fillWidth: true }
@@ -1154,19 +834,27 @@ Item {
             Rectangle {
                 id: searchServerSelector
 
-                readonly property int activeServerIndex: (fluxUser && fluxUser.activeServer === 1) ? 1 : 2
-                readonly property bool isWide: root.width >= 700
-                readonly property bool bothDown: !!fluxUser && fluxUser.bothServersDown
-                readonly property bool showServer1: !fluxUser || !fluxUser.serverCheckComplete || fluxUser.server1Available || bothDown
-                readonly property bool showServer2: !fluxUser || !fluxUser.serverCheckComplete || fluxUser.server2Available || bothDown
-                readonly property bool hasBothServers: showServer1 && showServer2
+                readonly property int activeServerIndex: fluxUser ? fluxUser.activeServer : 1
+                readonly property bool isWide: root.width >= 750
+                readonly property int enabledCount: fluxUser ? fluxUser.enabledServerCount : 3
 
+                visible: enabledCount > 0
                 implicitHeight: 42
-                implicitWidth: searchSegmentsRow.width + 8
+                implicitWidth: Math.max(80, searchSegmentsRow.width + 8)
                 radius: 21
                 color: Theme.surface
                 border.width: 1
                 border.color: Theme.border
+
+                readonly property var currentActiveSegment: {
+                    if (activeServerIndex === 1 && sseg1.visible) return sseg1
+                    if (activeServerIndex === 2 && sseg2.visible) return sseg2
+                    if (activeServerIndex === 3 && sseg3.visible) return sseg3
+                    if (sseg1.visible) return sseg1
+                    if (sseg2.visible) return sseg2
+                    if (sseg3.visible) return sseg3
+                    return null
+                }
 
                 // Active sliding pill
                 Rectangle {
@@ -1174,8 +862,9 @@ Item {
                     radius: 17
                     anchors.verticalCenter: parent.verticalCenter
                     color: Theme.accent
-                    x: searchSegmentsRow.x + (searchServerSelector.activeServerIndex === 1 ? sseg1.x : sseg2.x)
-                    width: searchServerSelector.activeServerIndex === 1 ? sseg1.width : sseg2.width
+                    visible: searchServerSelector.currentActiveSegment !== null
+                    x: searchServerSelector.currentActiveSegment ? (searchSegmentsRow.x + searchServerSelector.currentActiveSegment.x) : 0
+                    width: searchServerSelector.currentActiveSegment ? searchServerSelector.currentActiveSegment.width : 0
 
                     Behavior on x { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                     Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
@@ -1185,11 +874,12 @@ Item {
                     id: searchSegmentsRow
                     anchors.verticalCenter: parent.verticalCenter
                     x: 4
-                    spacing: searchServerSelector.hasBothServers ? 4 : 0
+                    spacing: 4
 
+                    // Server 1: Dhaka Flix
                     Item {
                         id: sseg1
-                        visible: searchServerSelector.showServer1
+                        visible: fluxUser ? (fluxUser.server1Enabled && fluxUser.server1Available) : true
                         height: 34
                         width: visible ? (sseg1Row.implicitWidth + 24) : 0
 
@@ -1233,6 +923,7 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 if (fluxUser && fluxUser.activeServer !== 1) {
+                                    if (fluxSearch) fluxSearch.clearSuggestions()
                                     categoryFilter.isExpanded = false
                                     var textQuery = topSearchInput.text.trim()
                                     fluxUser.activeServer = 1
@@ -1251,9 +942,10 @@ Item {
                         }
                     }
 
+                    // Server 2: ICC FTP
                     Item {
                         id: sseg2
-                        visible: searchServerSelector.showServer2
+                        visible: fluxUser ? (fluxUser.server2Enabled && fluxUser.server2Available) : true
                         height: 34
                         width: visible ? (sseg2Row.implicitWidth + 24) : 0
 
@@ -1297,6 +989,7 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 if (fluxUser && fluxUser.activeServer !== 2) {
+                                    if (fluxSearch) fluxSearch.clearSuggestions()
                                     categoryFilter.isExpanded = false
                                     var textQuery = topSearchInput.text.trim()
                                     fluxUser.activeServer = 2
@@ -1314,6 +1007,103 @@ Item {
                             text: "Server 2 (ICC FTP) \u2014 Direct high-speed streaming"
                         }
                     }
+
+                    // Server 3: Circle FTP
+                    Item {
+                        id: sseg3
+                        visible: fluxUser ? (fluxUser.server3Enabled && fluxUser.server3Available) : true
+                        height: 34
+                        width: visible ? (sseg3Row.implicitWidth + 24) : 0
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 17
+                            color: "#1AFFFFFF"
+                            visible: sseg3Mouse.containsMouse && searchServerSelector.activeServerIndex !== 3
+                        }
+
+                        Row {
+                            id: sseg3Row
+                            anchors.centerIn: parent
+                            spacing: 6
+
+                            Rectangle {
+                                width: 6
+                                height: 6
+                                radius: 3
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: "#FFFFFF"
+                                opacity: (searchServerSelector.activeServerIndex === 3) ? 1.0 : 0.0
+                                Behavior on opacity { NumberAnimation { duration: 140 } }
+                            }
+
+                            Text {
+                                text: searchServerSelector.isWide ? "Server 3 (Circle FTP)" : "Server 3"
+                                color: searchServerSelector.activeServerIndex === 3 ? "#FFFFFF"
+                                     : (sseg3Mouse.containsMouse ? "#FFFFFF" : Theme.textDim)
+                                font.pixelSize: 13
+                                font.weight: searchServerSelector.activeServerIndex === 3 ? Font.Bold : Font.Normal
+                                anchors.verticalCenter: parent.verticalCenter
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+                        }
+
+                        MouseArea {
+                            id: sseg3Mouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (fluxUser && fluxUser.activeServer !== 3) {
+                                    if (fluxSearch) fluxSearch.clearSuggestions()
+                                    categoryFilter.isExpanded = false
+                                    var textQuery = topSearchInput.text.trim()
+                                    fluxUser.activeServer = 3
+                                    if (fluxBrowser && fluxBrowser.active) fluxBrowser.close()
+                                    if (textQuery.length > 0 && fluxSearch && fluxSearch.query !== textQuery) {
+                                        fluxSearch.search(textQuery)
+                                    }
+                                }
+                            }
+                        }
+
+                        FluxToolTip {
+                            visible: sseg3Mouse.containsMouse
+                            delay: 400
+                            text: "Server 3 (Circle FTP) \u2014 Direct high-speed streaming"
+                        }
+                    }
+                }
+            }
+
+            // Notice when all servers are turned off
+            Rectangle {
+                visible: searchServerSelector.enabledCount === 0
+                implicitHeight: 38
+                implicitWidth: noServersRow.implicitWidth + 28
+                radius: 19
+                color: "#2E1A1D"
+                border.width: 1
+                border.color: "#FF4D5E"
+
+                RowLayout {
+                    id: noServersRow
+                    anchors.centerIn: parent
+                    spacing: 10
+
+                    FluxIcon {
+                        name: "alert"
+                        size: 14
+                        color: "#FF4D5E"
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    Text {
+                        text: "All media servers are currently turned off. Turn on servers in Settings."
+                        color: "#FFD0D4"
+                        font.pixelSize: 12
+                        Layout.alignment: Qt.AlignVCenter
+                    }
                 }
             }
 
@@ -1325,6 +1115,7 @@ Item {
             Layout.fillWidth: true
             Layout.topMargin: 2
             Layout.bottomMargin: 2
+            z: 100
 
             Item { Layout.fillWidth: true }
 
@@ -1335,64 +1126,275 @@ Item {
                 implicitWidth: Math.min(480, Math.max(300, Math.round(resultsView.width * 0.45)))
                 spacing: 10
 
-                Rectangle {
+                Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 44
-                    radius: 22
-                    color: Theme.surface
-                    border.width: topSearchInput.activeFocus ? 2 : 1
-                    border.color: topSearchInput.activeFocus ? Theme.accent : Theme.border
 
-                    Behavior on border.color { ColorAnimation { duration: 180 } }
-
-                    RowLayout {
+                    Rectangle {
+                        id: searchInputBox
                         anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 8
-                        spacing: 10
+                        radius: 22
+                        color: Theme.surface
+                        border.width: topSearchInput.activeFocus ? 2 : 1
+                        border.color: topSearchInput.activeFocus ? Theme.accent : Theme.border
 
-                        FluxIcon {
-                            name: "search"
-                            size: 18
-                            color: topSearchInput.activeFocus ? Theme.text : Theme.textMute
-                            Layout.alignment: Qt.AlignVCenter
-                        }
+                        Behavior on border.color { ColorAnimation { duration: 180 } }
 
-                        TextField {
-                            id: topSearchInput
-                            Layout.fillWidth: true
-                            text: fluxSearch ? fluxSearch.query : ""
-                            placeholderText: "Search movies, shows, episodes..."
-                            placeholderTextColor: Theme.textMute
-                            font.pixelSize: 13
-                            color: Theme.text
-                            selectedTextColor: "#FFFFFF"
-                            selectionColor: Theme.accent
-                            background: null
+                        property bool suppressSuggestions: false
 
-                            onAccepted: {
-                                if (fluxSearch && text.trim().length > 0) {
-                                    categoryFilter.isExpanded = false
-                                    fluxSearch.search(text.trim())
+                        TapHandler {
+                            acceptedButtons: Qt.LeftButton
+                            onTapped: {
+                                if (fluxUser && fluxUser.activeServer === 3 && topSearchInput.text.trim().length > 0) {
+                                    if (!suggestPopup.opened) {
+                                        if (fluxSearch && fluxSearch.suggestions.length > 0) {
+                                            suggestPopup.open()
+                                        } else if (fluxSearch) {
+                                            suggestDebounceTimer.restart()
+                                        }
+                                    }
                                 }
                             }
                         }
 
-                        IconButton {
-                            id: topClearBtn
-                            visible: topSearchInput.text.length > 0
-                            iconName: "close"
-                            iconSize: 14
-                            iconColor: Theme.textDim
-                            implicitWidth: 28
-                            implicitHeight: 28
-                            tip: "Clear"
-                            tipAbove: false
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 16
+                            anchors.rightMargin: 8
+                            spacing: 10
 
-                            onClicked: {
-                                topSearchInput.text = ""
-                                if (fluxSearch) fluxSearch.clear()
-                                categoryFilter.isExpanded = true
+                            FluxIcon {
+                                name: "search"
+                                size: 18
+                                color: topSearchInput.activeFocus ? Theme.text : Theme.textMute
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            Timer {
+                                id: suggestDebounceTimer
+                                interval: 180
+                                repeat: false
+                                onTriggered: {
+                                    if (fluxUser && fluxUser.activeServer === 3 && fluxSearch) {
+                                        var q = topSearchInput.text.trim()
+                                        if (q.length > 0) {
+                                            fluxSearch.requestSuggestions(q)
+                                        } else {
+                                            fluxSearch.clearSuggestions()
+                                            suggestPopup.close()
+                                        }
+                                    }
+                                }
+                            }
+
+                            TextField {
+                                id: topSearchInput
+                                Layout.fillWidth: true
+                                text: fluxSearch ? fluxSearch.query : ""
+                                placeholderText: "Search movies, shows, episodes..."
+                                placeholderTextColor: Theme.textMute
+                                font.pixelSize: 13
+                                color: Theme.text
+                                selectedTextColor: "#FFFFFF"
+                                selectionColor: Theme.accent
+                                background: null
+
+                                TapHandler {
+                                    acceptedButtons: Qt.LeftButton
+                                    onTapped: {
+                                        if (fluxUser && fluxUser.activeServer === 3 && topSearchInput.text.trim().length > 0) {
+                                            if (!suggestPopup.opened) {
+                                                if (fluxSearch && fluxSearch.suggestions.length > 0) {
+                                                    suggestPopup.open()
+                                                } else if (fluxSearch) {
+                                                    suggestDebounceTimer.restart()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                onTextChanged: {
+                                    // Search suggestions ONLY for Circle FTP (Server 3)
+                                    if (fluxUser && fluxUser.activeServer === 3 && !searchInputBox.suppressSuggestions) {
+                                        if (text.trim().length === 0) {
+                                            suggestDebounceTimer.stop()
+                                            suggestPopup.close()
+                                            if (fluxSearch) fluxSearch.clearSuggestions()
+                                        } else if (activeFocus) {
+                                            suggestDebounceTimer.restart()
+                                        }
+                                    }
+                                }
+
+                                onActiveFocusChanged: {
+                                    if (activeFocus && fluxUser && fluxUser.activeServer === 3 && text.trim().length > 0 && !searchInputBox.suppressSuggestions) {
+                                        if (fluxSearch && fluxSearch.suggestions.length > 0) {
+                                            suggestPopup.open()
+                                        } else if (fluxSearch) {
+                                            suggestDebounceTimer.restart()
+                                        }
+                                    }
+                                }
+
+                                onAccepted: {
+                                    suggestDebounceTimer.stop()
+                                    searchInputBox.suppressSuggestions = true
+                                    suggestPopup.close()
+                                    if (fluxSearch) fluxSearch.clearSuggestions()
+                                    if (fluxSearch && text.trim().length > 0) {
+                                        categoryFilter.isExpanded = false
+                                        fluxSearch.search(text.trim())
+                                    }
+                                    Qt.callLater(() => { searchInputBox.suppressSuggestions = false })
+                                }
+                            }
+
+                            IconButton {
+                                id: topClearBtn
+                                visible: topSearchInput.text.length > 0
+                                iconName: "close"
+                                iconSize: 14
+                                iconColor: Theme.textDim
+                                implicitWidth: 28
+                                implicitHeight: 28
+                                tip: "Clear"
+                                tipAbove: false
+
+                                onClicked: {
+                                    suggestDebounceTimer.stop()
+                                    suggestPopup.close()
+                                    topSearchInput.text = ""
+                                    if (fluxSearch) {
+                                        fluxSearch.clearSuggestions()
+                                        fluxSearch.clear()
+                                    }
+                                    categoryFilter.isExpanded = true
+                                }
+                            }
+                        }
+                    }
+
+                    Connections {
+                        target: (typeof fluxSearch !== "undefined" && fluxSearch) ? fluxSearch : null
+                        function onSuggestionsChanged() {
+                            if (fluxUser && fluxUser.activeServer === 3
+                                    && topSearchInput.text.trim().length > 0
+                                    && fluxSearch.suggestions.length > 0
+                                    && topSearchInput.activeFocus
+                                    && !searchInputBox.suppressSuggestions) {
+                                suggestPopup.open()
+                            } else if (fluxSearch && fluxSearch.suggestions.length === 0) {
+                                suggestPopup.close()
+                            }
+                        }
+                    }
+
+                    Connections {
+                        target: (typeof fluxUser !== "undefined" && fluxUser) ? fluxUser : null
+                        function onActiveServerChanged() {
+                            if (fluxUser.activeServer !== 3) {
+                                suggestDebounceTimer.stop()
+                                suggestPopup.close()
+                                if (fluxSearch) fluxSearch.clearSuggestions()
+                            }
+                        }
+                    }
+
+                    // Auto-suggestions overlay dropdown (Circle FTP Server 3 ONLY)
+                    Popup {
+                        id: suggestPopup
+                        parent: searchInputBox
+                        x: 0
+                        y: searchInputBox.height + 4
+                        width: searchInputBox.width
+                        implicitHeight: Math.min(300, suggestCol.implicitHeight + 12)
+                        height: implicitHeight
+                        padding: 6
+                        modal: false
+                        focus: false
+                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+
+                        enter: Transition {
+                            NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 120; easing.type: Easing.OutQuad }
+                            NumberAnimation { property: "scale"; from: 0.98; to: 1.0; duration: 120; easing.type: Easing.OutQuad }
+                        }
+                        exit: Transition {
+                            NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 100; easing.type: Easing.InQuad }
+                        }
+
+                        background: Rectangle {
+                            color: "#181d26"
+                            radius: 12
+                            border.width: 1
+                            border.color: "#303947"
+                        }
+
+                        contentItem: Flickable {
+                            id: suggestFlick
+                            clip: true
+                            contentWidth: width
+                            contentHeight: suggestCol.implicitHeight
+                            boundsBehavior: Flickable.StopAtBounds
+                            ScrollBar.vertical: FluxScrollBar { }
+
+                            Column {
+                                id: suggestCol
+                                width: suggestFlick.width
+                                spacing: 2
+
+                                Repeater {
+                                    model: (fluxUser && fluxUser.activeServer === 3 && fluxSearch) ? fluxSearch.suggestions : []
+                                    delegate: Rectangle {
+                                        id: sugDelegate
+                                        width: suggestCol.width
+                                        height: 34
+                                        radius: 6
+                                        color: sugMouse.containsMouse ? "#26FFFFFF" : "transparent"
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 12
+                                            anchors.rightMargin: 12
+                                            spacing: 10
+
+                                            FluxIcon {
+                                                name: "search"
+                                                size: 14
+                                                color: sugMouse.containsMouse ? Theme.accent : Theme.textMute
+                                            }
+
+                                            Text {
+                                                text: modelData
+                                                color: sugMouse.containsMouse ? "#FFFFFF" : Theme.text
+                                                font.pixelSize: 13
+                                                font.weight: sugMouse.containsMouse ? Font.DemiBold : Font.Normal
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            id: sugMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                suggestDebounceTimer.stop()
+                                                searchInputBox.suppressSuggestions = true
+                                                suggestPopup.close()
+                                                var chosen = modelData
+                                                topSearchInput.text = chosen
+                                                if (fluxSearch) {
+                                                    fluxSearch.clearSuggestions()
+                                                    if (typeof categoryFilter !== "undefined" && categoryFilter) categoryFilter.isExpanded = false
+                                                    fluxSearch.search(chosen)
+                                                }
+                                                Qt.callLater(() => { searchInputBox.suppressSuggestions = false })
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1405,10 +1407,15 @@ Item {
                     enabled: !(fluxSearch && fluxSearch.isSearching)
 
                     onClicked: {
+                        suggestDebounceTimer.stop()
+                        searchInputBox.suppressSuggestions = true
+                        suggestPopup.close()
                         if (fluxSearch && topSearchInput.text.trim().length > 0) {
+                            fluxSearch.clearSuggestions()
                             categoryFilter.isExpanded = false
                             fluxSearch.search(topSearchInput.text.trim())
                         }
+                        Qt.callLater(() => { searchInputBox.suppressSuggestions = false })
                     }
                 }
             }
@@ -1416,7 +1423,7 @@ Item {
             Item { Layout.fillWidth: true }
         }
 
-        // 3. Category filters (collapsible, automatically collapses on search; only shown for Server 1)
+        // 3. Category filters (collapsible, automatically collapses on search)
         CategoryFilterSection {
             id: categoryFilter
             Layout.fillWidth: true
@@ -1453,7 +1460,7 @@ Item {
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "Search on " + ((fluxUser && fluxUser.activeServer === 1) ? "Server 1 (Dhaka Flix)" : "Server 2 (ICC FTP)")
+                text: "Search on " + ((fluxUser && fluxUser.activeServer === 1) ? "Server 1 (Dhaka Flix)" : ((fluxUser && fluxUser.activeServer === 3) ? "Server 3 (Circle FTP)" : "Server 2 (ICC FTP)"))
                 color: Theme.text
                 font.pixelSize: 20
                 font.weight: Font.Bold

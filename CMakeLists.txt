@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(FLUX VERSION 2.2.4 LANGUAGES CXX)
+project(FLUX VERSION 2.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,6 +39,8 @@ qt_add_executable(FLUX WIN32
     src/main.cpp
     src/app/Application.h
     src/app/Application.cpp
+    src/app/SystemManager.h
+    src/app/SystemManager.cpp
     src/app/WindowsSnapHelper.h
     src/app/WindowsSnapHelper.cpp
     src/media/VLCInstance.h
@@ -117,6 +119,7 @@ qt_add_qml_module(FLUX
         qml/components/CategoryFilterSection.qml
         qml/components/MediaFormatter.js
         qml/components/Theme.js
+        qml/components/TopPicksData.js
         qml/components/FluxIcon.qml
         qml/components/FluxButton.qml
         qml/components/IconButton.qml
@@ -156,7 +159,7 @@ target_link_libraries(FLUX PRIVATE
 
 # Windows desktop subsystem and runtime DLL handling
 if(WIN32)
-    target_link_libraries(FLUX PRIVATE dwmapi user32)
+    target_link_libraries(FLUX PRIVATE dwmapi user32 ole32 shell32 advapi32)
     # Automatically copy libVLC runtime DLLs and plugins to output dir for running
     set(SYSTEM_VLC_DIR "C:/Program Files/VideoLAN/VLC")
     if(EXISTS "${SYSTEM_VLC_DIR}/libvlc.dll")
@@ -175,6 +178,9 @@ if(WIN32)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_CURRENT_SOURCE_DIR}/resources/icc_library.json"
                 "$<TARGET_FILE_DIR:FLUX>/resources/icc_library.json"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/circle_library.json"
+                "$<TARGET_FILE_DIR:FLUX>/resources/circle_library.json"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_CURRENT_SOURCE_DIR}/resources/flux.ico"
                 "$<TARGET_FILE_DIR:FLUX>/resources/flux.ico"
@@ -198,6 +204,26 @@ add_executable(flux_test_search
     src/core/Logger.cpp
 )
 target_link_libraries(flux_test_search PRIVATE
+    Qt6::Core
+    Qt6::Network
+    Qt6::Qml
+)
+
+# Standalone CLI test for Circle FTP & suggestions
+add_executable(flux_test_circle
+    tests/test_circle_integration.cpp
+    src/search/SearchResult.h
+    src/search/SearchResult.cpp
+    src/search/SearchQuery.h
+    src/search/SearchQuery.cpp
+    src/search/MediaLibrary.h
+    src/search/MediaLibrary.cpp
+    src/search/SearchManager.h
+    src/search/SearchManager.cpp
+    src/core/Logger.h
+    src/core/Logger.cpp
+)
+target_link_libraries(flux_test_circle PRIVATE
     Qt6::Core
     Qt6::Network
     Qt6::Qml

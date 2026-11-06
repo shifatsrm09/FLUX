@@ -1,9 +1,11 @@
 const releaseEndpoint = "https://api.github.com/repos/shifatsrm09/FLUX/releases/latest";
-const setupLink = document.querySelector("#setup-download");
-const portableLink = document.querySelector("#portable-download");
+const portableBadgeLink = document.querySelector("#portable-badge-link");
 const networkDownloadLink = document.querySelector("#network-check-download");
+const downloadBadgeLink = document.querySelector("#download-badge-link");
+const portableBadgeTotal = document.querySelector("#portable-badge-total");
 const note = document.querySelector("#release-note");
 const status = document.querySelector("#release-status");
+const downloadCounterUrl = "https://raw.githubusercontent.com/shifatsrm09/FLUX/main/resources/download-button.svg";
 
 async function loadLatestRelease() {
   try {
@@ -19,14 +21,16 @@ async function loadLatestRelease() {
     const portable = assets.find((asset) => /-win64-portable\.zip$/i.test(asset.name));
 
     if (setup) {
-      setupLink.href = setup.browser_download_url;
       if (networkDownloadLink) networkDownloadLink.href = setup.browser_download_url;
+      if (downloadBadgeLink) downloadBadgeLink.href = setup.browser_download_url;
     }
-    if (portable) portableLink.href = portable.browser_download_url;
+    if (portable) {
+      if (portableBadgeLink) portableBadgeLink.href = portable.browser_download_url;
+    }
     if (!setup || !portable) throw new Error("One or more download assets were not found");
 
     const version = release.tag_name || release.name || "Latest";
-    note.textContent = `${version} · ${formatSize(setup.size)} installer · ${formatSize(portable.size)} portable`;
+    note.textContent = `${version}  ·  Installer ${formatSize(setup.size)}  ·  Portable ${formatSize(portable.size)}`;
     status.textContent = "THE LATEST RELEASE";
   } catch (error) {
     // The releases page remains a working fallback if the API is unavailable.
@@ -40,6 +44,26 @@ function formatSize(bytes) {
 }
 
 loadLatestRelease();
+
+async function loadDownloadTotal() {
+  const freshCounterUrl = `${downloadCounterUrl}?_=${Date.now()}`;
+  try {
+    const response = await fetch(freshCounterUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
+
+    const svg = await response.text();
+    const match = svg.match(/TOTAL DOWNLOADS:\s*([\d,]+)/i);
+    if (!match) throw new Error("Download count not found");
+
+    const total = Number(match[1].replaceAll(",", "")).toLocaleString();
+    portableBadgeTotal.textContent = total;
+  } catch {
+    portableBadgeTotal.textContent = "—";
+  }
+}
+
+loadDownloadTotal();
+window.setInterval(loadDownloadTotal, 10 * 60 * 1000);
 
 const networkCheckDialog = document.querySelector("#network-check-dialog");
 const networkCheckIntro = document.querySelector("#network-check-intro");

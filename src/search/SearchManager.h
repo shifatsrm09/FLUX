@@ -4,6 +4,7 @@
 #include <QSortFilterProxyModel>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include <QPointer>
 #include <QString>
 #include <QList>
 #include <QHash>
@@ -40,10 +41,11 @@ class SearchManager : public QAbstractListModel {
     Q_PROPERTY(QString selectedLibraryGroup READ selectedLibraryGroup NOTIFY selectedLibraryChanged)
     Q_PROPERTY(QString selectedLibraryUrl READ selectedLibraryUrl NOTIFY selectedLibraryChanged)
 
-    // Multi-server properties (1 = Dhaka Flix, 2 = ICC FTP)
+    // Multi-server properties (1 = Dhaka Flix, 2 = ICC FTP, 3 = Circle FTP)
     Q_PROPERTY(int activeServer READ activeServer WRITE setActiveServer NOTIFY activeServerChanged)
     Q_PROPERTY(QString iccftpUrl READ iccftpUrl WRITE setIccftpUrl NOTIFY iccftpSettingsChanged)
     Q_PROPERTY(QString iccftpSession READ iccftpSession WRITE setIccftpSession NOTIFY iccftpSettingsChanged)
+    Q_PROPERTY(QStringList suggestions READ suggestions NOTIFY suggestionsChanged)
 
     // Multi-category / Filter properties
     Q_PROPERTY(bool isAllSelected READ isAllSelected WRITE setAllSelected NOTIFY selectedLibrariesChanged)
@@ -161,7 +163,13 @@ public:
     bool isTrendingLoading() const { return m_isTrendingLoading; }
     Q_INVOKABLE void fetchTrending();
 
+    // Auto-suggestions (powered by suggestion engine)
+    QStringList suggestions() const { return m_suggestions; }
+    Q_INVOKABLE void requestSuggestions(const QString &text);
+    Q_INVOKABLE void clearSuggestions();
+
 signals:
+    void suggestionsChanged();
     void activeServerChanged();
     void iccftpSettingsChanged();
     void selectedLibraryChanged();
@@ -185,6 +193,7 @@ private:
     // results, stage 2 sends short "anchor" chunks and keeps only candidates that score well.
     void startStage(quint64 searchId, const QStringList &queries);
     void startIccSearch(quint64 searchId, const QString &query);
+    void startCircleSearch(quint64 searchId, const QString &query);
     void resolveDirectUrl(const QString &playUrl, int resultIndex);
     void onReplyFinished(QNetworkReply *reply, quint64 searchId, const MediaRoot &root, int stage);
     void finishSearch(quint64 searchId);
@@ -223,6 +232,9 @@ private:
     FolderFilterProxyModel *m_folderModel = nullptr;
     FolderFilterProxyModel *m_mediaModel = nullptr;
     int m_resultsRevision = 0;
+
+    QPointer<QNetworkReply> m_suggestionReply;
+    QStringList m_suggestions;
 };
 
 } // namespace Flux

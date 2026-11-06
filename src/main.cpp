@@ -1,6 +1,8 @@
 #include <QGuiApplication>
 #include <QCoreApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
+#include <QQmlContext>
 #include <QQmlError>
 #include <QQuickStyle>
 #include <QDir>
@@ -10,6 +12,9 @@
 #include <QIcon>
 #include <QFile>
 #include <QQuickWindow>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 #include "app/Application.h"
 #include "app/WindowsSnapHelper.h"
 #include "core/Logger.h"
@@ -24,6 +29,46 @@ int main(int argc, char *argv[]) {
     QGuiApplication::setApplicationVersion(QString::fromLatin1(FLUX_VERSION));
 
     QGuiApplication app(argc, argv);
+
+    bool startedFromBoot = false;
+    bool allowMultiple = false;
+    for (int i = 1; i < argc; ++i) {
+        QString arg = QString::fromLocal8Bit(argv[i]);
+        if (arg == QStringLiteral("--autostart") || arg == QStringLiteral("-autostart")) {
+            startedFromBoot = true;
+        } else if (arg == QStringLiteral("--multi") || arg == QStringLiteral("--multi-instance") || arg == QStringLiteral("-m") || arg == QStringLiteral("/multi")) {
+            allowMultiple = true;
+        }
+    }
+    if (qEnvironmentVariableIsSet("FLUX_MULTI_INSTANCE")) {
+        allowMultiple = true;
+    }
+
+#ifdef Q_OS_WIN
+    // Ensure normal process priority class even when launched by Windows boot sequence
+    SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
+
+    HANDLE hSingleInstanceMutex = NULL;
+    if (!allowMultiple) {
+        // Single-instance enforcement: if FLUX is already running, activate it and exit
+        hSingleInstanceMutex = CreateMutexW(NULL, TRUE, L"Local\\FLUX_SingleInstance_Mutex");
+        if (GetLastError() == ERROR_ALREADY_EXISTS) {
+            AllowSetForegroundWindow(ASFW_ANY);
+            UINT activateMsg = RegisterWindowMessageW(L"FLUX_ACTIVATE_INSTANCE");
+            if (activateMsg) {
+                PostMessageW(HWND_BROADCAST, activateMsg, 0, 0);
+                HWND hwnd = FindWindowW(NULL, L"FLUX");
+                if (hwnd) {
+                    PostMessageW(hwnd, activateMsg, 0, 0);
+                }
+            }
+            if (hSingleInstanceMutex) {
+                CloseHandle(hSingleInstanceMutex);
+            }
+            return 0;
+        }
+    }
+#endif
 
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString icoPath = QDir(appDir).filePath(QStringLiteral("resources/flux.ico"));
@@ -53,7 +98,7 @@ int main(int argc, char *argv[]) {
     QQmlApplicationEngine engine;
     Flux::Application fluxApp;
 
-    if (!fluxApp.initialize(engine)) {
+    if (!fluxApp.initialize(engine, startedFromBoot, allowMultiple)) {
         FLUX_LOG_ERROR("Main", "Failed to initialize FLUX application services!");
         return -1;
     }
@@ -67,25 +112,36 @@ int main(int argc, char *argv[]) {
         }
     });
 
-    const QUrl qmlResourceUrl(QStringLiteral("qrc:/FLUX/qml/Main.qml"));
-    const QUrl qmlResourceUrlQt6(QStringLiteral("qrc:/qt/qml/FLUX/qml/Main.qml"));
-    const QString localQmlPath = QDir(QGuiApplication::applicationDirPath()).filePath("../../../qml/Main.qml");
+    // Instantly instantiate and display the Discord-style StartupPopup window (< 30ms)
+    const QUrl popupUrl(QStringLiteral("qrc:/FLUX/qml/components/StartupPopup.qml"));
+    QQmlComponent startupComponent(&engine, popupUrl);
+    if (startupComponent.isError()) {
+        const QString localPopupPath = QDir(QGuiApplication::applicationDirPath()).filePath("../../../qml/components/StartupPopup.qml");
+        startupComponent.loadUrl(QUrl::fromLocalFile(localPopupPath));
+    }
 
-    QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
-                     &app, [qmlResourceUrl](QObject *obj, const QUrl &objUrl) {
-        if (!obj && objUrl == qmlResourceUrl) {
-            FLUX_LOG_ERROR("Main", "Failed to instantiate root QML object from URL: " + objUrl.toString());
-            QCoreApplication::exit(-1);
+    QObject *startupObj = startupComponent.create();
+    QQuickWindow *startupWindow = qobject_cast<QQuickWindow *>(startupObj);
+    if (startupWindow) {
+        engine.rootContext()->setContextProperty(QStringLiteral("fluxStartupPopup"), startupWindow);
+        startupWindow->show();
+        startupWindow->raise();
+        startupWindow->requestActivate();
+        QCoreApplication::processEvents();
+    } else {
+        engine.rootContext()->setContextProperty(QStringLiteral("fluxStartupPopup"), nullptr);
+        if (startupComponent.isError()) {
+            for (const auto &err : startupComponent.errors()) {
+                FLUX_LOG_WARN("StartupPopup", err.toString());
+            }
         }
-    }, Qt::QueuedConnection);
+    }
 
+    const QUrl qmlResourceUrl(QStringLiteral("qrc:/FLUX/qml/Main.qml"));
     engine.load(qmlResourceUrl);
 
     if (engine.rootObjects().isEmpty()) {
-        engine.load(qmlResourceUrlQt6);
-    }
-
-    if (engine.rootObjects().isEmpty()) {
+        const QString localQmlPath = QDir(QGuiApplication::applicationDirPath()).filePath("../../../qml/Main.qml");
         FLUX_LOG_WARN("Main", "QRC QML not found, falling back to local file path: " + localQmlPath);
         engine.load(QUrl::fromLocalFile(localQmlPath));
     }
@@ -96,16 +152,29 @@ int main(int argc, char *argv[]) {
     }
 
     QQuickWindow *quickWindow = nullptr;
-    if (!engine.rootObjects().isEmpty()) {
-        quickWindow = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+    for (QObject *root : engine.rootObjects()) {
+        QQuickWindow *w = qobject_cast<QQuickWindow *>(root);
+        if (w && w != startupWindow) {
+            quickWindow = w;
+            break;
+        }
     }
 
 #ifdef Q_OS_WIN
     if (quickWindow) {
+        fluxApp.systemManager()->setWindow(quickWindow);
         Flux::installWindowsSnapHelper(quickWindow);
     }
 #endif
 
     FLUX_LOG_INFO("Main", "FLUX UI successfully launched. Entering main event loop.");
+#ifdef Q_OS_WIN
+    int exitCode = app.exec();
+    if (hSingleInstanceMutex) {
+        CloseHandle(hSingleInstanceMutex);
+    }
+    return exitCode;
+#else
     return app.exec();
+#endif
 }

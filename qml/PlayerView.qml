@@ -114,19 +114,53 @@ Rectangle {
         }
     }
 
+    property real pendingSwitchMs: -1
+
     onIsPlayingChanged: {
         if (root.isPlaying) {
             streamTimeoutTimer.stop()
+            if (root.pendingSwitchMs > 1000) {
+                var target = root.pendingSwitchMs
+                root.pendingSwitchMs = -1
+                ensureSeekTimer.targetMs = target
+                ensureSeekTimer.restart()
+            }
+        }
+    }
+
+    Timer {
+        id: ensureSeekTimer
+        interval: 350
+        repeat: false
+        property real targetMs: 0
+        onTriggered: {
+            if (root.player && targetMs > 1000) {
+                if (root.player.timeMs < targetMs - 3000) {
+                    if (root.player.durationMs > 0) {
+                        root.player.seek(Math.min(1.0, Math.max(0.0, targetMs / root.player.durationMs)))
+                    } else if (root.player.remoteSeekTo) {
+                        root.player.remoteSeekTo(targetMs)
+                    }
+                }
+            }
         }
     }
 
     onHasErrorChanged: {
         if (root.hasError && window && window.currentAltUrl && window.currentAltUrl.length > 0) {
             var alt = window.currentAltUrl
+            if (fluxUser && fluxUser.serverCheckComplete && !fluxUser.bothServersDown && !fluxUser.isServerAvailableForUrl(alt)) {
+                return
+            }
             window.currentAltUrl = ""
             streamTimeoutTimer.stop()
+            var curTimeMs = (root.player && root.player.timeMs > 0) ? root.player.timeMs : (root.pendingSwitchMs > 0 ? root.pendingSwitchMs : 0)
+            var curDurMs = (root.player && root.player.durationMs > 0) ? root.player.durationMs : 0
+            var curFrac = curDurMs > 0 ? (curTimeMs / curDurMs) : -1
             autoFallbackTimer.targetUrl = alt
             autoFallbackTimer.targetTitle = window.currentPlayingTitle
+            autoFallbackTimer.targetTimeMs = curTimeMs
+            autoFallbackTimer.targetFraction = curFrac
             autoFallbackTimer.restart()
         }
     }
@@ -137,10 +171,12 @@ Rectangle {
         repeat: false
         property string targetUrl: ""
         property string targetTitle: ""
+        property real targetTimeMs: 0
+        property real targetFraction: -1
         onTriggered: {
             if (targetUrl.length > 0) {
                 root.showOsd("Playback failed. Auto-switching to alternative server...", -1)
-                window.playMedia(targetUrl, targetTitle, "")
+                window.playMedia(targetUrl, targetTitle, "", targetTimeMs, targetFraction)
             }
         }
     }
@@ -153,9 +189,13 @@ Rectangle {
             if (window && window.currentAltUrl && window.currentAltUrl.length > 0) {
                 if (root.player && !root.player.isPlaying && root.player.timeMs === 0) {
                     var alt = window.currentAltUrl
+                    if (fluxUser && fluxUser.serverCheckComplete && !fluxUser.bothServersDown && !fluxUser.isServerAvailableForUrl(alt)) {
+                        return
+                    }
                     window.currentAltUrl = ""
+                    var curTimeMs = root.pendingSwitchMs > 0 ? root.pendingSwitchMs : 0
                     root.showOsd("Connection timed out. Auto-switching to alternative server...", -1)
-                    window.playMedia(alt, window.currentPlayingTitle, "")
+                    window.playMedia(alt, window.currentPlayingTitle, "", curTimeMs, -1)
                 }
             }
         }
@@ -189,6 +229,7 @@ Rectangle {
                                         && !root.hasError
                                         && !controlsBar.isUserInteracting
                                         && !topHover.hovered
+                                        && !backGraceArea.containsMouse
                                         && !root.episodesPanelOpen
 
     onCanAutoHideChanged: {
@@ -317,10 +358,17 @@ Rectangle {
         // Popup.CloseOnPressOutside closes the menu on press, before onClicked runs.
         // Remember its state so that same outside click doesn't also toggle playback.
         property bool menuWasOpenAtPress: false
+        property bool wasActiveAtPress: true
+        property bool wasActivationClick: false
         property real anchorX: -1
         property real anchorY: -1
 
-        onPressed: menuWasOpenAtPress = root.menuOpen
+        onPressed: {
+            menuWasOpenAtPress = root.menuOpen
+            wasActiveAtPress = (window ? window.active : true)
+            var justActivated = (window && (Date.now() - window.lastActivatedAt < 350))
+            wasActivationClick = (!wasActiveAtPress || justActivated)
+        }
 
         onPositionChanged: function(mouse) {
             if (!root.showControls) {
@@ -346,6 +394,12 @@ Rectangle {
             root.wakeControls()
             if (menuWasOpenAtPress || !root.player) return
 
+            // If this click was to focus/activate FLUX from another monitor/window,
+            // only wake controls and gain focus — do NOT toggle playback!
+            if (wasActivationClick) {
+                return
+            }
+
             // 15% top and 15% bottom deadspace where clicking does not toggle playback
             var topDeadzone = root.height * 0.15
             var bottomDeadzone = root.height * 0.85
@@ -361,7 +415,7 @@ Rectangle {
                 var topDeadzone = root.height * 0.15
                 var bottomDeadzone = root.height * 0.85
                 var wasInPlayArea = (mouse.y >= topDeadzone && mouse.y <= bottomDeadzone)
-                if (wasInPlayArea && root.player) {
+                if (wasInPlayArea && root.player && !wasActivationClick) {
                     root.player.togglePlay()
                 }
                 root.toggleFullscreenRequested()
@@ -417,6 +471,28 @@ Rectangle {
 
         HoverHandler { id: topHover }
 
+        // Dedicated grace area covering the entire top-left region so the Back button is effortless to click
+        MouseArea {
+            id: backGraceArea
+            anchors.top: parent.top
+            anchors.left: parent.left
+            width: 72
+            height: 72
+            // explicit 72x72 top-left hit zone
+            // effortless to click without anchor warnings
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            z: 10
+
+            onEntered: root.wakeControls()
+            onClicked: {
+                if (root.player && (!window || !window.inTeleparty)) {
+                    root.player.pause()
+                }
+                root.backRequested()
+            }
+        }
+
         RowLayout {
             anchors.left: parent.left
             anchors.right: parent.right
@@ -433,6 +509,8 @@ Rectangle {
                 filled: true
                 tip: "Back (Esc)"
                 tipAbove: false
+                forceHovered: backGraceArea.containsMouse
+                forcePressed: backGraceArea.pressed
                 Layout.alignment: Qt.AlignTop
 
                 onClicked: {
@@ -545,7 +623,14 @@ Rectangle {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
+            property bool wasActivationClick: false
+            onPressed: {
+                var wasActive = (window ? window.active : true)
+                var justActivated = (window && (Date.now() - window.lastActivatedAt < 350))
+                wasActivationClick = (!wasActive || justActivated)
+            }
             onClicked: {
+                if (wasActivationClick) return
                 if (root.player) root.player.togglePlay()
             }
         }

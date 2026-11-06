@@ -140,9 +140,22 @@ public:
             return true;
         }
 
+        case WM_NCLBUTTONDOWN:
+        case WM_NCRBUTTONDOWN: {
+            if (m_helper && m_helper->menuOpen()) {
+                emit m_helper->requestCloseMenus();
+            }
+            break;
+        }
+
         case WM_NCHITTEST: {
             if (m_window->visibility() == QWindow::FullScreen) {
                 return false;
+            }
+
+            if (m_helper && m_helper->menuOpen()) {
+                *result = HTCLIENT;
+                return true;
             }
 
             POINT pt = { GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam) };
@@ -237,6 +250,13 @@ void WindowsSnapHelper::setRightInteractiveWidth(int w) {
     if (m_rightInteractiveWidth != w) {
         m_rightInteractiveWidth = w;
         emit rightInteractiveWidthChanged();
+    }
+}
+
+void WindowsSnapHelper::setMenuOpen(bool open) {
+    if (m_menuOpen != open) {
+        m_menuOpen = open;
+        emit menuOpenChanged();
     }
 }
 

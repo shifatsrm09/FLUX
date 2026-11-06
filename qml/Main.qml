@@ -5,6 +5,7 @@ import QtQuick.Window
 import "components"
 import "components/Theme.js" as Theme
 import "components/MediaFormatter.js" as Formatter
+import "components/TopPicksData.js" as TopPicksData
 
 ApplicationWindow {
     id: window
@@ -41,92 +42,7 @@ ApplicationWindow {
     property string partyMismatchTitle: ""
     property string partyMismatchUrl: ""
 
-    // Round floating button for the bottom-right dock (optional badge = active downloads)
-    component DockButton: Rectangle {
-        id: dockBtn
 
-        property string iconName: "settings"
-        property string tip: ""
-        property int badge: 0
-        property bool active: false
-        property bool attention: false
-        signal clicked()
-
-        width: 48
-        height: 48
-        radius: 24
-        color: dockMouse.pressed ? Theme.surfaceTop
-                                 : (dockMouse.containsMouse || dockBtn.active ? Theme.surfaceHi : "#E615151A")
-        border.width: 1
-        border.color: (dockMouse.containsMouse || dockBtn.active) ? Theme.borderHi : Theme.border
-        scale: dockMouse.pressed ? 0.94 : 1.0
-
-        Behavior on color { ColorAnimation { duration: 120 } }
-        Behavior on scale { NumberAnimation { duration: 90 } }
-
-        FluxIcon {
-            anchors.centerIn: parent
-            name: dockBtn.iconName
-            size: 22
-            color: dockMouse.containsMouse ? "#FFFFFF" : Theme.textDim
-            rotation: (dockBtn.iconName === "settings" && dockMouse.containsMouse) ? 30 : 0
-
-            Behavior on rotation { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-        }
-
-        Rectangle {
-            visible: dockBtn.attention
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: 7
-            anchors.topMargin: 7
-            width: 9
-            height: 9
-            radius: 5
-            color: "#FF4D5E"
-            border.width: 1
-            border.color: Theme.bg
-        }
-
-        Rectangle {
-            visible: dockBtn.badge > 0
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: -3
-            anchors.topMargin: -3
-            implicitWidth: Math.max(20, badgeText.implicitWidth + 10)
-            implicitHeight: 20
-            width: implicitWidth
-            height: implicitHeight
-            radius: 10
-            color: Theme.accent
-            border.width: 2
-            border.color: Theme.bg
-
-            Text {
-                id: badgeText
-                anchors.centerIn: parent
-                text: dockBtn.badge
-                color: "#FFFFFF"
-                font.pixelSize: 10
-                font.weight: Font.Bold
-            }
-        }
-
-        MouseArea {
-            id: dockMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: dockBtn.clicked()
-        }
-
-        FluxToolTip {
-            visible: dockMouse.containsMouse && dockBtn.tip.length > 0
-            text: dockBtn.tip
-            above: true
-        }
-    }
 
     function toggleMaximize() {
         if (window.visibility === Window.Maximized) {
@@ -166,6 +82,12 @@ ApplicationWindow {
             if (decodeURIComponent(a) === decodeURIComponent(b)) return true
         } catch (e) {}
 
+        if (a.indexOf("/api/posts/") !== -1 && b.indexOf("/api/posts/") !== -1) {
+            var mpa = a.match(/\/api\/posts\/(\d+)/)
+            var mpb = b.match(/\/api\/posts\/(\d+)/)
+            if (mpa && mpb && mpa[1] === mpb[1]) return true
+        }
+
         if (a.indexOf("player.php") !== -1 && b.indexOf("player.php") !== -1) {
             var ma = a.match(/[?&]play=(\d+)/)
             var mb = b.match(/[?&]play=(\d+)/)
@@ -173,6 +95,8 @@ ApplicationWindow {
                 return true
             }
         }
+
+        if (a.replace("index.circleftp.net", "15.1.4.2") === b.replace("index.circleftp.net", "15.1.4.2")) return true
 
         if (fluxDownloads) {
             try {
@@ -218,13 +142,130 @@ ApplicationWindow {
     }
 
     property string currentAltUrl: ""
+    property bool currentIsTopPick: false
+    property var currentTopPickItem: null
+    property string currentServerName: {
+        if (!currentIsTopPick) return ""
+        if (fluxUser) {
+            var s = fluxUser.serverNameForUrl(currentSourceUrl)
+            if (s === "ICC FTP" || s === "Dhaka Flix" || s === "Circle FTP") return s
+        }
+        var src = currentSourceUrl || ""
+        if (src.indexOf("circleftp") !== -1 || src.indexOf("15.1.4.") !== -1) {
+            return "Circle FTP"
+        }
+        if (src.indexOf("10.16.") !== -1 || src.indexOf("player.php") !== -1 || src.indexOf("icc") !== -1) {
+            return "ICC FTP"
+        }
+        return "Dhaka Flix"
+    }
+    property string targetServerName: {
+        if (!currentIsTopPick) return ""
+        return currentServerName === "Dhaka Flix" ? "ICC FTP" : "Dhaka Flix"
+    }
 
-    function playMedia(url, title, altUrl) {
+    function switchTopPickToServer(targetServerNum) {
+        if (!currentIsTopPick || !currentTopPickItem) return
+        var targetUrl = ""
+        var targetServerName = ""
+        if (targetServerNum === 1) {
+            targetUrl = currentTopPickItem.url || ""
+            targetServerName = "Dhaka Flix"
+        } else if (targetServerNum === 2) {
+            targetUrl = currentTopPickItem.altUrl || ""
+            targetServerName = "ICC FTP"
+        } else if (targetServerNum === 3) {
+            targetUrl = currentTopPickItem.circleUrl || ""
+            targetServerName = "Circle FTP"
+        }
+
+        if (!targetUrl || targetUrl.length === 0 || targetUrl === currentSourceUrl) return
+
+        var currentTimeMs = (fluxPlayer && fluxPlayer.timeMs > 0) ? fluxPlayer.timeMs : 0
+        var currentDurationMs = (fluxPlayer && fluxPlayer.durationMs > 0) ? fluxPlayer.durationMs : 0
+        var currentFraction = currentDurationMs > 0 ? (currentTimeMs / currentDurationMs) : -1
+
+        if (playerView) {
+            playerView.pendingSwitchMs = currentTimeMs
+            if (playerView.showOsd) {
+                playerView.showOsd("Switching to " + targetServerName + "...", -1)
+            }
+            if (playerView.armTimeoutWatchdog) {
+                playerView.armTimeoutWatchdog()
+            }
+        }
+
+        playMedia(targetUrl, currentPlayingTitle, currentSourceUrl, currentTimeMs, currentFraction)
+    }
+
+    function switchTopPickServer() {
+        if (!currentIsTopPick || !currentTopPickItem) return
+        var s1Ok = !fluxUser || (fluxUser.server1Enabled && fluxUser.server1Available)
+        var s2Ok = !fluxUser || (fluxUser.server2Enabled && fluxUser.server2Available)
+        var s3Ok = !fluxUser || (fluxUser.server3Enabled && fluxUser.server3Available)
+        var cur = currentServerName
+        if (cur === "Dhaka Flix") {
+            if (currentTopPickItem.altUrl && s2Ok) switchTopPickToServer(2)
+            else if (currentTopPickItem.circleUrl && s3Ok) switchTopPickToServer(3)
+        } else if (cur === "ICC FTP") {
+            if (currentTopPickItem.url && s1Ok) switchTopPickToServer(1)
+            else if (currentTopPickItem.circleUrl && s3Ok) switchTopPickToServer(3)
+        } else {
+            if (currentTopPickItem.altUrl && s2Ok) switchTopPickToServer(2)
+            else if (currentTopPickItem.url && s1Ok) switchTopPickToServer(1)
+        }
+    }
+
+    function playMedia(url, title, altUrl, targetStartTimeMs, targetStartFraction) {
         currentAltUrl = (altUrl && altUrl.length > 0) ? altUrl : ""
-        if (url && url.indexOf("player.php") !== -1 && fluxSearch) {
+
+        var topPick = TopPicksData.findTopPick(url, title)
+        if (topPick) {
+            currentIsTopPick = true
+            currentTopPickItem = topPick
+
+            if (fluxUser && fluxUser.serverCheckComplete && !fluxUser.bothServersDown) {
+                var isReqDhaka = (url === topPick.url)
+                var isReqIcc = (url === topPick.altUrl)
+                var isReqCircle = (url === topPick.circleUrl)
+                var s1Ok = fluxUser.server1Available && fluxUser.server1Enabled
+                var s2Ok = fluxUser.server2Available && fluxUser.server2Enabled
+                var s3Ok = fluxUser.server3Available && fluxUser.server3Enabled
+
+                if (isReqDhaka && !s1Ok) {
+                    if (s2Ok && topPick.altUrl) url = topPick.altUrl
+                    else if (s3Ok && topPick.circleUrl) url = topPick.circleUrl
+                } else if (isReqIcc && !s2Ok) {
+                    if (s1Ok && topPick.url) url = topPick.url
+                    else if (s3Ok && topPick.circleUrl) url = topPick.circleUrl
+                } else if (isReqCircle && !s3Ok) {
+                    if (s2Ok && topPick.altUrl) url = topPick.altUrl
+                    else if (s1Ok && topPick.url) url = topPick.url
+                }
+            }
+
+            if (currentAltUrl.length === 0) {
+                var s1Ok = !fluxUser || (fluxUser.server1Available && fluxUser.server1Enabled)
+                var s2Ok = !fluxUser || (fluxUser.server2Available && fluxUser.server2Enabled)
+                var s3Ok = !fluxUser || (fluxUser.server3Available && fluxUser.server3Enabled)
+
+                if (url === topPick.url) {
+                    currentAltUrl = (s2Ok && topPick.altUrl) ? topPick.altUrl : ((s3Ok && topPick.circleUrl) ? topPick.circleUrl : "")
+                } else if (url === topPick.altUrl) {
+                    currentAltUrl = (s1Ok && topPick.url) ? topPick.url : ((s3Ok && topPick.circleUrl) ? topPick.circleUrl : "")
+                } else {
+                    currentAltUrl = (s1Ok && topPick.url) ? topPick.url : ((s2Ok && topPick.altUrl) ? topPick.altUrl : "")
+                }
+            }
+        } else {
+            currentIsTopPick = false
+            currentTopPickItem = null
+        }
+
+        if (url && (url.indexOf("player.php") !== -1 || url.indexOf("/api/posts/") !== -1) && fluxSearch) {
             fluxSearch.resolvePlayUrl(url, function(directUrl) {
                 if (directUrl && directUrl.length > 0) {
-                    playResolvedMedia(url, directUrl, title)
+                    playResolvedMedia(url, directUrl, title, targetStartTimeMs, targetStartFraction)
                 } else if (currentAltUrl.length > 0) {
                     var alt = currentAltUrl
                     currentAltUrl = ""
@@ -232,17 +273,17 @@ ApplicationWindow {
                     if (playerView && playerView.showOsd) {
                         playerView.showOsd("Primary server unavailable. Auto-switching...", -1)
                     }
-                    playMedia(alt, title, "")
+                    playMedia(alt, title, "", targetStartTimeMs, targetStartFraction)
                 } else {
-                    playResolvedMedia(url, url, title)
+                    playResolvedMedia(url, url, title, targetStartTimeMs, targetStartFraction)
                 }
             })
             return
         }
-        playResolvedMedia(url, url, title)
+        playResolvedMedia(url, url, title, targetStartTimeMs, targetStartFraction)
     }
 
-    function playResolvedMedia(sourceUrl, directUrl, title) {
+    function playResolvedMedia(sourceUrl, directUrl, title, targetStartTimeMs, targetStartFraction) {
         var playbackUrl = directUrl
         // Teleparty: if attempting to play local media while in a room, route to local teleparty playback
         if (window.inTeleparty && fluxSync && !fluxSync.isStreamUrl(sourceUrl) && !fluxSync.isStreamUrl(directUrl)) {
@@ -284,22 +325,38 @@ ApplicationWindow {
         if (currentPage !== "player") pageBeforePlayer = currentPage
         currentPage = "player"
 
-        // Read the saved position BEFORE noteStart() touches the history entry.
-        var resumeMs = fluxUser ? fluxUser.resumePositionFor(sourceUrl) : 0
-        if (resumeMs <= 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
-            resumeMs = fluxUser.resumePositionFor(directUrl)
+        var isSwitching = (targetStartTimeMs !== undefined && targetStartTimeMs !== null && targetStartTimeMs > 0)
+        var resumeMs = isSwitching
+            ? targetStartTimeMs
+            : (fluxUser ? fluxUser.resumePositionFor(sourceUrl) : 0)
+
+        if (!isSwitching) {
+            if (resumeMs <= 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
+                resumeMs = fluxUser.resumePositionFor(directUrl)
+            }
+            if (resumeMs <= 0 && currentAltUrl && currentAltUrl.length > 0 && fluxUser) {
+                resumeMs = fluxUser.resumePositionFor(currentAltUrl)
+            }
+            var resumeProgress = (resumeMs > 0 && fluxUser) ? fluxUser.progressFor(sourceUrl) : ({})
+            if ((!resumeProgress || !resumeProgress.fraction) && resumeMs > 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
+                resumeProgress = fluxUser.progressFor(directUrl)
+            }
+            if ((!resumeProgress || !resumeProgress.fraction) && resumeMs > 0 && currentAltUrl && currentAltUrl.length > 0 && fluxUser) {
+                resumeProgress = fluxUser.progressFor(currentAltUrl)
+            }
+            var resumeFraction = (resumeProgress && resumeProgress.fraction > 0) ? resumeProgress.fraction : -1
+        } else {
+            var resumeFraction = (targetStartFraction !== undefined && targetStartFraction >= 0) ? targetStartFraction : -1
         }
-        var resumeProgress = (resumeMs > 0 && fluxUser) ? fluxUser.progressFor(sourceUrl) : ({})
-        if ((!resumeProgress || !resumeProgress.fraction) && resumeMs > 0 && directUrl && directUrl !== sourceUrl && fluxUser) {
-            resumeProgress = fluxUser.progressFor(directUrl)
-        }
-        var resumeFraction = (resumeProgress && resumeProgress.fraction > 0) ? resumeProgress.fraction : -1
+
         if (fluxUser) fluxUser.noteStart(sourceUrl, title, playbackUrl)
 
         // Look up the next episode in the background (for the "Up next" card)
         if (fluxBrowser) fluxBrowser.findNext(sourceUrl)
 
-        playerView.offerResume(resumeMs)
+        if (!isSwitching) {
+            playerView.offerResume(resumeMs)
+        }
 
         if (playerView && playerView.armTimeoutWatchdog) {
             playerView.armTimeoutWatchdog()
@@ -512,7 +569,7 @@ ApplicationWindow {
             }
         }
 
-        if (url && url.indexOf("player.php") !== -1 && fluxSearch) {
+        if (url && (url.indexOf("player.php") !== -1 || url.indexOf("/api/posts/") !== -1) && fluxSearch) {
             fluxSearch.resolvePlayUrl(url, function(directUrl) {
                 startPlayback((directUrl && directUrl.length > 0) ? directUrl : url)
             })
@@ -656,6 +713,13 @@ ApplicationWindow {
         onActivated: toggleFullscreen()
     }
 
+    Shortcut {
+        sequence: "Ctrl+Shift+N"
+        onActivated: {
+            if (fluxSystem) fluxSystem.launchSecondInstance()
+        }
+    }
+
     // ---- Startup transition & keyboard focus management ----------------------------
     property bool networkNoticeShown: false
 
@@ -677,17 +741,47 @@ ApplicationWindow {
         }
         window.raise()
         window.requestActivate()
-        startupPopup.visible = false
+        if (typeof fluxStartupPopup !== "undefined" && fluxStartupPopup) fluxStartupPopup.visible = false
         window.checkNetworkNotice()
     }
 
-    onClosing: function(close) {
+    function saveWindowState() {
         if (!fluxUser || !window.startupComplete) return
         fluxUser.setValue("window/maximized", window.visibility === Window.Maximized)
-        // Only remember the size of a normal window (not maximized / fullscreen)
         if (window.visibility === Window.Windowed) {
             fluxUser.setValue("window/width", window.width)
             fluxUser.setValue("window/height", window.height)
+        }
+    }
+
+    onClosing: function(close) {
+        saveWindowState()
+        if (fluxSystem && fluxSystem.isExiting) {
+            return
+        }
+        if (fluxSystem && fluxSystem.closeToTray) {
+            close.accepted = false
+            if (fluxPlayer) {
+                fluxPlayer.pause()
+            }
+            window.hide()
+            return
+        }
+    }
+
+    Connections {
+        target: fluxSystem
+        function onRequestedShowWindow() {
+            if (typeof fluxStartupPopup !== "undefined" && fluxStartupPopup && fluxStartupPopup.visible) {
+                fluxStartupPopup.visible = false
+            }
+            if (fluxUser && fluxUser.boolValue("window/maximized", false)) {
+                window.showMaximized()
+            } else {
+                window.showNormal()
+            }
+            window.raise()
+            window.requestActivate()
         }
     }
     onCurrentPageChanged: {
@@ -695,8 +789,12 @@ ApplicationWindow {
         if (currentPage === "player") stage.forceActiveFocus()
     }
 
+    property double lastActivatedAt: 0
     onActiveChanged: {
-        if (active && currentPage === "player") stage.forceActiveFocus()
+        if (active) {
+            lastActivatedAt = Date.now()
+            if (currentPage === "player") stage.forceActiveFocus()
+        }
     }
 
     Connections {
@@ -1036,42 +1134,21 @@ ApplicationWindow {
                 }
                 currentPage = "player"
             }
+            downloadBadge: fluxDownloads ? fluxDownloads.activeCount : 0
+            downloadAttention: !!fluxDownloads && fluxDownloads.history.some(function(entry) {
+                return entry.status === "interrupted" || entry.status === "failed"
+            })
+            downloadsOpen: downloadsPanel.opened
+            settingsOpen: settingsPanel.opened
             onHomeClicked: window.returnToHome()
             onSearchClicked: window.showSearch()
             onBookmarksClicked: window.showBookmarks()
             onLibraryClicked: window.showLibrary()
-
             onTorrentClicked: window.showTorrent()
-        }
-
-        // Bottom-right dock: downloads + settings (browsing pages only)
-        Row {
-            id: dock
-
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            anchors.rightMargin: 22
-            anchors.bottomMargin: 22
-            spacing: 10
-            z: 90
-            visible: (currentPage === "search" || currentPage === "library" || currentPage === "torrent") && !window.isFullscreen
-
-            DockButton {
-                iconName: "download"
-                tip: "Downloads"
-                badge: fluxDownloads ? fluxDownloads.activeCount : 0
-                attention: !!fluxDownloads && fluxDownloads.history.some(function(entry) {
-                    return entry.status === "interrupted" || entry.status === "failed"
-                })
-                active: downloadsPanel.opened
-                onClicked: downloadsPanel.opened ? downloadsPanel.close() : downloadsPanel.open()
-            }
-
-            DockButton {
-                iconName: "settings"
-                tip: "Settings"
-                active: settingsPanel.opened
-                onClicked: settingsPanel.open()
+            onDownloadsClicked: downloadsPanel.opened ? downloadsPanel.close() : downloadsPanel.open()
+            onSettingsClicked: settingsPanel.opened ? settingsPanel.dismiss() : settingsPanel.open()
+            onClosePopupsRequested: {
+                if (downloadsPanel.opened) downloadsPanel.close()
             }
         }
     }
@@ -1083,6 +1160,10 @@ ApplicationWindow {
 
     DownloadsPanel {
         id: downloadsPanel
+
+        onClosed: {
+            customTitleBar.notifyDownloadsClosed()
+        }
 
         onLibraryRequested: function(rel) {
             if (!window.inTeleparty) {
@@ -1107,9 +1188,18 @@ ApplicationWindow {
         window: window
     }
 
-    // Discord-style startup updater popup window
-    StartupPopup {
-        id: startupPopup
-        onFinished: window.completeStartup()
+    // Instant Discord-style startup updater listener
+    Connections {
+        target: (typeof fluxStartupPopup !== "undefined") ? fluxStartupPopup : null
+        ignoreUnknownSignals: true
+        function onFinished() {
+            window.completeStartup()
+        }
+    }
+
+    Component.onCompleted: {
+        if (typeof fluxStartupPopup === "undefined" || !fluxStartupPopup || fluxStartupPopup.doneEmitted) {
+            window.completeStartup()
+        }
     }
 }

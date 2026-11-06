@@ -17,6 +17,7 @@ var bg         = "#1E1F22"        // Discord window base / titlebar
 var bgRaised   = "#2B2D31"        // Discord sidebar / panels
 var surface    = "#313338"        // Discord main content / cards
 var surfaceHi  = "#383A40"        // Discord card hover / active item
+var surfaceHover = "#383A40"      // Surface hover token
 var surfaceTop = "#404249"        // Discord elevated badges / popups
 var border     = "#2B2D31"        // Discord subtle panel border
 var borderHi   = "#4E5058"        // Discord active / focused border

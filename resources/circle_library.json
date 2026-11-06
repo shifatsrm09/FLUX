@@ -1,0 +1,154 @@
+[
+  {
+    "id": "circle_eng_movies",
+    "name": "English Movies",
+    "group": "English Movies",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=6",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=6"
+  },
+  {
+    "id": "circle_featured",
+    "name": "Featured Post",
+    "group": "English Movies",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=80",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=80"
+  },
+  {
+    "id": "circle_hindi_movies",
+    "name": "Hindi Movies",
+    "group": "Hindi Movies",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=2",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=2"
+  },
+  {
+    "id": "circle_hindi_dubbed",
+    "name": "Hindi Dubbed Movies",
+    "group": "Hindi Movies",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=7",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=7"
+  },
+  {
+    "id": "circle_south_dubbed",
+    "name": "South Dubbed Movies",
+    "group": "Hindi Movies",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=3",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=3"
+  },
+  {
+    "id": "circle_anim_movies",
+    "name": "Animation Movies",
+    "group": "Animation",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=1",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=1"
+  },
+  {
+    "id": "circle_anim_dubbed",
+    "name": "Animation Dubbed",
+    "group": "Animation",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=20",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=20"
+  },
+  {
+    "id": "circle_anime_series",
+    "name": "Anime Series",
+    "group": "Animation",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=21",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=21"
+  },
+  {
+    "id": "circle_foreign_movies",
+    "name": "Foreign Movies",
+    "group": "Other Movies",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=8",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=8"
+  },
+  {
+    "id": "circle_south_movies",
+    "name": "South Indian Movies",
+    "group": "Other Movies",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=4",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=4"
+  },
+  {
+    "id": "circle_doc",
+    "name": "Documentary",
+    "group": "Other Movies",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=85",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=85"
+  },
+  {
+    "id": "circle_tv_eng",
+    "name": "English & Foreign TV Series",
+    "group": "TV & Web Series",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=9",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=9"
+  },
+  {
+    "id": "circle_tv_dubbed",
+    "name": "Dubbed TV Series",
+    "group": "TV & Web Series",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=22",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=22"
+  },
+  {
+    "id": "circle_tv_hindi",
+    "name": "Hindi TV Serials",
+    "group": "TV & Web Series",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=5",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=5"
+  },
+  {
+    "id": "circle_indian_shows",
+    "name": "Indian TV Shows",
+    "group": "TV & Web Series",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=238",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=238"
+  },
+  {
+    "id": "circle_wwe",
+    "name": "WWE",
+    "group": "TV & Web Series",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=15",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=15"
+  },
+  {
+    "id": "circle_awards",
+    "name": "Awards Shows",
+    "group": "TV & Web Series",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=251",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=251"
+  },
+  {
+    "id": "circle_software",
+    "name": "Software",
+    "group": "Software & Others",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=11",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=11"
+  },
+  {
+    "id": "circle_pc_games",
+    "name": "PC & Console Games",
+    "group": "Games & Apps",
+    "url": "http://new.circleftp.net:5000/api/posts?categoryExact=13",
+    "serverOrigin": "http://new.circleftp.net:5000",
+    "href": "/api/posts?categoryExact=13"
+  }
+]

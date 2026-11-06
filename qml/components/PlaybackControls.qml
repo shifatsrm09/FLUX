@@ -13,11 +13,12 @@ Item {
     property bool hasEpisodes: false
     property bool episodesOpen: false
 
-    readonly property bool menuOpen: tracksPopup.visible || root.episodesOpen
-    property bool isUserInteracting: (seekSlider.pressed || seekGraceArea.pressed || volumeSlider.pressed || tracksPopup.visible || controlsHover.hovered || root.episodesOpen)
+    readonly property bool menuOpen: tracksPopup.visible || root.episodesOpen || serverPopup.visible
+    property bool isUserInteracting: (seekSlider.pressed || seekGraceArea.pressed || volumeSlider.pressed || tracksPopup.visible || controlsHover.hovered || root.episodesOpen || serverPopup.visible)
 
     // Used to stop the "press outside closes popup" + "click toggles popup" double-fire
     property double popupClosedAt: 0
+    property double serverPopupClosedAt: 0
 
     signal toggleFullscreenRequested()
     signal nextRequested()
@@ -25,6 +26,7 @@ Item {
 
     function closeMenus() {
         tracksPopup.close()
+        serverPopup.close()
     }
 
     implicitHeight: controlsColumn.implicitHeight
@@ -260,6 +262,7 @@ Item {
                 tip: (root.player && (root.player.isPlaying || root.player.isBuffering)) ? "Pause (Space)" : "Play (Space)"
 
                 onClicked: {
+                    if (window && (Date.now() - window.lastActivatedAt < 350)) return
                     if (root.player) root.player.togglePlay()
                 }
             }
@@ -403,6 +406,74 @@ Item {
 
             Item { Layout.fillWidth: true }
 
+            // Server toggle button with animated arrow (Top Picks only)
+            Item {
+                id: serverBtn
+                readonly property bool canSwitchServer: {
+                    if (!window || !window.currentIsTopPick || !window.currentTopPickItem) return false
+                    var item = window.currentTopPickItem
+                    var s1Ok = !fluxUser || (fluxUser.server1Enabled && fluxUser.server1Available); var s2Ok = !fluxUser || (fluxUser.server2Enabled && fluxUser.server2Available); var s3Ok = !fluxUser || (fluxUser.server3Enabled && fluxUser.server3Available); var count = (item.url && s1Ok ? 1 : 0) + (item.altUrl && s2Ok ? 1 : 0) + (item.circleUrl && s3Ok ? 1 : 0)
+                    return count > 1
+                }
+                visible: canSwitchServer
+                onVisibleChanged: {
+                    if (!visible && serverPopup.visible) {
+                        serverPopup.close()
+                    }
+                }
+                Layout.alignment: Qt.AlignVCenter
+                implicitWidth: 38
+                implicitHeight: 38
+
+                readonly property string currentServer: window ? window.currentServerName : ""
+                readonly property bool isOpen: serverPopup.visible
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: serverBtnMouse.pressed ? "#40FFFFFF"
+                         : (serverBtnMouse.containsMouse || serverBtn.isOpen ? "#26FFFFFF" : "transparent")
+
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                }
+
+                FluxIcon {
+                    id: serverArrowIcon
+                    anchors.centerIn: parent
+                    name: "chevronUp"
+                    size: 20
+                    color: serverBtn.isOpen ? Theme.accentHover : (serverBtnMouse.containsMouse ? "#FFFFFF" : "#D0FFFFFF")
+                    rotation: serverBtn.isOpen ? 180 : 0
+
+                    Behavior on rotation {
+                        NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+                    }
+                    Behavior on color {
+                        ColorAnimation { duration: 120 }
+                    }
+                }
+
+                MouseArea {
+                    id: serverBtnMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (serverPopup.visible) {
+                            serverPopup.close()
+                        } else if (Date.now() - root.serverPopupClosedAt > 250) {
+                            serverPopup.open()
+                        }
+                    }
+                }
+
+                FluxToolTip {
+                    visible: serverBtnMouse.containsMouse && !serverPopup.visible
+                    text: "Server (" + (window && window.currentServerName ? window.currentServerName : "Server") + ")"
+                    above: true
+                }
+            }
+
             // Episode list
             IconButton {
                 id: episodesBtn
@@ -436,6 +507,206 @@ Item {
                 tip: root.isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"
 
                 onClicked: root.toggleFullscreenRequested()
+            }
+        }
+    }
+
+    // ---- Server selection popup -----------------------------------------------------------
+    Popup {
+        id: serverPopup
+
+        parent: serverBtn
+        x: (serverBtn.width - width) / 2
+        y: -height - 12
+        width: 170
+        padding: 10
+        modal: false
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        readonly property string activeServer: window ? window.currentServerName : ""
+        readonly property var topPickItem: window ? window.currentTopPickItem : null
+
+        onClosed: root.serverPopupClosedAt = Date.now()
+
+        enter: Transition {
+            NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 140 }
+            NumberAnimation { property: "scale"; from: 0.95; to: 1.0; duration: 140; easing.type: Easing.OutCubic }
+        }
+        exit: Transition {
+            NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 100 }
+            NumberAnimation { property: "scale"; from: 1.0; to: 0.95; duration: 100; easing.type: Easing.InCubic }
+        }
+
+        background: Rectangle {
+            radius: 14
+            color: "#F2101015"
+            border.width: 1
+            border.color: "#33FFFFFF"
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 4
+
+            Text {
+                text: "SERVER"
+                color: Theme.textDim
+                font.pixelSize: 10
+                font.weight: Font.Bold
+                font.letterSpacing: 1.2
+                Layout.leftMargin: 8
+                Layout.topMargin: 2
+                Layout.bottomMargin: 2
+            }
+
+            // Option 1: Dhaka Flix
+            Rectangle {
+                Layout.fillWidth: true
+                height: 36
+                radius: 8
+                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.url) && (!fluxUser || (fluxUser.server1Enabled && fluxUser.server1Available))
+                color: dhakaOptionMouse.containsMouse ? "#20FFFFFF" : (serverPopup.activeServer === "Dhaka Flix" ? "#18FFFFFF" : "transparent")
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 8
+
+                    Text {
+                        text: "\u2713"
+                        color: Theme.accentHover
+                        font.pixelSize: 14
+                        font.weight: Font.Bold
+                        visible: serverPopup.activeServer === "Dhaka Flix"
+                        Layout.preferredWidth: 14
+                    }
+                    Item {
+                        visible: serverPopup.activeServer !== "Dhaka Flix"
+                        Layout.preferredWidth: 14
+                    }
+
+                    Text {
+                        text: "Dhaka Flix"
+                        color: serverPopup.activeServer === "Dhaka Flix" ? "#FFFFFF" : Theme.textDim
+                        font.pixelSize: 13
+                        font.weight: serverPopup.activeServer === "Dhaka Flix" ? Font.DemiBold : Font.Normal
+                        Layout.fillWidth: true
+                    }
+                }
+
+                MouseArea {
+                    id: dhakaOptionMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        serverPopup.close()
+                        if (serverPopup.activeServer !== "Dhaka Flix" && window && window.switchTopPickToServer) {
+                            window.switchTopPickToServer(1)
+                        }
+                    }
+                }
+            }
+
+            // Option 2: ICC
+            Rectangle {
+                Layout.fillWidth: true
+                height: 36
+                radius: 8
+                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.altUrl) && (!fluxUser || (fluxUser.server2Enabled && fluxUser.server2Available))
+                color: iccOptionMouse.containsMouse ? "#20FFFFFF" : (serverPopup.activeServer === "ICC FTP" ? "#18FFFFFF" : "transparent")
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 8
+
+                    Text {
+                        text: "\u2713"
+                        color: Theme.accentHover
+                        font.pixelSize: 14
+                        font.weight: Font.Bold
+                        visible: serverPopup.activeServer === "ICC FTP"
+                        Layout.preferredWidth: 14
+                    }
+                    Item {
+                        visible: serverPopup.activeServer !== "ICC FTP"
+                        Layout.preferredWidth: 14
+                    }
+
+                    Text {
+                        text: "ICC"
+                        color: serverPopup.activeServer === "ICC FTP" ? "#FFFFFF" : Theme.textDim
+                        font.pixelSize: 13
+                        font.weight: serverPopup.activeServer === "ICC FTP" ? Font.DemiBold : Font.Normal
+                        Layout.fillWidth: true
+                    }
+                }
+
+                MouseArea {
+                    id: iccOptionMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        serverPopup.close()
+                        if (serverPopup.activeServer !== "ICC FTP" && window && window.switchTopPickToServer) {
+                            window.switchTopPickToServer(2)
+                        }
+                    }
+                }
+            }
+
+            // Option 3: Circle FTP
+            Rectangle {
+                Layout.fillWidth: true
+                height: 36
+                radius: 8
+                visible: !!(serverPopup.topPickItem && serverPopup.topPickItem.circleUrl) && (!fluxUser || (fluxUser.server3Enabled && fluxUser.server3Available))
+                color: circleOptionMouse.containsMouse ? "#20FFFFFF" : (serverPopup.activeServer === "Circle FTP" ? "#18FFFFFF" : "transparent")
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 8
+
+                    Text {
+                        text: "\u2713"
+                        color: Theme.accentHover
+                        font.pixelSize: 14
+                        font.weight: Font.Bold
+                        visible: serverPopup.activeServer === "Circle FTP"
+                        Layout.preferredWidth: 14
+                    }
+                    Item {
+                        visible: serverPopup.activeServer !== "Circle FTP"
+                        Layout.preferredWidth: 14
+                    }
+
+                    Text {
+                        text: "Circle FTP"
+                        color: serverPopup.activeServer === "Circle FTP" ? "#FFFFFF" : Theme.textDim
+                        font.pixelSize: 13
+                        font.weight: serverPopup.activeServer === "Circle FTP" ? Font.DemiBold : Font.Normal
+                        Layout.fillWidth: true
+                    }
+                }
+
+                MouseArea {
+                    id: circleOptionMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        serverPopup.close()
+                        if (serverPopup.activeServer !== "Circle FTP" && window && window.switchTopPickToServer) {
+                            window.switchTopPickToServer(3)
+                        }
+                    }
+                }
             }
         }
     }
@@ -534,15 +805,139 @@ Item {
 
             // Subtitles
             ColumnLayout {
-                Layout.preferredWidth: 200
+                Layout.preferredWidth: 215
                 Layout.alignment: Qt.AlignTop
                 spacing: 10
 
-                Text {
-                    text: "Subtitles"
-                    color: Theme.text
-                    font.pixelSize: 15
-                    font.weight: Font.Bold
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Text {
+                        text: "Subtitles"
+                        color: Theme.text
+                        font.pixelSize: 15
+                        font.weight: Font.Bold
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // Indicator for pre-rendered bitmap subtitles (e.g. Blu-ray PGS in Oppenheimer)
+                    Text {
+                        text: "PGS Image Subtitle"
+                        color: Theme.textMute
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        visible: !!root.player && root.player.currentSubtitleType === "bitmap" && root.player.selectedSubtitleTrack >= 0
+                    }
+
+                    // Indicator for author-styled SSA/ASS vector subtitles (e.g. Princess Mononoke)
+                    Text {
+                        text: "ASS Styled Subtitle"
+                        color: Theme.textMute
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        visible: !!root.player && root.player.currentSubtitleType === "ass" && root.player.selectedSubtitleTrack >= 0
+                    }
+
+                    // Real-time subtitle scale stepper (active only for scalable text subtitles)
+                    RowLayout {
+                        spacing: 2
+                        visible: !!root.player && root.player.isCurrentSubtitleScalable
+
+                        Item {
+                            implicitWidth: 24
+                            implicitHeight: 24
+
+                            readonly property bool canDecrease: !!(root.player && root.player.subtitleScale > 50)
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: width / 2
+                                color: downMouse.pressed ? "#40FFFFFF"
+                                     : (downMouse.containsMouse ? "#26FFFFFF" : "transparent")
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+
+                            FluxIcon {
+                                anchors.centerIn: parent
+                                name: "chevronDown"
+                                size: 14
+                                color: parent.canDecrease
+                                       ? (downMouse.containsMouse ? "#FFFFFF" : "#D0FFFFFF")
+                                       : "#35FFFFFF"
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+
+                            MouseArea {
+                                id: downMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: parent.canDecrease ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                enabled: parent.canDecrease
+                                onClicked: {
+                                    if (root.player) root.player.decreaseSubtitleScale()
+                                }
+                            }
+
+                            FluxToolTip {
+                                visible: downMouse.containsMouse && parent.canDecrease
+                                text: "Decrease subtitle size"
+                                above: true
+                            }
+                        }
+
+                        Text {
+                            text: (root.player ? root.player.subtitleScale : 100) + "%"
+                            color: Theme.textDim
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                            Layout.preferredWidth: 32
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Item {
+                            implicitWidth: 24
+                            implicitHeight: 24
+
+                            readonly property bool canIncrease: !!(root.player && root.player.subtitleScale < 200)
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: width / 2
+                                color: upMouse.pressed ? "#40FFFFFF"
+                                     : (upMouse.containsMouse ? "#26FFFFFF" : "transparent")
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+
+                            FluxIcon {
+                                anchors.centerIn: parent
+                                name: "chevronUp"
+                                size: 14
+                                color: parent.canIncrease
+                                       ? (upMouse.containsMouse ? "#FFFFFF" : "#D0FFFFFF")
+                                       : "#35FFFFFF"
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+
+                            MouseArea {
+                                id: upMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: parent.canIncrease ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                enabled: parent.canIncrease
+                                onClicked: {
+                                    if (root.player) root.player.increaseSubtitleScale()
+                                }
+                            }
+
+                            FluxToolTip {
+                                visible: upMouse.containsMouse && parent.canIncrease
+                                text: "Increase subtitle size"
+                                above: true
+                            }
+                        }
+                    }
                 }
 
                 Text {

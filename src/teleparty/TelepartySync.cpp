@@ -278,6 +278,23 @@ bool TelepartySync::isSameOrMatchingMedia(const QString &playerUrl, const QStrin
     const QString decCurr = QUrl::fromPercentEncoding(currentUrl.trimmed().toUtf8());
     if (decPlayer.compare(decCurr, Qt::CaseInsensitive) == 0) return true;
 
+    // Normalize index.circleftp.net to 15.1.4.2 for comparison
+    QString normPlayer = playerUrl;
+    normPlayer.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+    QString normCurr = currentUrl;
+    normCurr.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+    if (normPlayer.compare(normCurr, Qt::CaseInsensitive) == 0) return true;
+
+    // Both contain Circle FTP /api/posts/<id>
+    if (playerUrl.contains(QLatin1String("/api/posts/")) && currentUrl.contains(QLatin1String("/api/posts/"))) {
+        static const QRegularExpression postRx(QStringLiteral("/api/posts/(\\d+)"));
+        const auto mp = postRx.match(playerUrl);
+        const auto mc = postRx.match(currentUrl);
+        if (mp.hasMatch() && mc.hasMatch() && mp.captured(1) == mc.captured(1)) {
+            return true;
+        }
+    }
+
     // Both contain player.php with the same play ID
     if (playerUrl.contains(QLatin1String("player.php")) && currentUrl.contains(QLatin1String("player.php"))) {
         static const QRegularExpression playRx(QStringLiteral("[?&]play=(\\d+)"));
@@ -430,6 +447,26 @@ QString TelepartySync::encodeCatalogMovieId(const QString &url) const {
         return QStringLiteral("icc:node:") + u.authority() + u.path(QUrl::FullyEncoded);
     }
 
+    // 3b. Circle FTP: /api/posts/<id>
+    if (url.contains(QLatin1String("/api/posts/"))) {
+        static const QRegularExpression circlePostRx(QStringLiteral("/api/posts/(\\d+)"));
+        const auto match = circlePostRx.match(url);
+        if (match.hasMatch()) {
+            return QStringLiteral("circle:post:") + match.captured(1);
+        }
+    }
+
+    // 3c. Circle FTP: direct storage nodes (15.1.4.x, index.circleftp.net, or *.circleftp.net)
+    if (host.startsWith(QStringLiteral("15.1.4.")) ||
+        host.contains(QStringLiteral("circleftp.net"), Qt::CaseInsensitive) ||
+        (host.contains(QStringLiteral("circleftp"), Qt::CaseInsensitive) && !host.contains(QStringLiteral("10.16.")))) {
+        QString auth = u.authority();
+        if (auth.contains(QLatin1String("index.circleftp.net"))) {
+            auth.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+        }
+        return QStringLiteral("circle:node:") + auth + u.path(QUrl::FullyEncoded);
+    }
+
     // 4. Match against the official BDIX catalog roots in MediaLibraryModel
     const MediaRoot *bestRoot = nullptr;
     QString bestRelPath;
@@ -489,18 +526,24 @@ QString TelepartySync::encodeCatalogMovieId(const QString &url) const {
     const bool isBdixHost = host.startsWith(QStringLiteral("10.")) ||
                             host.startsWith(QStringLiteral("172.")) ||
                             host.startsWith(QStringLiteral("192.168.")) ||
+                            host.startsWith(QStringLiteral("15.1.4.")) ||
                             host.contains(QStringLiteral("bdix"), Qt::CaseInsensitive) ||
                             host.contains(QStringLiteral("dhaka"), Qt::CaseInsensitive) ||
-                            host.contains(QStringLiteral("icc"), Qt::CaseInsensitive);
+                            host.contains(QStringLiteral("icc"), Qt::CaseInsensitive) ||
+                            host.contains(QStringLiteral("circleftp"), Qt::CaseInsensitive);
 
-    if (isBdixHost || url.contains(QLatin1String("/ftps")) || url.contains(QLatin1String("DHAKA-FLIX"))) {
+    if (isBdixHost || url.contains(QLatin1String("/ftps")) || url.contains(QLatin1String("DHAKA-FLIX")) || url.contains(QLatin1String("circleftp"))) {
         if (url.endsWith(QStringLiteral(".mp4"), Qt::CaseInsensitive) ||
             url.endsWith(QStringLiteral(".mkv"), Qt::CaseInsensitive) ||
             url.endsWith(QStringLiteral(".avi"), Qt::CaseInsensitive) ||
             url.endsWith(QStringLiteral(".webm"), Qt::CaseInsensitive) ||
             url.endsWith(QStringLiteral(".ts"), Qt::CaseInsensitive) ||
             url.endsWith(QStringLiteral(".m4v"), Qt::CaseInsensitive)) {
-            return QStringLiteral("bdix:") + u.authority() + u.path(QUrl::FullyEncoded);
+            QString auth = u.authority();
+            if (auth.contains(QLatin1String("index.circleftp.net"))) {
+                auth.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+            }
+            return QStringLiteral("bdix:") + auth + u.path(QUrl::FullyEncoded);
         }
     }
 
@@ -553,8 +596,34 @@ bool TelepartySync::resolveCatalogMovie(const QVariantMap &data, QString &outUrl
 
     // 3. ICC FTP direct node: "icc:node:<authority><path>"
     if (id.startsWith(QLatin1String("icc:node:"))) {
-        const QString remainder = id.mid(9);
+        QString remainder = id.mid(9);
         if (!remainder.isEmpty() && !hasUnsafeCharactersOrTraversal(remainder)) {
+
+            remainder.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+            outUrl = QStringLiteral("http://") + remainder;
+            const QString fallbackTitle = deriveTitleFromPath(QUrl(outUrl).path());
+            outTitle = (providedTitle.isEmpty() ? fallbackTitle : providedTitle).left(kMaxTitleLength);
+            return true;
+        }
+    }
+
+    // 3b. Circle FTP post: "circle:post:<id>" or legacy "circle:<id>"
+    if (id.startsWith(QLatin1String("circle:post:")) ||
+        (id.startsWith(QLatin1String("circle:")) && !id.startsWith(QLatin1String("circle:node:")))) {
+        const QString postId = id.startsWith(QLatin1String("circle:post:")) ? id.mid(12) : id.mid(7);
+        if (!postId.isEmpty()) {
+            outUrl = QStringLiteral("http://new.circleftp.net:5000/api/posts/") + postId;
+            outTitle = (providedTitle.isEmpty() ? QStringLiteral("Circle FTP Video") : providedTitle).left(kMaxTitleLength);
+            return true;
+        }
+    }
+
+    // 3c. Circle FTP direct node: "circle:node:<authority><path>"
+    if (id.startsWith(QLatin1String("circle:node:"))) {
+        QString remainder = id.mid(12);
+        if (!remainder.isEmpty() && !hasUnsafeCharactersOrTraversal(remainder)) {
+
+            remainder.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
             outUrl = QStringLiteral("http://") + remainder;
             const QString fallbackTitle = deriveTitleFromPath(QUrl(outUrl).path());
             outTitle = (providedTitle.isEmpty() ? fallbackTitle : providedTitle).left(kMaxTitleLength);
@@ -564,8 +633,10 @@ bool TelepartySync::resolveCatalogMovie(const QVariantMap &data, QString &outUrl
 
     // 4. Dhaka Flix direct node: "df:node:<authority><path>"
     if (id.startsWith(QLatin1String("df:node:"))) {
-        const QString remainder = id.mid(8);
+        QString remainder = id.mid(8);
         if (!remainder.isEmpty() && !hasUnsafeCharactersOrTraversal(remainder)) {
+
+            remainder.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
             outUrl = QStringLiteral("http://") + remainder;
             const QString fallbackTitle = deriveTitleFromPath(QUrl(outUrl).path());
             outTitle = (providedTitle.isEmpty() ? fallbackTitle : providedTitle).left(kMaxTitleLength);
@@ -575,8 +646,10 @@ bool TelepartySync::resolveCatalogMovie(const QVariantMap &data, QString &outUrl
 
     // 5. Generic BDIX direct stream: "bdix:<authority><path>"
     if (id.startsWith(QLatin1String("bdix:"))) {
-        const QString remainder = id.mid(5);
+        QString remainder = id.mid(5);
         if (!remainder.isEmpty() && !hasUnsafeCharactersOrTraversal(remainder)) {
+
+            remainder.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
             outUrl = QStringLiteral("http://") + remainder;
             const QString fallbackTitle = deriveTitleFromPath(QUrl(outUrl).path());
             outTitle = (providedTitle.isEmpty() ? fallbackTitle : providedTitle).left(kMaxTitleLength);

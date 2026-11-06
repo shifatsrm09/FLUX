@@ -7,7 +7,7 @@
 ; The self-updater downloads the release asset named  FLUX-<version>-Setup.exe
 ; and runs it silently:  FLUX-<version>-Setup.exe /S /NOGUI /D=<install dir>
 !ifndef VERSION
-  !define VERSION "2.2.4"
+  !define VERSION "2.3.0"
 !endif
 
 ; General — Discord-style per-user zero-click setup:
@@ -108,12 +108,12 @@ Section "FLUX" SecMain
     !insertmacro WriteProgress "20|INSTALLING UPDATE 1 OF 1"
 
     ; Close any running FLUX instance so files are unlocked
-    nsExec::ExecToStack 'taskkill /F /IM FLUX.exe'
+    nsExec::ExecToStack 'taskkill /F /IM FLUX.exe'
     nsExec::ExecToStack 'taskkill /F /IM torrserver.exe'
 
     !insertmacro WriteProgress "35|INSTALLING UPDATE 1 OF 1"
     SetOutPath "$INSTDIR"
-    File /r "..\dist\FLUX-${VERSION}\*.*"
+    File /r /x "flux_test_*.exe" /x "*.lib" /x "*.exp" "..\dist\FLUX-${VERSION}\*.*"
 
     ; Write uninstaller
     !insertmacro WriteProgress "88|INSTALLING UPDATE 1 OF 1"
@@ -132,6 +132,8 @@ Section "FLUX" SecMain
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "InstallLocation" "$INSTDIR"
     WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "NoModify" 1
     WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FLUX" "NoRepair" 1
+    ; Zero Windows startup delay policy for instant boot
+    WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize" "StartupDelayInMSec" 0
 
     ; Shortcuts
     !insertmacro WriteProgress "94|INSTALLING UPDATE 1 OF 1"
@@ -151,11 +153,12 @@ Section "FLUX" SecMain
 SectionEnd
 
 Section "Uninstall"
-    nsExec::ExecToStack 'taskkill /F /IM FLUX.exe'
+    nsExec::ExecToStack 'taskkill /F /IM FLUX.exe'
     nsExec::ExecToStack 'taskkill /F /IM torrserver.exe'
 
     ; Remove Shortcuts
     Delete "$DESKTOP\FLUX.lnk"
+    Delete "$SMSTARTUP\FLUX.lnk"
     Delete "$SMPROGRAMS\FLUX\FLUX.lnk"
     Delete "$SMPROGRAMS\FLUX\Uninstall FLUX.lnk"
     RMDir "$SMPROGRAMS\FLUX"

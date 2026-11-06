@@ -274,6 +274,10 @@ UserStore::UserStore(QObject *parent)
     m_devUnlocked = m_settings.value(QStringLiteral("developer/unlocked"), false).toBool();
     m_server1Available = m_settings.value(QStringLiteral("server/server1Available"), true).toBool();
     m_server2Available = m_settings.value(QStringLiteral("server/server2Available"), true).toBool();
+    m_server3Available = m_settings.value(QStringLiteral("server/server3Available"), true).toBool();
+    m_server1Enabled = m_settings.value(QStringLiteral("server/server1Enabled"), true).toBool();
+    m_server2Enabled = m_settings.value(QStringLiteral("server/server2Enabled"), true).toBool();
+    m_server3Enabled = m_settings.value(QStringLiteral("server/server3Enabled"), true).toBool();
 
     const QFileInfo settingsInfo(m_settings.fileName());
     QDir().mkpath(settingsInfo.absolutePath());
@@ -687,16 +691,103 @@ void UserStore::setTopPicksFirst(bool first) {
 }
 
 int UserStore::activeServer() const {
-    return m_settings.value(QStringLiteral("server/activeServer"), 2).toInt();
+    int s = m_settings.value(QStringLiteral("server/activeServer"), 1).toInt();
+    if (!isServerEnabled(s) && enabledServerCount() > 0) {
+        return firstEnabledServer();
+    }
+    return s;
 }
 
 void UserStore::setActiveServer(int server) {
-    if (server < 1 || server > 2) server = 1;
-    if (activeServer() != server) {
+    if (server < 1 || server > 3) server = 1;
+    if (!isServerEnabled(server) && enabledServerCount() > 0) {
+        server = firstEnabledServer();
+    }
+    if (m_settings.value(QStringLiteral("server/activeServer"), 1).toInt() != server) {
         m_settings.setValue(QStringLiteral("server/activeServer"), server);
         m_settingsTimer.start();
         emit serverChanged();
     }
+}
+
+bool UserStore::isServerEnabled(int server) const {
+    if (server == 1) return m_server1Enabled;
+    if (server == 2) return m_server2Enabled;
+    if (server == 3) return m_server3Enabled;
+    return false;
+}
+
+void UserStore::setServer1Enabled(bool enabled) {
+    setServerEnabled(1, enabled);
+}
+
+void UserStore::setServer2Enabled(bool enabled) {
+    setServerEnabled(2, enabled);
+}
+
+void UserStore::setServer3Enabled(bool enabled) {
+    setServerEnabled(3, enabled);
+}
+
+void UserStore::setServerEnabled(int server, bool enabled) {
+    bool changed = false;
+    if (server == 1 && m_server1Enabled != enabled) {
+        m_server1Enabled = enabled;
+        setValue(QStringLiteral("server/server1Enabled"), enabled);
+        changed = true;
+    } else if (server == 2 && m_server2Enabled != enabled) {
+        m_server2Enabled = enabled;
+        setValue(QStringLiteral("server/server2Enabled"), enabled);
+        changed = true;
+    } else if (server == 3 && m_server3Enabled != enabled) {
+        m_server3Enabled = enabled;
+        setValue(QStringLiteral("server/server3Enabled"), enabled);
+        changed = true;
+    }
+
+    if (changed) {
+        emit serverEnabledChanged();
+        emit serverAvailabilityChanged();
+
+        if (!isServerEnabled(activeServer())) {
+            int next = firstEnabledServer();
+            if (next > 0) {
+                setActiveServer(next);
+            }
+        }
+    }
+}
+
+int UserStore::enabledServerCount() const {
+    int count = 0;
+    if (m_server1Enabled) ++count;
+    if (m_server2Enabled) ++count;
+    if (m_server3Enabled) ++count;
+    return count;
+}
+
+int UserStore::firstEnabledServer() const {
+    // Priority: Dhaka Flix (1) max priority -> ICC FTP (2) -> Circle FTP (3)
+    if (m_server1Enabled && m_server1Available) return 1;
+    if (m_server2Enabled && m_server2Available) return 2;
+    if (m_server1Enabled) return 1;
+    if (m_server2Enabled) return 2;
+    if (m_server3Enabled && m_server3Available) return 3;
+    if (m_server3Enabled) return 3;
+    return 0;
+}
+
+QString UserStore::circleFtpUrl() const {
+    return m_settings.value(QStringLiteral("server/circleFtpUrl"),
+        QStringLiteral("http://new.circleftp.net:5000/api")).toString();
+}
+
+void UserStore::setCircleFtpUrl(const QString &url) {
+    QString trimmed = url.trimmed();
+    if (trimmed.isEmpty()) return;
+    m_settings.setValue(QStringLiteral("server/circleFtpUrl"), trimmed);
+    m_settingsTimer.start();
+    emit serverChanged();
 }
 
 QString UserStore::iccftpUrl() const {
@@ -736,17 +827,26 @@ int UserStore::serverForUrl(const QString &url) const {
     if (url.isEmpty()) return 0;
     const QString lower = url.toLower();
 
+    // Circle FTP detection:
+    // - Teleparty catalog ID prefix "circle:"
+    // - circleftp.net, new.circleftp.net, index.circleftp.net, ftp*.circleftp.net
+    if (lower.startsWith(QLatin1String("circle:")) ||
+        lower.contains(QLatin1String("15.1.4.")) ||
+        lower.contains(QLatin1String("circleftp.net")) ||
+        (lower.contains(QLatin1String("circleftp")) && !lower.contains(QLatin1String("10.16.")))) {
+        return 3;
+    }
+
     // ICC FTP detection:
     // - Teleparty catalog ID prefix "icc:"
     // - Subnet 10.16.x.x (Circle / ICC network nodes: 10.16.100.244, 10.16.100.201, etc.)
     // - player.php
-    // - circleftp, iccftp, icc-ftp, /icc/, .icc.
+    // - iccftp, icc-ftp, /icc/, .icc.
     // - configured iccftpUrl
     const QString iccUrl = iccftpUrl().toLower();
     if (lower.startsWith(QLatin1String("icc:")) ||
         lower.contains(QLatin1String("10.16.")) ||
         lower.contains(QLatin1String("player.php")) ||
-        lower.contains(QLatin1String("circleftp")) ||
         lower.contains(QLatin1String("iccftp")) ||
         lower.contains(QLatin1String("icc-ftp")) ||
         lower.contains(QLatin1String("/icc/")) ||
@@ -771,6 +871,7 @@ int UserStore::serverForUrl(const QString &url) const {
 
 QString UserStore::serverNameForUrl(const QString &url) const {
     const int s = serverForUrl(url);
+    if (s == 3) return QStringLiteral("Circle FTP");
     if (s == 2) return QStringLiteral("ICC FTP");
     if (s == 1) return QStringLiteral("Dhaka Flix");
     return QStringLiteral("Unknown Server");
@@ -778,8 +879,9 @@ QString UserStore::serverNameForUrl(const QString &url) const {
 
 bool UserStore::isServerAvailableForUrl(const QString &url) const {
     const int s = serverForUrl(url);
-    if (s == 2) return m_server2Available;
-    if (s == 1) return m_server1Available;
+    if (s == 3) return m_server3Enabled && m_server3Available;
+    if (s == 2) return m_server2Enabled && m_server2Available;
+    if (s == 1) return m_server1Enabled && m_server1Available;
     return true; // Non-BDIX / generic URLs
 }
 
@@ -809,47 +911,62 @@ void UserStore::setTmdbApiKey(const QString &key) {
 void UserStore::autoDetectServer() {
     m_serverCheckComplete = false;
     auto *nam = new QNetworkAccessManager(this);
-    auto *pendingCount = new int(2);
+    auto *pendingCount = new int(3);
     auto *s1Ok = new bool(false);
     auto *s2Ok = new bool(false);
+    auto *s3Ok = new bool(false);
 
-    auto checkDone = [this, nam, pendingCount, s1Ok, s2Ok]() {
+    auto checkDone = [this, nam, pendingCount, s1Ok, s2Ok, s3Ok]() {
         (*pendingCount)--;
         if (*pendingCount == 0) {
             nam->deleteLater();
             const bool s1 = *s1Ok;
             const bool s2 = *s2Ok;
+            const bool s3 = *s3Ok;
             delete pendingCount;
             delete s1Ok;
             delete s2Ok;
+            delete s3Ok;
 
             m_server1Available = s1;
             m_server2Available = s2;
+            m_server3Available = s3;
             setValue(QStringLiteral("server/server1Available"), s1);
             setValue(QStringLiteral("server/server2Available"), s2);
+            setValue(QStringLiteral("server/server3Available"), s3);
+
+            // On startup: check if this network supports each server
+            // If all work -> all turned ON
+            // If only 1 works -> that 1 turned ON only
+            m_server1Enabled = s1;
+            m_server2Enabled = s2;
+            m_server3Enabled = s3;
+            setValue(QStringLiteral("server/server1Enabled"), s1);
+            setValue(QStringLiteral("server/server2Enabled"), s2);
+            setValue(QStringLiteral("server/server3Enabled"), s3);
+
             m_serverCheckComplete = true;
             emit serverAvailabilityChanged();
+            emit serverEnabledChanged();
 
-            FLUX_LOG_INFO("UserStore", QStringLiteral("Server auto-detection complete: Dhaka Flix = %1, ICC FTP = %2")
-                          .arg(s1 ? QStringLiteral("OK") : QStringLiteral("DOWN"))
-                          .arg(s2 ? QStringLiteral("OK") : QStringLiteral("DOWN")));
+            FLUX_LOG_INFO("UserStore", QStringLiteral("Server auto-detection complete: Dhaka Flix = %1, ICC FTP = %2, Circle FTP = %3")
+                          .arg(s1 ? QStringLiteral("OK (ON)") : QStringLiteral("DOWN (OFF)"))
+                          .arg(s2 ? QStringLiteral("OK (ON)") : QStringLiteral("DOWN (OFF)"))
+                          .arg(s3 ? QStringLiteral("OK (ON)") : QStringLiteral("DOWN (OFF)")));
 
-            if (s1 && !s2) {
-                if (activeServer() != 1) {
-                    FLUX_LOG_INFO("UserStore", "Only Dhaka Flix is accessible on this ISP/network. Auto-switching to Server 1.");
-                    setActiveServer(1);
-                }
-            } else if (!s1 && s2) {
-                if (activeServer() != 2) {
-                    FLUX_LOG_INFO("UserStore", "Only ICC FTP is accessible on this ISP/network. Auto-switching to Server 2.");
-                    setActiveServer(2);
+            const int current = m_settings.value(QStringLiteral("server/activeServer"), 1).toInt();
+            // If current active server is not enabled or not available, switch to first available server
+            if (!isServerEnabled(current) || (current == 1 && !s1) || (current == 2 && !s2) || (current == 3 && !s3)) {
+                const int next = firstEnabledServer();
+                if (next > 0) {
+                    setActiveServer(next);
                 }
             }
         }
     };
 
     // Probe Server 1 (Dhaka Flix)
-    QUrl s1Url(QStringLiteral("http://172.16.50.7/DHAKA-FLIX-7/"));
+    QUrl s1Url(QStringLiteral("http://172.16.50.14/"));
     QNetworkRequest s1Req(s1Url);
     s1Req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     s1Req.setTransferTimeout(3500);
@@ -865,8 +982,8 @@ void UserStore::autoDetectServer() {
         checkDone();
     });
 
-    // Probe Server 2 (ICC FTP)
-    QUrl s2Url(iccftpUrl());
+    // Probe Server 2 (ICC FTP) - login.php responds in 35ms instead of hanging
+    QUrl s2Url(QStringLiteral("http://10.16.100.244/login.php"));
     QNetworkRequest s2Req(s2Url);
     s2Req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     s2Req.setTransferTimeout(3500);
@@ -881,6 +998,24 @@ void UserStore::autoDetectServer() {
         }
         checkDone();
     });
+
+    // Probe Server 3 (Circle FTP)
+    QUrl s3Url(QStringLiteral("http://new.circleftp.net:5000/api/categories"));
+    QNetworkRequest s3Req(s3Url);
+    s3Req.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0");
+    s3Req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    s3Req.setTransferTimeout(3500);
+    QNetworkReply *s3Reply = nam->get(s3Req);
+    connect(s3Reply, &QNetworkReply::finished, this, [s3Reply, s3Ok, checkDone]() {
+        s3Reply->deleteLater();
+        if (s3Reply->error() == QNetworkReply::NoError) {
+            const int code = s3Reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (code >= 200 && code < 400) {
+                *s3Ok = true;
+            }
+        }
+        checkDone();
+    });
 }
 
 void UserStore::testServerConnection(int server, const QString &customUrl, const QJSValue &callback) {
@@ -888,8 +1023,10 @@ void UserStore::testServerConnection(int server, const QString &customUrl, const
     QUrl targetUrl;
     if (server == 1) {
         targetUrl = QUrl(customUrl.isEmpty() ? QStringLiteral("http://172.16.50.7/DHAKA-FLIX-7/") : customUrl);
-    } else {
+    } else if (server == 2) {
         targetUrl = QUrl(customUrl.isEmpty() ? iccftpUrl() : customUrl);
+    } else {
+        targetUrl = QUrl(customUrl.isEmpty() ? QStringLiteral("http://new.circleftp.net:5000/api/categories") : customUrl);
     }
 
     QNetworkRequest request(targetUrl);

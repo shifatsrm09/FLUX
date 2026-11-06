@@ -1,8 +1,16 @@
 #include "DownloadManager.h"
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <shobjidl.h>
+#include <shlobj.h>
+#endif
 #include "../search/FolderBrowser.h"
 #include "../search/SearchResult.h"
 #include "../core/Logger.h"
 
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 #include <QClipboard>
 #include <QCollator>
 #include <QGuiApplication>
@@ -69,7 +77,7 @@ QStringList decodedSegments(const QString &url) {
 // different shows never end up in the same place.
 QString packFolderName(const QString &url, const QString &title) {
     const QString trimmedTitle = title.trimmed();
-    if (!trimmedTitle.isEmpty() && (url.contains(QLatin1String("player.php")) || url.contains(QLatin1String("play=")) || url.contains('?'))) {
+    if (!trimmedTitle.isEmpty() && (url.contains(QLatin1String("player.php")) || url.contains(QLatin1String("play=")) || url.contains(QLatin1String("/api/posts/")) || url.contains('?'))) {
         return trimmedTitle;
     }
 
@@ -782,6 +790,72 @@ void DownloadManager::setTargets(const QStringList &paths) {
     emit offlineChanged();
 }
 
+QString DownloadManager::browseFolder(const QString &title, const QString &initialPath) {
+#ifdef Q_OS_WIN
+    IFileOpenDialog *pfd = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd));
+    if (SUCCEEDED(hr)) {
+        DWORD dwOptions = 0;
+        if (SUCCEEDED(pfd->GetOptions(&dwOptions))) {
+            pfd->SetOptions(dwOptions | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR);
+        }
+        if (!title.isEmpty()) {
+            pfd->SetTitle(reinterpret_cast<LPCWSTR>(title.utf16()));
+        }
+
+        bool folderSet = false;
+        if (!initialPath.trimmed().isEmpty() && QDir(initialPath).exists()) {
+            IShellItem *psiFolder = nullptr;
+            const QString nativePath = QDir::toNativeSeparators(initialPath.trimmed());
+            if (SUCCEEDED(SHCreateItemFromParsingName(reinterpret_cast<LPCWSTR>(nativePath.utf16()), NULL, IID_PPV_ARGS(&psiFolder)))) {
+                pfd->SetFolder(psiFolder);
+                pfd->SetDefaultFolder(psiFolder);
+                psiFolder->Release();
+                folderSet = true;
+            }
+        }
+
+        if (!folderSet) {
+            // Default initial folder: "This PC" (FOLDERID_ComputerFolder: {0AC0837C-BBF8-452A-850D-79D08E667CA7})
+            static const GUID kComputerFolder = { 0x0AC0837C, 0xBBF8, 0x452A, { 0x85, 0x0D, 0x79, 0xD0, 0x8E, 0x66, 0x7C, 0xA7 } };
+            IShellItem *psiComputer = nullptr;
+            if (SUCCEEDED(SHCreateItemInKnownFolder(kComputerFolder, 0, NULL, IID_PPV_ARGS(&psiComputer)))) {
+                pfd->SetFolder(psiComputer);
+                pfd->SetDefaultFolder(psiComputer);
+                psiComputer->Release();
+            }
+        }
+        hr = pfd->Show(NULL);
+        if (SUCCEEDED(hr)) {
+            IShellItem *psi = nullptr;
+            hr = pfd->GetResult(&psi);
+            if (SUCCEEDED(hr)) {
+                PWSTR pszPath = nullptr;
+                hr = psi->GetDisplayName(SIGDN_FILESYSPATH, &pszPath);
+                if (SUCCEEDED(hr)) {
+                    QString path = QString::fromWCharArray(pszPath);
+                    CoTaskMemFree(pszPath);
+                    psi->Release();
+                    pfd->Release();
+                    return QDir::cleanPath(QDir::fromNativeSeparators(path));
+                }
+                psi->Release();
+            }
+        }
+        pfd->Release();
+    }
+#endif
+    return QString();
+}
+
+bool DownloadManager::promptAddTarget() {
+    const QString path = browseFolder(QStringLiteral("Select Folder to Add to Library"));
+    if (!path.isEmpty()) {
+        return addTarget(path);
+    }
+    return false;
+}
+
 bool DownloadManager::addTarget(const QString &path) {
     const QString p = QDir::cleanPath(QDir::fromNativeSeparators(path.trimmed()));
     if (path.trimmed().isEmpty() || !QDir::isAbsolutePath(p) || !QFileInfo(p).isDir()) {
@@ -1078,7 +1152,60 @@ void DownloadManager::openPath(const QString &path) {
 
 int DownloadManager::downloadFile(const QString &url, const QString &title) {
     if (url.isEmpty()) return 0;
-    if (Job *dup = findActiveBySource(url)) {
+
+    QString cleanUrl = url;
+    if (cleanUrl.contains(QLatin1String("index.circleftp.net"))) {
+        cleanUrl.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+    }
+
+    if (cleanUrl.contains(QLatin1String("/api/posts/"))) {
+        QNetworkRequest req{QUrl(cleanUrl, QUrl::TolerantMode)};
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+        req.setTransferTimeout(10000);
+        QNetworkReply *reply = m_network.get(req);
+        QString capturedTitle = title;
+        connect(reply, &QNetworkReply::finished, this, [this, reply, capturedTitle]() {
+            reply->deleteLater();
+            if (reply->error() == QNetworkReply::NoError) {
+                QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+                if (doc.isObject()) {
+                    QJsonObject obj = doc.object();
+                    QString mediaUrl;
+                    if (obj[QLatin1String("content")].isString()) {
+                        mediaUrl = obj[QLatin1String("content")].toString().trimmed();
+                    } else if (obj[QLatin1String("content")].isArray()) {
+                        QJsonArray seasons = obj[QLatin1String("content")].toArray();
+                        for (const auto &sVal : seasons) {
+                            if (!sVal.isObject()) continue;
+                            QJsonArray eps = sVal.toObject()[QLatin1String("episodes")].toArray();
+                            for (const auto &eVal : eps) {
+                                if (!eVal.isObject()) continue;
+                                QString link = eVal.toObject()[QLatin1String("link")].toString().trimmed();
+                                if (!link.isEmpty()) {
+                                    mediaUrl = link;
+                                    break;
+                                }
+                            }
+                            if (!mediaUrl.isEmpty()) break;
+                        }
+                    }
+                    if (!mediaUrl.isEmpty()) {
+                        if (mediaUrl.contains(QLatin1String("index.circleftp.net"))) {
+                            mediaUrl.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+                        }
+                        QString itemTitle = capturedTitle;
+                        if (itemTitle.isEmpty() && obj.contains(QLatin1String("title"))) {
+                            itemTitle = obj[QLatin1String("title")].toString().trimmed();
+                        }
+                        this->downloadFile(mediaUrl, itemTitle);
+                    }
+                }
+            }
+        });
+        return ++m_nextId;
+    }
+
+    if (Job *dup = findActiveBySource(cleanUrl)) {
         if (dup->status == Status::Paused) resume(dup->id);
         return dup->id;
     }
@@ -1113,7 +1240,7 @@ int DownloadManager::downloadPack(const QString &folderUrl, const QString &title
     if (folderUrl.isEmpty()) return 0;
 
     QString url = folderUrl;
-    if (!url.contains('?') && !url.endsWith('/')) url += QLatin1Char('/');
+    if (!url.contains(QLatin1String("/api/posts/")) && !url.contains('?') && !url.endsWith('/')) url += QLatin1Char('/');
     if (Job *dup = findActiveBySource(url)) {
         if (dup->status == Status::Paused) resume(dup->id);
         return dup->id;
@@ -1178,7 +1305,14 @@ void DownloadManager::onScanResult(int id, const QString &rel, int depth, int ge
         } else if (static_cast<int>(job->items.size()) < kMaxPackFiles) {
             Item item;
             item.url = r.playUrl;
-            item.relPath = rel + sanitizeSegment(r.displayName);
+            if (item.url.contains(QLatin1String("index.circleftp.net"))) {
+                item.url.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+            }
+            QString relName = sanitizeSegment(r.displayName);
+            if (!r.extension.isEmpty() && !relName.endsWith(QLatin1Char('.') + r.extension, Qt::CaseInsensitive)) {
+                relName += QLatin1Char('.') + r.extension;
+            }
+            item.relPath = rel + relName;
             item.size = r.sizeBytes > 0 ? r.sizeBytes : -1;
             job->items.push_back(item);
         }
@@ -1359,7 +1493,11 @@ void DownloadManager::startNext(Job &job) {
             continue;
         }
 
-        QNetworkRequest request{QUrl(item.url, QUrl::TolerantMode)};
+        QString itemUrl = item.url;
+        if (itemUrl.contains(QLatin1String("index.circleftp.net"))) {
+            itemUrl.replace(QLatin1String("index.circleftp.net"), QLatin1String("15.1.4.2"));
+        }
+        QNetworkRequest request{QUrl(itemUrl, QUrl::TolerantMode)};
         request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
         request.setTransferTimeout(30000);
         if (job.resumeFrom > 0) {

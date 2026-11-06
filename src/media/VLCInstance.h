@@ -12,8 +12,9 @@ class VLCInstance {
 public:
     static VLCInstance& instance();
 
-    bool initialize();
-    void initializeAsync();
+    bool initialize(int subtitleScale = -1);
+    void initializeAsync(int subtitleScale = -1);
+    bool reinitialize(int subtitleScale);
     void shutdown();
     void waitUntilInitialized();
 

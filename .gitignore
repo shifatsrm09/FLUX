@@ -14,3 +14,5 @@ dist/
 inspirationREADME.md
 tools/nsis/
 third_party/torrserver/
+torrserver/
+brag-output/

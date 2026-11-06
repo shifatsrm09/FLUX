@@ -22,6 +22,7 @@ Application::~Application() {
     // Leave any Teleparty session (tells the other members) before the player goes away
     m_sync.reset();
     m_teleparty.reset();
+    m_system.reset();
     m_updater.reset();
     // The user store records final watch progress from the player, so it goes first
     m_userStore.reset();
@@ -34,7 +35,7 @@ Application::~Application() {
     VLCInstance::instance().shutdown();
 }
 
-bool Application::initialize(QQmlApplicationEngine &engine) {
+bool Application::initialize(QQmlApplicationEngine &engine, bool startedFromBoot, bool isMultiInstance) {
     FLUX_LOG_INFO("Application", QString("Starting FLUX Media Player v%1...").arg(QString::fromLatin1(FLUX_VERSION)));
 
     // 1. Initialize libVLC instance asynchronously in background so splash and UI appear instantly
@@ -58,6 +59,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     m_bookmarks = std::make_unique<BookmarkManager>(this);
     m_updater = std::make_unique<Updater>(this);
     m_torrentManager = std::make_unique<TorrentManager>(this);
+    m_system = std::make_unique<SystemManager>(m_userStore.get(), startedFromBoot, isMultiInstance, this);
     // Pre-warm update check immediately so the splash popup has data without waiting
     m_updater->checkForUpdates(true);
 
@@ -108,6 +110,9 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
         const int latchedIndex = store->value("subtitles/latchedIndex", -1).toInt();
         const bool latchedDisabled = store->value("subtitles/latchedDisabled", false).toBool();
         player->setLatchedSubtitle(latchedName, latchedLang, latchedIndex, latchedDisabled);
+
+        const int savedSubScale = store->value("subtitles/scale", 100).toInt();
+        player->setSubtitleScale(savedSubScale > 0 ? savedSubScale : 100);
 
         auto updateTelepartyCustomCode = [this, store]() {
             if (!m_teleparty) return;
@@ -160,6 +165,9 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
             store->setValue("subtitles/latchedLang", player->latchedSubtitleLang());
             store->setValue("subtitles/latchedIndex", player->latchedSubtitleIndex());
             store->setValue("subtitles/latchedDisabled", player->latchedSubtitleDisabled());
+        });
+        connect(player, &VLCPlayer::subtitleScaleChanged, store, [store, player]() {
+            store->setValue("subtitles/scale", player->subtitleScale());
         });
         connect(search, &SearchManager::selectedLibrariesChanged, store, [store, search]() {
             store->setValue(QStringLiteral("categories/selected_s%1").arg(search->activeServer()),
@@ -233,6 +241,7 @@ bool Application::initialize(QQmlApplicationEngine &engine) {
     rootContext->setContextProperty("fluxLogger", &Logger::instance());
     rootContext->setContextProperty("fluxSnap", WindowsSnapHelper::instance());
     rootContext->setContextProperty("fluxTorrent", m_torrentManager.get());
+    rootContext->setContextProperty("fluxSystem", m_system.get());
 
     // 5. Startup update check is driven immediately by the Discord-style StartupPopup window
 

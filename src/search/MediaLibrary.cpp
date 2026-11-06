@@ -85,9 +85,15 @@ void MediaLibraryModel::adjustIccRoots(const QString &session, const QString &ba
 }
 
 bool MediaLibraryModel::loadServer(int serverType, const QString &session, const QString &baseUrl) {
-    m_serverType = (serverType == 2) ? 2 : 1;
-    const QString filename = (m_serverType == 2) ? QStringLiteral("resources/icc_library.json")
-                                                 : QStringLiteral("resources/media_library.json");
+    m_serverType = (serverType == 2) ? 2 : ((serverType == 3) ? 3 : 1);
+    QString filename;
+    if (m_serverType == 3) {
+        filename = QStringLiteral("resources/circle_library.json");
+    } else if (m_serverType == 2) {
+        filename = QStringLiteral("resources/icc_library.json");
+    } else {
+        filename = QStringLiteral("resources/media_library.json");
+    }
 
     QString appDir = QCoreApplication::applicationDirPath();
     QStringList candidates = {
@@ -114,7 +120,29 @@ bool MediaLibraryModel::loadServer(int serverType, const QString &session, const
     FLUX_LOG_WARN("MediaLibrary", QString("Library json file (%1) not found, using hardcoded roots").arg(filename));
 
     beginResetModel();
-    if (m_serverType == 2) {
+    if (m_serverType == 3) {
+        m_roots = {
+            {"circle_eng_movies", "English Movies", "English Movies", "http://new.circleftp.net:5000/api/posts?categoryExact=6", "http://new.circleftp.net:5000", "/api/posts?categoryExact=6"},
+            {"circle_featured", "Featured Post", "English Movies", "http://new.circleftp.net:5000/api/posts?categoryExact=80", "http://new.circleftp.net:5000", "/api/posts?categoryExact=80"},
+            {"circle_hindi_movies", "Hindi Movies", "Hindi Movies", "http://new.circleftp.net:5000/api/posts?categoryExact=2", "http://new.circleftp.net:5000", "/api/posts?categoryExact=2"},
+            {"circle_hindi_dubbed", "Hindi Dubbed Movies", "Hindi Movies", "http://new.circleftp.net:5000/api/posts?categoryExact=7", "http://new.circleftp.net:5000", "/api/posts?categoryExact=7"},
+            {"circle_south_dubbed", "South Dubbed Movies", "Hindi Movies", "http://new.circleftp.net:5000/api/posts?categoryExact=3", "http://new.circleftp.net:5000", "/api/posts?categoryExact=3"},
+            {"circle_anim_movies", "Animation Movies", "Animation", "http://new.circleftp.net:5000/api/posts?categoryExact=1", "http://new.circleftp.net:5000", "/api/posts?categoryExact=1"},
+            {"circle_anim_dubbed", "Animation Dubbed", "Animation", "http://new.circleftp.net:5000/api/posts?categoryExact=20", "http://new.circleftp.net:5000", "/api/posts?categoryExact=20"},
+            {"circle_anime_series", "Anime Series", "Animation", "http://new.circleftp.net:5000/api/posts?categoryExact=21", "http://new.circleftp.net:5000", "/api/posts?categoryExact=21"},
+            {"circle_foreign_movies", "Foreign Movies", "Other Movies", "http://new.circleftp.net:5000/api/posts?categoryExact=8", "http://new.circleftp.net:5000", "/api/posts?categoryExact=8"},
+            {"circle_south_movies", "South Indian Movies", "Other Movies", "http://new.circleftp.net:5000/api/posts?categoryExact=4", "http://new.circleftp.net:5000", "/api/posts?categoryExact=4"},
+            {"circle_doc", "Documentary", "Other Movies", "http://new.circleftp.net:5000/api/posts?categoryExact=85", "http://new.circleftp.net:5000", "/api/posts?categoryExact=85"},
+            {"circle_tv_eng", "English & Foreign TV Series", "TV & Web Series", "http://new.circleftp.net:5000/api/posts?categoryExact=9", "http://new.circleftp.net:5000", "/api/posts?categoryExact=9"},
+            {"circle_tv_dubbed", "Dubbed TV Series", "TV & Web Series", "http://new.circleftp.net:5000/api/posts?categoryExact=22", "http://new.circleftp.net:5000", "/api/posts?categoryExact=22"},
+            {"circle_tv_hindi", "Hindi TV Serials", "TV & Web Series", "http://new.circleftp.net:5000/api/posts?categoryExact=5", "http://new.circleftp.net:5000", "/api/posts?categoryExact=5"},
+            {"circle_indian_shows", "Indian TV Shows", "TV & Web Series", "http://new.circleftp.net:5000/api/posts?categoryExact=238", "http://new.circleftp.net:5000", "/api/posts?categoryExact=238"},
+            {"circle_wwe", "WWE", "TV & Web Series", "http://new.circleftp.net:5000/api/posts?categoryExact=15", "http://new.circleftp.net:5000", "/api/posts?categoryExact=15"},
+            {"circle_awards", "Awards Shows", "TV & Web Series", "http://new.circleftp.net:5000/api/posts?categoryExact=251", "http://new.circleftp.net:5000", "/api/posts?categoryExact=251"},
+            {"circle_software", "Software", "Software & Others", "http://new.circleftp.net:5000/api/posts?categoryExact=11", "http://new.circleftp.net:5000", "/api/posts?categoryExact=11"},
+            {"circle_pc_games", "PC & Console Games", "Games & Apps", "http://new.circleftp.net:5000/api/posts?categoryExact=13", "http://new.circleftp.net:5000", "/api/posts?categoryExact=13"}
+        };
+    } else if (m_serverType == 2) {
         const QString s = session.isEmpty() ? QStringLiteral("b1bdfdae1f7e206b628274ef7eafadcd6094e07c46cd85b157c595174a369f96") : session;
         m_roots = {
             {"icc_eng_movies", "English Movies", "English Movies", "http://10.16.100.244/dashboard.php?session=" + s + "&category=19", "http://10.16.100.244", "/dashboard.php?category=19"},
