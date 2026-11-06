@@ -31,11 +31,11 @@ async function loadLatestRelease() {
 
     const version = release.tag_name || release.name || "Latest";
     note.textContent = `${version}  ·  Installer ${formatSize(setup.size)}  ·  Portable ${formatSize(portable.size)}`;
-    status.textContent = "THE LATEST RELEASE";
+    status.textContent = "Latest release";
   } catch (error) {
     // The releases page remains a working fallback if the API is unavailable.
     note.textContent = "Latest downloads on GitHub · Windows 10/11";
-    status.textContent = "READY TO DOWNLOAD";
+    status.textContent = "Ready to download";
   }
 }
 
