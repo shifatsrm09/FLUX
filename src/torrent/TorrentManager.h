@@ -8,6 +8,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QPointer>
+#include <QMap>
 
 namespace Flux {
 
@@ -58,6 +59,12 @@ class TorrentManager : public QObject {
     Q_PROPERTY(QString resolvingTorrentName READ resolvingTorrentName NOTIFY resolvingMagnetChanged)
     Q_PROPERTY(int resolvingIndex READ resolvingIndex NOTIFY resolvingMagnetChanged)
 
+    // Tork Multi-Engine Search & Stream
+    Q_PROPERTY(bool isSearchingTork READ isSearchingTork NOTIFY searchingTorkChanged)
+    Q_PROPERTY(QVariantList torkResults READ torkResults NOTIFY torkResultsChanged)
+    Q_PROPERTY(QString torkError READ torkError NOTIFY torkErrorChanged)
+    Q_PROPERTY(int torkResultCount READ torkResultCount NOTIFY torkResultsChanged)
+
 public:
     explicit TorrentManager(QObject *parent = nullptr);
     ~TorrentManager() override;
@@ -102,6 +109,12 @@ public:
     QString resolvingTorrentName() const { return m_resolvingTorrentName; }
     int resolvingIndex() const { return m_resolvingIndex; }
 
+    // Tork Search getters
+    bool isSearchingTork() const { return m_isSearchingTork; }
+    QVariantList torkResults() const { return m_torkResults; }
+    QString torkError() const { return m_torkError; }
+    int torkResultCount() const { return m_torkResults.size(); }
+
     Q_INVOKABLE void startTorrent(const QString &magnetOrPath);
     Q_INVOKABLE void selectFile(int fileIndex);
     Q_INVOKABLE void stopTorrent();
@@ -113,7 +126,19 @@ public:
     Q_INVOKABLE void cancelSearch1337x();
     Q_INVOKABLE void clearSearchResults();
     Q_INVOKABLE void streamSearchResult(int index);
+    Q_INVOKABLE void downloadSearchResult(int index);
     Q_INVOKABLE void copyMagnet(int index);
+
+    // Tork Multi-Engine Search invokables
+    Q_INVOKABLE void searchTork(const QString &query, const QString &category = QString());
+    Q_INVOKABLE void cancelSearchTork();
+    Q_INVOKABLE void clearTorkResults();
+    Q_INVOKABLE void streamTorkResult(int index);
+    Q_INVOKABLE void downloadTorkResult(int index);
+    Q_INVOKABLE void copyTorkMagnet(int index);
+
+    // Direct download helper
+    Q_INVOKABLE void downloadTorrent(const QString &magnet, const QString &title);
 
 signals:
     void engineReadyChanged();
@@ -136,8 +161,16 @@ signals:
     void resolvingMagnetChanged();
     void magnetCopied(const QString &magnet);
 
+    // Tork Signals
+    void searchingTorkChanged();
+    void torkResultsChanged();
+    void torkErrorChanged();
+    void downloadStarted(const QString &title);
+    void downloadRequested(const QString &url, const QString &title);
+
 private slots:
     void onPollTimer();
+    void onTorkTimeout();
 
 private:
     void startEngineProcess();
@@ -154,6 +187,18 @@ private:
     // 1337x Private helpers
     void parse1337xSearchHtml(const QString &html, const QString &baseUrl);
     static QString decodeHtmlEntities(const QString &raw);
+
+    // Tork Private helpers
+    void parseTpbResponse(const QByteArray &data, const QString &category);
+    void parseYtsResponse(const QByteArray &data);
+    void parseRarbgResponse(const QByteArray &data, const QString &category);
+    void parseNyaaResponse(const QByteArray &data);
+    void addOrMergeTorkResult(const QString &infoHash, const QString &title,
+                             qint64 sizeBytes, const QString &formattedSize,
+                             int seeders, int leechers,
+                             const QString &category, const QString &provider);
+    void finalizeTorkResults();
+    static QString createMagnetLink(const QString &infoHash, const QString &title);
 
     static QString formatBytes(qint64 bytes);
     static bool isVideoFile(const QString &path);
@@ -192,9 +237,21 @@ private:
     bool m_isResolvingMagnet{false};
     QString m_resolvingTorrentName;
     int m_resolvingIndex{-1};
+    bool m_pendingDownloadAfterResolve{false};
     QPointer<QNetworkReply> m_searchReply;
     QPointer<QNetworkReply> m_detailReply;
     QString m_currentBaseUrl{QStringLiteral("https://1337x.la")};
+
+    // Tork Multi-Engine Search state
+    bool m_isSearchingTork{false};
+    QVariantList m_torkResults;
+    QString m_torkError;
+    int m_activeTorkPending{0};
+    QMap<QString, QVariantMap> m_pendingTorkMap;
+    QList<QPointer<QNetworkReply>> m_torkReplies;
+    QTimer *m_torkTimeoutTimer{nullptr};
+    bool m_pendingDownloadStream{false};
+    QString m_pendingDownloadTitle;
 
     QProcess *m_process{nullptr};
     QNetworkAccessManager *m_nam{nullptr};

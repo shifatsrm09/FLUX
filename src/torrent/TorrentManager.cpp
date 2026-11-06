@@ -17,6 +17,7 @@
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QRegularExpression>
+#include <QXmlStreamReader>
 
 
 #ifdef Q_OS_WIN
@@ -42,12 +43,18 @@ TorrentManager::TorrentManager(QObject *parent)
     m_engineCheckTimer->setInterval(1500);
     connect(m_engineCheckTimer, &QTimer::timeout, this, &TorrentManager::pingEngine);
 
+    m_torkTimeoutTimer = new QTimer(this);
+    m_torkTimeoutTimer->setSingleShot(true);
+    m_torkTimeoutTimer->setInterval(7000);
+    connect(m_torkTimeoutTimer, &QTimer::timeout, this, &TorrentManager::onTorkTimeout);
+
     checkEngine();
 }
 
 TorrentManager::~TorrentManager() {
     if (m_pollTimer) m_pollTimer->stop();
     if (m_engineCheckTimer) m_engineCheckTimer->stop();
+    cancelSearchTork();
     if (m_searchReply) {
         m_searchReply->abort();
         m_searchReply->deleteLater();
@@ -634,6 +641,14 @@ void TorrentManager::updateStreamUrl() {
 
     emit streamUrlChanged();
     FLUX_LOG_INFO("TorrentManager", "Generated stream URL: " + m_streamUrl);
+
+    if (m_pendingDownloadStream && !m_streamUrl.isEmpty()) {
+        m_pendingDownloadStream = false;
+        QString title = m_pendingDownloadTitle.isEmpty()
+            ? (m_selectedFileName.isEmpty() ? m_torrentName : m_selectedFileName)
+            : m_pendingDownloadTitle;
+        emit downloadRequested(m_streamUrl, title);
+    }
 }
 
 void TorrentManager::stopTorrent() {
@@ -694,6 +709,7 @@ void TorrentManager::search1337x(const QString &query, const QString &category) 
         return;
     }
 
+    cancelSearchTork();
     if (m_searchReply) {
         m_searchReply->abort();
         m_searchReply->deleteLater();
@@ -750,6 +766,7 @@ void TorrentManager::search1337x(const QString &query, const QString &category) 
 }
 
 void TorrentManager::cancelSearch1337x() {
+    cancelSearchTork();
     if (m_searchReply) {
         m_searchReply->abort();
         m_searchReply->deleteLater();
@@ -928,7 +945,12 @@ void TorrentManager::streamSearchResult(int index) {
                     m_searchResults[index] = curItem;
 
                     FLUX_LOG_INFO("TorrentManager", "Magnet resolved successfully! Starting stream...");
-                    startTorrent(magnet);
+                    if (m_pendingDownloadAfterResolve) {
+                        m_pendingDownloadAfterResolve = false;
+                        downloadTorrent(magnet, m_resolvingTorrentName);
+                    } else {
+                        startTorrent(magnet);
+                    }
                 } else {
                     m_searchError = QStringLiteral("Could not find magnet link on detail page.");
                     emit searchErrorChanged();
@@ -1030,6 +1052,445 @@ void TorrentManager::copyMagnet(int index) {
         emit resolvingMagnetChanged();
         emit searchResultsChanged();
     });
+}
+
+
+void TorrentManager::downloadSearchResult(int index) {
+    if (index < 0 || index >= m_searchResults.size()) return;
+    QVariantMap item = m_searchResults[index].toMap();
+    const QString existingMagnet = item.value(QStringLiteral("magnet")).toString();
+    if (!existingMagnet.isEmpty() && existingMagnet.startsWith(QLatin1String("magnet:"), Qt::CaseInsensitive)) {
+        downloadTorrent(existingMagnet, item.value(QStringLiteral("name")).toString());
+        return;
+    }
+    m_pendingDownloadAfterResolve = true;
+    streamSearchResult(index);
+}
+
+void TorrentManager::downloadTorrent(const QString &magnet, const QString &title) {
+    if (magnet.isEmpty()) return;
+    m_pendingDownloadStream = true;
+    m_pendingDownloadTitle = title;
+    startTorrent(magnet);
+    emit downloadStarted(title);
+}
+
+void TorrentManager::searchTork(const QString &query, const QString &category) {
+    cancelSearchTork();
+
+    QString trimmedQuery = query.trimmed();
+    if (trimmedQuery.isEmpty()) {
+        m_torkResults.clear();
+        emit torkResultsChanged();
+        return;
+    }
+
+    m_isSearchingTork = true;
+    m_torkError.clear();
+    m_pendingTorkMap.clear();
+    m_torkResults.clear();
+    emit searchingTorkChanged();
+    emit torkErrorChanged();
+    emit torkResultsChanged();
+
+    QString cat = category.toLower().trimmed();
+    if (cat.isEmpty()) cat = QStringLiteral("all");
+
+    m_activeTorkPending = 0;
+
+    // 1. The Pirate Bay (apibay.org)
+    {
+        QString apibayUrl = QStringLiteral("https://apibay.org/q.php?q=%1")
+                                .arg(QString::fromUtf8(QUrl::toPercentEncoding(trimmedQuery)));
+        if (cat == QLatin1String("movies")) {
+            apibayUrl += QStringLiteral("&cat=201,207");
+        } else if (cat == QLatin1String("tv") || cat == QLatin1String("tv shows")) {
+            apibayUrl += QStringLiteral("&cat=205,208");
+        } else if (cat == QLatin1String("anime")) {
+            apibayUrl += QStringLiteral("&cat=200");
+        }
+
+        QNetworkRequest req;
+        req.setUrl(QUrl(apibayUrl));
+        req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("tork/0.5.0"));
+        QNetworkReply *reply = m_nam->get(req);
+        m_torkReplies.append(reply);
+        m_activeTorkPending++;
+
+        connect(reply, &QNetworkReply::finished, this, [this, reply, cat]() {
+            m_torkReplies.removeAll(reply);
+            reply->deleteLater();
+            m_activeTorkPending = std::max<int>(0, m_activeTorkPending - 1);
+            if (reply->error() == QNetworkReply::NoError) {
+                parseTpbResponse(reply->readAll(), cat);
+            }
+            if (m_activeTorkPending == 0) {
+                finalizeTorkResults();
+            }
+        });
+    }
+
+    // 2. YTS Movies (yts.rs)
+    if (cat == QLatin1String("all") || cat == QLatin1String("movies")) {
+        QString ytsUrl = QStringLiteral("https://yts.rs/api/v2/list_movies.json?query_term=%1&limit=30")
+                             .arg(QString::fromUtf8(QUrl::toPercentEncoding(trimmedQuery)));
+        QNetworkRequest req;
+        req.setUrl(QUrl(ytsUrl));
+        req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("tork/0.5.0"));
+        QNetworkReply *reply = m_nam->get(req);
+        m_torkReplies.append(reply);
+        m_activeTorkPending++;
+
+        connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+            m_torkReplies.removeAll(reply);
+            reply->deleteLater();
+            m_activeTorkPending = std::max<int>(0, m_activeTorkPending - 1);
+            if (reply->error() == QNetworkReply::NoError) {
+                parseYtsResponse(reply->readAll());
+            }
+            if (m_activeTorkPending == 0) {
+                finalizeTorkResults();
+            }
+        });
+    }
+
+    // 3. TheRARBG (therarbg.to)
+    {
+        QString cleanQuery = trimmedQuery;
+        cleanQuery.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9 ]")), QStringLiteral(" "));
+        cleanQuery = cleanQuery.simplified();
+        if (!cleanQuery.isEmpty()) {
+            QString rarbgUrl = QStringLiteral("https://therarbg.to/get-posts/order:-se:keywords:%1:paginate_by:50:format:json/")
+                                  .arg(QString::fromUtf8(QUrl::toPercentEncoding(cleanQuery)));
+            QNetworkRequest req;
+            req.setUrl(QUrl(rarbgUrl));
+            req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("tork/0.5.0"));
+            QNetworkReply *reply = m_nam->get(req);
+            m_torkReplies.append(reply);
+            m_activeTorkPending++;
+
+            connect(reply, &QNetworkReply::finished, this, [this, reply, cat]() {
+                m_torkReplies.removeAll(reply);
+                reply->deleteLater();
+                m_activeTorkPending = std::max<int>(0, m_activeTorkPending - 1);
+                if (reply->error() == QNetworkReply::NoError) {
+                    parseRarbgResponse(reply->readAll(), cat);
+                }
+                if (m_activeTorkPending == 0) {
+                    finalizeTorkResults();
+                }
+            });
+        }
+    }
+
+    // 4. Nyaa Anime (nyaa.si)
+    if (cat == QLatin1String("all") || cat == QLatin1String("anime")) {
+        QString nyaaUrl = QStringLiteral("https://nyaa.si/?page=rss&q=%1")
+                              .arg(QString::fromUtf8(QUrl::toPercentEncoding(trimmedQuery)));
+        QNetworkRequest req;
+        req.setUrl(QUrl(nyaaUrl));
+        req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("tork/0.5.0"));
+        QNetworkReply *reply = m_nam->get(req);
+        m_torkReplies.append(reply);
+        m_activeTorkPending++;
+
+        connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+            m_torkReplies.removeAll(reply);
+            reply->deleteLater();
+            m_activeTorkPending = std::max<int>(0, m_activeTorkPending - 1);
+            if (reply->error() == QNetworkReply::NoError) {
+                parseNyaaResponse(reply->readAll());
+            }
+            if (m_activeTorkPending == 0) {
+                finalizeTorkResults();
+            }
+        });
+    }
+
+    if (m_activeTorkPending > 0) {
+        m_torkTimeoutTimer->start();
+    } else {
+        finalizeTorkResults();
+    }
+}
+
+void TorrentManager::parseTpbResponse(const QByteArray &data, const QString &category) {
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isArray()) return;
+
+    const QJsonArray arr = doc.array();
+    for (const QJsonValue &val : arr) {
+        if (!val.isObject()) continue;
+        const QJsonObject obj = val.toObject();
+        if (obj[QStringLiteral("id")].toString() == QLatin1String("0")) continue;
+
+        const QString hash = obj[QStringLiteral("info_hash")].toString().trimmed().toUpper();
+        if (hash.isEmpty() || hash.length() != 40) continue;
+
+        const QString name = decodeHtmlEntities(obj[QStringLiteral("name")].toString().trimmed());
+        if (name.isEmpty()) continue;
+
+        const int seeders = obj[QStringLiteral("seeders")].toString().toInt();
+        const int leechers = obj[QStringLiteral("leechers")].toString().toInt();
+        const qint64 size = obj[QStringLiteral("size")].toString().toLongLong();
+
+        const QString catCode = obj[QStringLiteral("category")].toString();
+        QString cat = QStringLiteral("General");
+        if (catCode == QLatin1String("201") || catCode == QLatin1String("207")) cat = QStringLiteral("Movies");
+        else if (catCode == QLatin1String("205") || catCode == QLatin1String("208")) cat = QStringLiteral("TV Shows");
+        else if (catCode.startsWith(QLatin1String("200"))) cat = QStringLiteral("Anime");
+
+        if (category == QLatin1String("movies") && cat != QLatin1String("Movies")) continue;
+        if (category == QLatin1String("tv") && cat != QLatin1String("TV Shows")) continue;
+        if (category == QLatin1String("anime") && cat != QLatin1String("Anime")) continue;
+
+        addOrMergeTorkResult(hash, name, size, formatBytes(size), seeders, leechers, cat, QStringLiteral("TPB"));
+    }
+}
+
+void TorrentManager::parseYtsResponse(const QByteArray &data) {
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject()) return;
+
+    const QJsonObject root = doc.object();
+    const QJsonObject dataObj = root[QStringLiteral("data")].toObject();
+    const QJsonArray movies = dataObj[QStringLiteral("movies")].toArray();
+
+    for (const QJsonValue &mVal : movies) {
+        if (!mVal.isObject()) continue;
+        const QJsonObject mObj = mVal.toObject();
+        QString movieTitle = mObj[QStringLiteral("title_long")].toString().trimmed();
+        if (movieTitle.isEmpty()) movieTitle = mObj[QStringLiteral("title")].toString().trimmed();
+
+        const QJsonArray torrents = mObj[QStringLiteral("torrents")].toArray();
+        for (const QJsonValue &tVal : torrents) {
+            if (!tVal.isObject()) continue;
+            const QJsonObject tObj = tVal.toObject();
+
+            const QString hash = tObj[QStringLiteral("hash")].toString().trimmed().toUpper();
+            if (hash.isEmpty() || hash.length() != 40) continue;
+
+            const QString quality = tObj[QStringLiteral("quality")].toString();
+            const QString type = tObj[QStringLiteral("type")].toString();
+            QString fullTitle = movieTitle;
+            if (!quality.isEmpty()) fullTitle += QStringLiteral(" [%1]").arg(quality);
+            if (!type.isEmpty()) fullTitle += QStringLiteral(" [%1]").arg(type.toUpper());
+
+            const int seeders = tObj[QStringLiteral("seeds")].toInt();
+            const int leechers = tObj[QStringLiteral("peers")].toInt();
+            const qint64 sizeBytes = tObj[QStringLiteral("size_bytes")].toVariant().toLongLong();
+            QString sizeStr = tObj[QStringLiteral("size")].toString();
+            if (sizeStr.isEmpty()) sizeStr = formatBytes(sizeBytes);
+
+            addOrMergeTorkResult(hash, fullTitle, sizeBytes, sizeStr, seeders, leechers, QStringLiteral("Movies"), QStringLiteral("YTS"));
+        }
+    }
+}
+
+void TorrentManager::parseRarbgResponse(const QByteArray &data, const QString &category) {
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject()) return;
+
+    const QJsonObject root = doc.object();
+    const QJsonArray results = root[QStringLiteral("results")].toArray();
+
+    for (const QJsonValue &rVal : results) {
+        if (!rVal.isObject()) continue;
+        const QJsonObject rObj = rVal.toObject();
+
+        const QString hash = rObj[QStringLiteral("h")].toString().trimmed().toUpper();
+        if (hash.isEmpty() || hash.length() != 40) continue;
+
+        const QString name = decodeHtmlEntities(rObj[QStringLiteral("n")].toString().trimmed());
+        if (name.isEmpty()) continue;
+
+        const int seeders = rObj[QStringLiteral("se")].toInt();
+        const int leechers = rObj[QStringLiteral("le")].toInt();
+        const qint64 sizeBytes = rObj[QStringLiteral("s")].toVariant().toLongLong();
+        QString cat = rObj[QStringLiteral("c")].toString();
+        if (cat.isEmpty()) cat = QStringLiteral("General");
+        else if (cat.contains(QLatin1String("Movie"), Qt::CaseInsensitive)) cat = QStringLiteral("Movies");
+        else if (cat.contains(QLatin1String("TV"), Qt::CaseInsensitive)) cat = QStringLiteral("TV Shows");
+        else if (cat.contains(QLatin1String("Anime"), Qt::CaseInsensitive)) cat = QStringLiteral("Anime");
+
+        if (category == QLatin1String("movies") && cat != QLatin1String("Movies")) continue;
+        if (category == QLatin1String("tv") && cat != QLatin1String("TV Shows")) continue;
+        if (category == QLatin1String("anime") && cat != QLatin1String("Anime")) continue;
+
+        addOrMergeTorkResult(hash, name, sizeBytes, formatBytes(sizeBytes), seeders, leechers, cat, QStringLiteral("RARBG"));
+    }
+}
+
+void TorrentManager::parseNyaaResponse(const QByteArray &data) {
+    QXmlStreamReader xml(data);
+    while (!xml.atEnd()) {
+        xml.readNext();
+        if (xml.isStartElement() && xml.name() == QLatin1String("item")) {
+            QString title;
+            QString infoHash;
+            int seeders = 0;
+            int leechers = 0;
+            QString sizeStr;
+
+            while (!(xml.isEndElement() && xml.name() == QLatin1String("item")) && !xml.atEnd()) {
+                xml.readNext();
+                if (xml.isStartElement()) {
+                    const QString tag = xml.name().toString();
+                    if (tag == QLatin1String("title")) {
+                        title = xml.readElementText();
+                    } else if (tag == QLatin1String("infoHash")) {
+                        infoHash = xml.readElementText().trimmed().toUpper();
+                    } else if (tag == QLatin1String("seeders")) {
+                        seeders = xml.readElementText().toInt();
+                    } else if (tag == QLatin1String("leechers")) {
+                        leechers = xml.readElementText().toInt();
+                    } else if (tag == QLatin1String("size")) {
+                        sizeStr = xml.readElementText();
+                    }
+                }
+            }
+
+            if (!infoHash.isEmpty() && infoHash.length() == 40 && !title.isEmpty()) {
+                addOrMergeTorkResult(infoHash, decodeHtmlEntities(title), 0, sizeStr, seeders, leechers, QStringLiteral("Anime"), QStringLiteral("Nyaa"));
+            }
+        }
+    }
+}
+
+void TorrentManager::addOrMergeTorkResult(const QString &infoHash, const QString &title,
+                                         qint64 sizeBytes, const QString &formattedSize,
+                                         int seeders, int leechers,
+                                         const QString &category, const QString &provider) {
+    if (m_pendingTorkMap.contains(infoHash)) {
+        QVariantMap existing = m_pendingTorkMap[infoHash];
+        const int existingSeeds = existing[QStringLiteral("seeds")].toInt();
+        if (seeders > existingSeeds) {
+            existing[QStringLiteral("seeds")] = seeders;
+            existing[QStringLiteral("leeches")] = leechers;
+        }
+        QStringList providers = existing[QStringLiteral("providers")].toStringList();
+        if (!providers.contains(provider)) {
+            providers.append(provider);
+            existing[QStringLiteral("providers")] = providers;
+            existing[QStringLiteral("provider")] = providers.join(QStringLiteral(", "));
+        }
+        if (existing[QStringLiteral("size")].toString().isEmpty() && !formattedSize.isEmpty()) {
+            existing[QStringLiteral("size")] = formattedSize;
+            existing[QStringLiteral("sizeBytes")] = sizeBytes;
+        }
+        m_pendingTorkMap[infoHash] = existing;
+    } else {
+        QVariantMap item;
+        item[QStringLiteral("name")] = title;
+        item[QStringLiteral("infoHash")] = infoHash;
+        item[QStringLiteral("magnet")] = createMagnetLink(infoHash, title);
+        item[QStringLiteral("size")] = formattedSize;
+        item[QStringLiteral("sizeBytes")] = sizeBytes;
+        item[QStringLiteral("seeds")] = seeders;
+        item[QStringLiteral("leeches")] = leechers;
+        item[QStringLiteral("category")] = category;
+        item[QStringLiteral("providers")] = QStringList{provider};
+        item[QStringLiteral("provider")] = provider;
+        m_pendingTorkMap[infoHash] = item;
+    }
+}
+
+void TorrentManager::finalizeTorkResults() {
+    if (m_torkTimeoutTimer && m_torkTimeoutTimer->isActive()) {
+        m_torkTimeoutTimer->stop();
+    }
+
+    QVariantList list;
+    for (auto it = m_pendingTorkMap.cbegin(); it != m_pendingTorkMap.cend(); ++it) {
+        list.append(it.value());
+    }
+    std::sort(list.begin(), list.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap()[QStringLiteral("seeds")].toInt() > b.toMap()[QStringLiteral("seeds")].toInt();
+    });
+
+    m_torkResults = list;
+    m_isSearchingTork = false;
+    emit searchingTorkChanged();
+    emit torkResultsChanged();
+
+    FLUX_LOG_INFO("TorrentManager", QString("Tork search finished with %1 combined results").arg(m_torkResults.size()));
+}
+
+QString TorrentManager::createMagnetLink(const QString &infoHash, const QString &title) {
+    static const QString kTrackers = QStringLiteral(
+        "&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce"
+        "&tr=udp%3A%2F%2Fopen.stealth.si%3A80%2Fannounce"
+        "&tr=udp%3A%2F%2Ftracker.torrent.eu.org%3A451%2Fannounce"
+        "&tr=udp%3A%2F%2Ftracker.bittor.pw%3A1337%2Fannounce"
+        "&tr=udp%3A%2F%2Fpublic.popcorn-tracker.org%3A6969%2Fannounce"
+        "&tr=udp%3A%2F%2Ftracker.dler.org%3A6969%2Fannounce"
+        "&tr=udp%3A%2F%2Fexodus.desync.com%3A6969"
+        "&tr=udp%3A%2F%2Fopen.demonii.com%3A1337%2Fannounce"
+    );
+    return QStringLiteral("magnet:?xt=urn:btih:%1&dn=%2%3")
+        .arg(infoHash.toUpper(), QString::fromUtf8(QUrl::toPercentEncoding(title)), kTrackers);
+}
+
+void TorrentManager::cancelSearchTork() {
+    if (m_torkTimeoutTimer && m_torkTimeoutTimer->isActive()) {
+        m_torkTimeoutTimer->stop();
+    }
+    for (QPointer<QNetworkReply> r : m_torkReplies) {
+        if (r) {
+            r->abort();
+            r->deleteLater();
+        }
+    }
+    m_torkReplies.clear();
+    m_activeTorkPending = 0;
+    if (m_isSearchingTork) {
+        m_isSearchingTork = false;
+        emit searchingTorkChanged();
+    }
+}
+
+void TorrentManager::clearTorkResults() {
+    cancelSearchTork();
+    m_pendingTorkMap.clear();
+    m_torkResults.clear();
+    emit torkResultsChanged();
+}
+
+void TorrentManager::streamTorkResult(int index) {
+    if (index < 0 || index >= m_torkResults.size()) return;
+    const QVariantMap item = m_torkResults[index].toMap();
+    const QString magnet = item.value(QStringLiteral("magnet")).toString();
+    if (!magnet.isEmpty()) {
+        startTorrent(magnet);
+    }
+}
+
+void TorrentManager::downloadTorkResult(int index) {
+    if (index < 0 || index >= m_torkResults.size()) return;
+    const QVariantMap item = m_torkResults[index].toMap();
+    const QString magnet = item.value(QStringLiteral("magnet")).toString();
+    const QString title = item.value(QStringLiteral("name")).toString();
+    downloadTorrent(magnet, title);
+}
+
+void TorrentManager::copyTorkMagnet(int index) {
+    if (index < 0 || index >= m_torkResults.size()) return;
+    const QVariantMap item = m_torkResults[index].toMap();
+    const QString magnet = item.value(QStringLiteral("magnet")).toString();
+    if (!magnet.isEmpty()) {
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        if (clipboard) {
+            clipboard->setText(magnet);
+            emit magnetCopied(magnet);
+        }
+    }
+}
+
+void TorrentManager::onTorkTimeout() {
+    if (m_isSearchingTork) {
+        cancelSearchTork();
+        finalizeTorkResults();
+    }
 }
 
 } // namespace Flux

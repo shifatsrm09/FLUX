@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#090a09" />
+    <meta name="theme-color" content="#0b0d14" />
     <meta name="description" content="FLUX is a free, open-source native Windows streaming app powered by BDIX. No account. No subscription." />
     <title>FLUX</title>
     <link rel="icon" href="./flux.ico" sizes="any" />
@@ -22,27 +22,36 @@
         </a>
       </header>
 
-      <section class="hero" id="top" aria-labelledby="hero-title">
-        <div class="eyebrow"><span class="status-dot"></span><span id="release-status">THE LATEST RELEASE</span></div>
-        <h1 id="hero-title">FLUX<br /><span>Netflix but Powered by BDIX</span></h1>
-        <p class="intro">A free, open-source streaming app for Windows.<br class="desktop-break" /> Powered by BDIX. Ready when you are.</p>
+      <div class="main-content" id="top">
+        <div class="hero-grid">
+          <section class="hero" aria-labelledby="hero-title">
+            <div class="eyebrow"><span class="status-dot"></span><span id="release-status">Latest release</span></div>
+            <h1 id="hero-title">FLUX<span>Netflix but Powered by BDIX</span></h1>
+            <p class="intro">A free, open-source streaming app for Windows, powered by BDIX.</p>
 
-        <div class="download-stats-bar" aria-label="FLUX downloads and total downloads">
-          <a class="download-stats-action setup" id="download-badge-link" href="https://github.com/shifatsrm09/FLUX/releases/latest" aria-label="Download FLUX setup installer">DOWNLOAD FLUX</a>
-          <a class="download-stats-action portable" id="portable-badge-link" href="https://github.com/shifatsrm09/FLUX/releases/latest" aria-label="Download portable FLUX">DOWNLOAD PORTABLE</a>
-          <div class="download-stats-total" aria-label="Total downloads"><span>TOTAL DOWNLOADS</span><strong id="portable-badge-total">—</strong></div>
+            <div class="download-stats-bar" aria-label="FLUX downloads and total downloads">
+              <a class="download-stats-action setup" id="download-badge-link" href="https://github.com/shifatsrm09/FLUX/releases/latest" aria-label="Download FLUX setup installer">DOWNLOAD FLUX</a>
+              <a class="download-stats-action portable" id="portable-badge-link" href="https://github.com/shifatsrm09/FLUX/releases/latest" aria-label="Download portable FLUX">DOWNLOAD PORTABLE</a>
+              <div class="download-stats-total" aria-label="Total downloads"><span>TOTAL DOWNLOADS</span><strong id="portable-badge-total">—</strong></div>
+            </div>
+            <p class="release-note" id="release-note" aria-live="polite">Finding the latest release…</p>
+            <button class="network-check-trigger" id="network-check-open" type="button">
+              <svg class="network-check-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 10h3l2-4 4 8 2-4h4" /></svg>
+              Can I run FLUX?
+              <svg class="network-check-arrow" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 15 15 5M6 5h9v9" /></svg>
+            </button>
+          </section>
+
+          <figure class="app-preview">
+            <img src="https://raw.githubusercontent.com/shifatsrm09/FLUX/main/resources/looks/homepage.png" alt="The FLUX Windows app showing its home screen and streaming library" fetchpriority="high" />
+            <figcaption><span class="preview-indicator"></span>FLUX for Windows</figcaption>
+          </figure>
         </div>
-        <p class="release-note" id="release-note" aria-live="polite">Finding the latest release…</p>
-        <button class="network-check-trigger" id="network-check-open" type="button">
-          <span class="network-check-icon" aria-hidden="true">⌁</span>
-          Can I run FLUX?
-          <span class="network-check-arrow" aria-hidden="true">↗</span>
-        </button>
 
         <section class="platforms" aria-labelledby="platforms-title">
           <div class="platforms-heading">
             <h2 id="platforms-title">Supported platforms</h2>
-            <span>AT A GLANCE</span>
+            <span>Windows app available</span>
           </div>
           <div class="platform-table-wrap">
             <table class="platform-table">
@@ -50,23 +59,22 @@
                 <tr><th scope="col">Platform</th><th scope="col">Availability</th></tr>
               </thead>
               <tbody>
-                <tr><th scope="row">Windows</th><td><span class="platform-status available"><span aria-hidden="true">✓</span> Available</span></td></tr>
-                <tr><th scope="row">Android</th><td><span class="platform-status developing"><span aria-hidden="true">↗</span> In development</span></td></tr>
-                <tr><th scope="row">Linux</th><td><span class="platform-status developing"><span aria-hidden="true">↗</span> In development</span></td></tr>
-                <tr><th scope="row">iOS</th><td><span class="platform-status planned"><span aria-hidden="true">—</span> Not available yet</span></td></tr>
+                <tr><th scope="row">Windows</th><td><span class="platform-status available"><span aria-hidden="true"></span>Available</span></td></tr>
+                <tr><th scope="row">Android</th><td><span class="platform-status developing"><span aria-hidden="true"></span>In development</span></td></tr>
+                <tr><th scope="row">Linux</th><td><span class="platform-status developing"><span aria-hidden="true"></span>In development</span></td></tr>
+                <tr><th scope="row">iOS</th><td><span class="platform-status planned"><span aria-hidden="true"></span>Not available yet</span></td></tr>
               </tbody>
             </table>
           </div>
         </section>
-      </section>
+      </div>
 
-      <footer class="footer"><span>No account. No subscription.</span><span class="footer-right">OPEN SOURCE <span class="footer-dot">·</span> NATIVE WINDOWS</span></footer>
-      <div class="orb orb-one" aria-hidden="true"></div><div class="orb orb-two" aria-hidden="true"></div>
+      <footer class="footer"><span>No account. No subscription.</span><span class="footer-right">Open source <span class="footer-dot">·</span> Native Windows</span></footer>
     </main>
     <dialog class="network-dialog" id="network-check-dialog" aria-labelledby="network-dialog-title">
       <div class="network-dialog-head">
         <div>
-          <p class="network-dialog-kicker">LOCAL NETWORK TEST</p>
+          <p class="network-dialog-kicker">Local network test</p>
           <h2 id="network-dialog-title">Before you check</h2>
         </div>
         <button class="network-dialog-close" id="network-check-close" type="button" aria-label="Close network check">×</button>

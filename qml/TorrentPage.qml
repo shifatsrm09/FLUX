@@ -11,9 +11,14 @@ Item {
     property bool active: false
     property bool autoPlay: true
     property bool autoPlayTriggered: false
-    property string activeTab: "search" // "search" | "direct"
-    property string currentCategory: "all"
-    property bool searchResultsCollapsed: false
+    property string activeTab: "tork" // "tork" | "1337x" | "direct"
+    property bool activeOnly: false   // Torrents with > 50 seeders
+
+    // Category filter checkboxes (Movies, TV, Anime)
+    property bool catMovies: true
+    property bool catTV: true
+    property bool catAnime: true
+
     property string toastMessage: ""
     property bool showToast: false
 
@@ -28,15 +33,28 @@ Item {
             }
         }
         function onMagnetCopied(magnet) {
-            root.toastMessage = "Magnet link copied to clipboard!"
+            root.toastMessage = "Magnet link copied to clipboard"
             root.showToast = true
             toastTimer.restart()
+        }
+        function onDownloadStarted(title) {
+            root.toastMessage = "Download queued: " + title
+            root.showToast = true
+            toastTimer.restart()
+        }
+        function onDownloadRequested(url, title) {
+            if (typeof fluxDownloads !== "undefined" && fluxDownloads && url && url.length > 0) {
+                fluxDownloads.downloadFile(url, title)
+                root.toastMessage = "Download started in Downloads panel"
+                root.showToast = true
+                toastTimer.restart()
+            }
         }
     }
 
     Timer {
         id: toastTimer
-        interval: 2500
+        interval: 2200
         onTriggered: root.showToast = false
     }
 
@@ -74,175 +92,199 @@ Item {
 
     function executeSearch(query) {
         var q = (query !== undefined ? query : searchInput.text).trim()
-        if (q.length > 0 && fluxTorrent) {
-            root.searchResultsCollapsed = false
-            fluxTorrent.search1337x(q, root.currentCategory)
+        if (!q.length || !fluxTorrent) return
+
+        var cat = "all"
+        if (root.catMovies && !root.catTV && !root.catAnime) cat = "movies"
+        else if (!root.catMovies && root.catTV && !root.catAnime) cat = "tv"
+        else if (!root.catMovies && !root.catTV && root.catAnime) cat = "anime"
+
+        if (root.activeTab === "tork") {
+            fluxTorrent.searchTork(q, cat)
+        } else if (root.activeTab === "1337x") {
+            fluxTorrent.search1337x(q, cat)
         }
     }
 
-    Flickable {
-        id: flick
+    function getTypeBadge(name, category) {
+        var lower = (name || "").toLowerCase()
+        var cat = (category || "").toLowerCase()
+
+        if (lower.indexOf("2160p") !== -1 || lower.indexOf("4k") !== -1) {
+            return { tag: "4K UHD", text: "WEB-DL", fg: "#e9d5ff", border: "#7e22ce", bg: "#231535" }
+        }
+        if (cat.indexOf("anime") !== -1) {
+            return { tag: "ANIME", text: "SERIES", fg: "#fbcfe8", border: "#be185d", bg: "#301323" }
+        }
+        if (lower.indexOf("s0") !== -1 || lower.indexOf("season") !== -1 || cat.indexOf("tv") !== -1) {
+            return { tag: "HD", text: "SEASONS", fg: "#fecdd3", border: "#be123c", bg: "#2f121d" }
+        }
+        if (lower.indexOf("web-dl") !== -1 || lower.indexOf("webrip") !== -1) {
+            return { tag: "HD", text: "WEB-DL", fg: "#a5f3fc", border: "#0e7490", bg: "#10252f" }
+        }
+        if (lower.indexOf("1080p") !== -1) {
+            return { tag: "FHD", text: "1080p", fg: "#bae6fd", border: "#0284c7", bg: "#102334" }
+        }
+        if (lower.indexOf("720p") !== -1) {
+            return { tag: "HD", text: "720p", fg: "#c7d2fe", border: "#4338ca", bg: "#141733" }
+        }
+        return { tag: "HD", text: "MOVIE", fg: "#99f6e4", border: "#0f766e", bg: "#102827" }
+    }
+
+    function getProviderColor(prov) {
+        var p = (prov || "").toUpperCase()
+        if (p.indexOf("TPB") !== -1) return "#fbbf24"
+        if (p.indexOf("YTS") !== -1) return "#34d399"
+        if (p.indexOf("RARBG") !== -1) return "#c084fc"
+        if (p.indexOf("NYAA") !== -1) return "#f472b6"
+        if (p.indexOf("1337X") !== -1) return "#f87171"
+        return "#a0aec0"
+    }
+
+    function filterList(sourceList) {
+        if (!sourceList) return []
+        var res = []
+        for (var i = 0; i < sourceList.length; i++) {
+            var item = sourceList[i]
+            var seeds = item.seeds !== undefined ? item.seeds : (item.seeders !== undefined ? item.seeders : 0)
+
+            // ACTIVE toggle filter: > 50 seeders
+            if (root.activeOnly && seeds <= 50) {
+                continue
+            }
+
+            var cat = (item.category || "").toLowerCase()
+            var name = (item.name || "").toLowerCase()
+
+            var matchesCat = false
+            if (!root.catMovies && !root.catTV && !root.catAnime) {
+                matchesCat = true
+            } else {
+                if (root.catMovies && (cat.indexOf("movie") !== -1 || name.indexOf("bluray") !== -1 || name.indexOf("1080p") !== -1 || cat === "general" || cat === "")) matchesCat = true
+                if (root.catTV && (cat.indexOf("tv") !== -1 || name.indexOf("s0") !== -1 || name.indexOf("season") !== -1)) matchesCat = true
+                if (root.catAnime && cat.indexOf("anime") !== -1) matchesCat = true
+            }
+
+            if (matchesCat) {
+                var copy = Object.assign({}, item)
+                copy.itemIndex = i
+                copy.seedsVal = seeds
+                copy.leechesVal = item.leeches !== undefined ? item.leeches : (item.leechers !== undefined ? item.leechers : 0)
+                res.push(copy)
+            }
+        }
+        return res
+    }
+
+    property var displayedItems: {
+        if (!fluxTorrent) return []
+        if (root.activeTab === "tork") {
+            return filterList(fluxTorrent.torkResults)
+        } else if (root.activeTab === "1337x") {
+            return filterList(fluxTorrent.searchResults)
+        }
+        return []
+    }
+
+    // Outer Background matching screenshot
+    Rectangle {
         anchors.fill: parent
-        anchors.topMargin: root.topInset
-        contentWidth: width
-        contentHeight: contentCol.implicitHeight + 100
-        clip: true
+        color: "#1a222b"
 
         ColumnLayout {
-            id: contentCol
-            width: Math.min(parent.width - 64, 960)
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 24
+            anchors.fill: parent
+            anchors.topMargin: root.topInset + 10
+            anchors.leftMargin: 24
+            anchors.rightMargin: 24
+            anchors.bottomMargin: 16
+            spacing: 16
 
-            Item { implicitHeight: 12 }
-
-            // ---- Header ----
-            ColumnLayout {
-                spacing: 8
+            // ---- 1. Top Header Row ----
+            RowLayout {
                 Layout.fillWidth: true
-
-                RowLayout {
-                    spacing: 12
-                    Rectangle {
-                        width: 36
-                        height: 36
-                        radius: 10
-                        color: Theme.accentSoft
-                        border.width: 1
-                        border.color: Theme.accent
-
-                        FluxIcon {
-                            anchors.centerIn: parent
-                            name: "download"
-                            size: 18
-                            color: Theme.accent
-                        }
-                    }
-
-                    Text {
-                        text: "Torrent Streamer"
-                        color: "#FFFFFF"
-                        font.pixelSize: 26
-                        font.weight: Font.Bold
-                    }
-                }
+                spacing: 20
 
                 Text {
-                    text: "Search 1337x for movies, TV shows, and anime, or stream directly from magnet links."
-                    color: Theme.textDim
-                    font.pixelSize: 14
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
+                    text: "Torrents"
+                    color: "#e2e8f0"
+                    font.pixelSize: 26
+                    font.weight: Font.DemiBold
                 }
-            }
 
-            // ---- Engine Setup Banner (shown if downloading TorrServer) ----
-            Rectangle {
-                visible: !!fluxTorrent && fluxTorrent.isSettingUp
-                Layout.fillWidth: true
-                implicitHeight: setupCol.implicitHeight + 24
-                radius: 12
-                color: Theme.surface
-                border.width: 1
-                border.color: Theme.accent
-
-                ColumnLayout {
-                    id: setupCol
-                    anchors.fill: parent
-                    anchors.margins: 16
-                    spacing: 10
-
-                    RowLayout {
-                        spacing: 8
-                        BusyIndicator {
-                            running: true
-                            implicitWidth: 18
-                            implicitHeight: 18
-                        }
-                        Text {
-                            text: fluxTorrent ? fluxTorrent.setupStatus : "Setting up torrent engine..."
-                            color: Theme.text
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
-                        }
-                    }
-
-                    ProgressBar {
-                        Layout.fillWidth: true
-                        value: fluxTorrent ? fluxTorrent.setupProgress : 0
-                    }
-                }
-            }
-
-            // ---- Mode Selector Segmented Tabs ----
-            Rectangle {
-                Layout.fillWidth: true
-                height: 48
-                radius: 12
-                color: Theme.surface
-                border.width: 1
-                border.color: Theme.border
-
+                // Center Segmented Source Tabs [ Tork | 1337x | Direct Magnet ]
                 RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: 4
-                    spacing: 6
+                    spacing: 0
+                    Layout.alignment: Qt.AlignHCenter
 
-                    // Search 1337x Tab Button
                     Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        radius: 9
-                        color: root.activeTab === "search" ? Theme.accent : "transparent"
+                        implicitWidth: torkTabText.implicitWidth + 40
+                        height: 38
+                        radius: 0
+                        color: root.activeTab === "tork" ? "#0d9488" : "#1e2934"
+                        border.width: 1
+                        border.color: "#2a3746"
 
-                        RowLayout {
+                        Text {
+                            id: torkTabText
                             anchors.centerIn: parent
-                            spacing: 8
-
-                            FluxIcon {
-                                name: "search"
-                                size: 15
-                                color: root.activeTab === "search" ? "#FFFFFF" : Theme.textDim
-                            }
-
-                            Text {
-                                text: "Search 1337x"
-                                color: root.activeTab === "search" ? "#FFFFFF" : Theme.text
-                                font.pixelSize: 13
-                                font.weight: root.activeTab === "search" ? Font.Bold : Font.Normal
-                            }
+                            text: "Tork"
+                            color: root.activeTab === "tork" ? "#ffffff" : "#94a3b8"
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
                         }
 
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.activeTab = "search"
+                            onClicked: {
+                                root.activeTab = "tork"
+                                if (searchInput.text.trim().length > 0) root.executeSearch()
+                            }
                         }
                     }
 
-                    // Direct Magnet / File Tab Button
                     Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        radius: 9
-                        color: root.activeTab === "direct" ? Theme.accent : "transparent"
+                        implicitWidth: x1337TabText.implicitWidth + 40
+                        height: 38
+                        radius: 0
+                        color: root.activeTab === "1337x" ? "#0d9488" : "#1e2934"
+                        border.width: 1
+                        border.color: "#2a3746"
 
-                        RowLayout {
+                        Text {
+                            id: x1337TabText
                             anchors.centerIn: parent
-                            spacing: 8
+                            text: "1337x"
+                            color: root.activeTab === "1337x" ? "#ffffff" : "#94a3b8"
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
+                        }
 
-                            FluxIcon {
-                                name: "download"
-                                size: 15
-                                color: root.activeTab === "direct" ? "#FFFFFF" : Theme.textDim
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.activeTab = "1337x"
+                                if (searchInput.text.trim().length > 0) root.executeSearch()
                             }
+                        }
+                    }
 
-                            Text {
-                                text: "Magnet Link / Torrent File"
-                                color: root.activeTab === "direct" ? "#FFFFFF" : Theme.text
-                                font.pixelSize: 13
-                                font.weight: root.activeTab === "direct" ? Font.Bold : Font.Normal
-                            }
+                    Rectangle {
+                        implicitWidth: directTabText.implicitWidth + 40
+                        height: 38
+                        radius: 0
+                        color: root.activeTab === "direct" ? "#0d9488" : "#1e2934"
+                        border.width: 1
+                        border.color: "#2a3746"
+
+                        Text {
+                            id: directTabText
+                            anchors.centerIn: parent
+                            text: "Direct Magnet"
+                            color: root.activeTab === "direct" ? "#ffffff" : "#94a3b8"
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
                         }
 
                         MouseArea {
@@ -252,656 +294,619 @@ Item {
                         }
                     }
                 }
+
+                Item { Layout.fillWidth: true }
             }
 
-            // ==========================================
-            // TAB 1: 1337x SEARCH SECTION
-            // ==========================================
-            Rectangle {
-                visible: root.activeTab === "search"
+            // ---- 2. Category Checkboxes Row (Scaled & Readable) ----
+            RowLayout {
+                visible: root.activeTab !== "direct"
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 40
+
+                // Movies Checkbox
+                RowLayout {
+                    spacing: 10
+                    Rectangle {
+                        width: 20
+                        height: 20
+                        radius: 3
+                        color: root.catMovies ? "#222c37" : "#161c24"
+                        border.width: 1
+                        border.color: root.catMovies ? "#64748b" : "#334155"
+
+                        Text {
+                            visible: root.catMovies
+                            anchors.centerIn: parent
+                            text: "✓"
+                            color: "#14b8a6"
+                            font.pixelSize: 14
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.catMovies = !root.catMovies
+                        }
+                    }
+                    Text {
+                        text: "Movies"
+                        color: root.catMovies ? "#e2e8f0" : "#808f9f"
+                        font.pixelSize: 15
+                        font.weight: Font.Medium
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.catMovies = !root.catMovies
+                        }
+                    }
+                }
+
+                // TV Checkbox
+                RowLayout {
+                    spacing: 10
+                    Rectangle {
+                        width: 20
+                        height: 20
+                        radius: 3
+                        color: root.catTV ? "#222c37" : "#161c24"
+                        border.width: 1
+                        border.color: root.catTV ? "#64748b" : "#334155"
+
+                        Text {
+                            visible: root.catTV
+                            anchors.centerIn: parent
+                            text: "✓"
+                            color: "#14b8a6"
+                            font.pixelSize: 14
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.catTV = !root.catTV
+                        }
+                    }
+                    Text {
+                        text: "TV"
+                        color: root.catTV ? "#e2e8f0" : "#808f9f"
+                        font.pixelSize: 15
+                        font.weight: Font.Medium
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.catTV = !root.catTV
+                        }
+                    }
+                }
+
+                // Anime Checkbox
+                RowLayout {
+                    spacing: 10
+                    Rectangle {
+                        width: 20
+                        height: 20
+                        radius: 3
+                        color: root.catAnime ? "#222c37" : "#161c24"
+                        border.width: 1
+                        border.color: root.catAnime ? "#64748b" : "#334155"
+
+                        Text {
+                            visible: root.catAnime
+                            anchors.centerIn: parent
+                            text: "✓"
+                            color: "#14b8a6"
+                            font.pixelSize: 14
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.catAnime = !root.catAnime
+                        }
+                    }
+                    Text {
+                        text: "Anime"
+                        color: root.catAnime ? "#e2e8f0" : "#808f9f"
+                        font.pixelSize: 15
+                        font.weight: Font.Medium
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.catAnime = !root.catAnime
+                        }
+                    }
+                }
+            }
+
+            // ---- 3. Search Bar + Active Switch Row ----
+            RowLayout {
+                visible: root.activeTab !== "direct"
                 Layout.fillWidth: true
-                implicitHeight: searchSectionCol.implicitHeight + 36
-                radius: 16
-                color: Theme.surface
-                border.width: 1
-                border.color: Theme.border
+                spacing: 20
 
-                ColumnLayout {
-                    id: searchSectionCol
-                    anchors.fill: parent
-                    anchors.margins: 20
-                    spacing: 18
+                // Search by name input box
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 44
+                    radius: 3
+                    color: "#161c23"
+                    border.width: 1
+                    border.color: searchInput.activeFocus ? "#475569" : "#242d38"
 
-                    // Search Bar
                     RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 10
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 12
+                        spacing: 12
 
-                        Rectangle {
+                        TextInput {
+                            id: searchInput
                             Layout.fillWidth: true
-                            height: 48
-                            radius: 10
-                            color: Theme.surfaceHi
-                            border.width: 1
-                            border.color: searchInput.activeFocus ? Theme.accent : Theme.border
+                            color: "#e2e8f0"
+                            font.pixelSize: 15
+                            verticalAlignment: TextInput.AlignVCenter
+                            clip: true
+                            selectByMouse: true
 
-                            RowLayout {
+                            Text {
                                 anchors.fill: parent
-                                anchors.leftMargin: 14
-                                anchors.rightMargin: 12
-                                spacing: 10
+                                text: "Search by name"
+                                color: "#64748b"
+                                font.pixelSize: 15
+                                verticalAlignment: Text.AlignVCenter
+                                visible: !searchInput.text && !searchInput.activeFocus
+                            }
 
-                                FluxIcon {
-                                    name: "search"
-                                    size: 16
-                                    color: searchInput.activeFocus ? Theme.accent : Theme.textDim
-                                }
+                            onAccepted: root.executeSearch()
+                        }
 
-                                TextInput {
-                                    id: searchInput
-                                    Layout.fillWidth: true
-                                    color: Theme.text
-                                    font.pixelSize: 14
-                                    verticalAlignment: TextInput.AlignVCenter
-                                    clip: true
-                                    selectByMouse: true
-
-                                    Text {
-                                        anchors.fill: parent
-                                        text: "Search movies, TV shows, anime on 1337x (e.g., Inception, Dune)..."
-                                        color: Theme.textDim
-                                        font.pixelSize: 14
-                                        verticalAlignment: Text.AlignVCenter
-                                        visible: !searchInput.text && !searchInput.activeFocus
-                                    }
-
-                                    onAccepted: root.executeSearch()
-                                }
-
-                                // Clear Button
-                                Rectangle {
-                                    visible: searchInput.text.length > 0
-                                    width: 24
-                                    height: 24
-                                    radius: 12
-                                    color: "transparent"
-                                    FluxIcon {
-                                        anchors.centerIn: parent
-                                        name: "close"
-                                        size: 12
-                                        color: Theme.textDim
-                                    }
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            searchInput.text = ""
-                                            if (fluxTorrent) fluxTorrent.clearSearchResults()
-                                        }
+                        Text {
+                            visible: searchInput.text.length > 0
+                            text: "✕"
+                            color: "#94a3b8"
+                            font.pixelSize: 15
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    searchInput.text = ""
+                                    if (fluxTorrent) {
+                                        if (root.activeTab === "tork") fluxTorrent.clearTorkResults()
+                                        else fluxTorrent.clearSearchResults()
                                     }
                                 }
                             }
                         }
 
-                        // Search Submit Button
-                        Rectangle {
-                            implicitWidth: searchBtnRow.implicitWidth + 30
-                            height: 48
-                            radius: 10
-                            color: searchMouse.containsMouse ? Theme.accentHi : Theme.accent
-
-                            RowLayout {
-                                id: searchBtnRow
-                                anchors.centerIn: parent
-                                spacing: 8
-
-                                FluxIcon {
-                                    name: "search"
-                                    size: 14
-                                    color: "#FFFFFF"
-                                }
-
-                                Text {
-                                    text: "Search"
-                                    color: "#FFFFFF"
-                                    font.pixelSize: 14
-                                    font.weight: Font.Bold
-                                }
-                            }
-
+                        // Search Icon
+                        Text {
+                            text: "🔍"
+                            font.pixelSize: 16
+                            color: "#14b8a6"
                             MouseArea {
-                                id: searchMouse
                                 anchors.fill: parent
-                                hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: root.executeSearch()
                             }
                         }
                     }
+                }
 
-                    // Category Filter Pills (Only All, Movies, TV Shows, Anime)
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
+                // Active Switch (Pill toggle from Screenshot)
+                RowLayout {
+                    spacing: 10
+                    Layout.alignment: Qt.AlignVCenter
 
-                        Repeater {
-                            model: [
-                                { label: "All", id: "all" },
-                                { label: "Movies", id: "Movies" },
-                                { label: "TV Shows", id: "TV" },
-                                { label: "Anime", id: "Anime" }
-                            ]
-
-                            delegate: Rectangle {
-                                implicitWidth: catText.implicitWidth + 24
-                                height: 32
-                                radius: 16
-                                color: root.currentCategory === modelData.id ? Theme.accentSoft : (catMouse.containsMouse ? Theme.surfaceHi : "transparent")
-                                border.width: 1
-                                border.color: root.currentCategory === modelData.id ? Theme.accent : Theme.border
-
-                                Text {
-                                    id: catText
-                                    anchors.centerIn: parent
-                                    text: modelData.label
-                                    color: root.currentCategory === modelData.id ? Theme.accent : Theme.textDim
-                                    font.pixelSize: 12
-                                    font.weight: root.currentCategory === modelData.id ? Font.Bold : Font.Normal
-                                }
-
-                                MouseArea {
-                                    id: catMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        root.currentCategory = modelData.id
-                                        if (searchInput.text.trim().length > 0) {
-                                            root.executeSearch()
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    // Loading State Banner
                     Rectangle {
-                        visible: !!fluxTorrent && fluxTorrent.isSearching1337x
-                        Layout.fillWidth: true
-                        height: 50
-                        radius: 10
-                        color: Theme.surfaceHi
-
-                        RowLayout {
-                            anchors.centerIn: parent
-                            spacing: 12
-                            BusyIndicator {
-                                running: true
-                                implicitWidth: 20
-                                implicitHeight: 20
-                            }
-                            Text {
-                                text: "Searching 1337x for \"" + searchInput.text.trim() + "\"..."
-                                color: Theme.text
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                            }
-                        }
-                    }
-
-                    // Resolving Magnet Banner
-                    Rectangle {
-                        visible: !!fluxTorrent && fluxTorrent.isResolvingMagnet
-                        Layout.fillWidth: true
-                        height: 52
-                        radius: 10
-                        color: "#1A06B6D4"
-                        border.width: 1
-                        border.color: "#06B6D4"
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 14
-                            spacing: 12
-
-                            BusyIndicator {
-                                running: true
-                                implicitWidth: 18
-                                implicitHeight: 18
-                            }
-
-                            Text {
-                                text: "Resolving magnet link for: " + (fluxTorrent ? fluxTorrent.resolvingTorrentName : "")
-                                color: "#06B6D4"
-                                font.pixelSize: 13
-                                font.weight: Font.Bold
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                        }
-                    }
-
-                    // Search Error Notice
-                    Rectangle {
-                        visible: !!fluxTorrent && fluxTorrent.searchError.length > 0
-                        Layout.fillWidth: true
-                        implicitHeight: errText.implicitHeight + 20
-                        radius: 10
-                        color: "#1AFF4D5E"
-                        border.width: 1
-                        border.color: "#FF4D5E"
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 12
-                            spacing: 10
-
-                            FluxIcon {
-                                name: "close"
-                                size: 16
-                                color: "#FF4D5E"
-                            }
-
-                            Text {
-                                id: errText
-                                text: fluxTorrent ? fluxTorrent.searchError : ""
-                                color: "#FF4D5E"
-                                font.pixelSize: 13
-                                wrapMode: Text.WordWrap
-                                Layout.fillWidth: true
-                            }
-                        }
-                    }
-
-                    // Initial State / Quick Suggestions (when no search yet)
-                    ColumnLayout {
-                        visible: !fluxTorrent || (!fluxTorrent.isSearching1337x && fluxTorrent.searchResults.length === 0 && fluxTorrent.searchError.length === 0)
-                        Layout.fillWidth: true
-                        spacing: 12
-
-                        Text {
-                            text: "Popular searches:"
-                            color: Theme.textDim
-                            font.pixelSize: 12
-                        }
-
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Repeater {
-                                model: ["Inception", "Dune: Part Two", "Interstellar", "Arcane", "Oppenheimer", "Breaking Bad", "Shogun"]
-
-                                delegate: Rectangle {
-                                    implicitWidth: chipRow.implicitWidth + 20
-                                    height: 30
-                                    radius: 15
-                                    color: chipMouse.containsMouse ? Theme.surfaceHi : "#14FFFFFF"
-                                    border.width: 1
-                                    border.color: Theme.border
-
-                                    RowLayout {
-                                        id: chipRow
-                                        anchors.centerIn: parent
-                                        spacing: 6
-
-                                        FluxIcon {
-                                            name: "search"
-                                            size: 11
-                                            color: Theme.accent
-                                        }
-
-                                        Text {
-                                            text: modelData
-                                            color: Theme.text
-                                            font.pixelSize: 12
-                                        }
-                                    }
-
-                                    MouseArea {
-                                        id: chipMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            searchInput.text = modelData
-                                            root.executeSearch(modelData)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Collapsed Search Results Notice / Reopen Bar
-                    Rectangle {
-                        visible: root.searchResultsCollapsed && !!fluxTorrent && fluxTorrent.searchResults.length > 0
-                        Layout.fillWidth: true
-                        height: 48
-                        radius: 10
-                        color: Theme.surfaceHi
-                        border.width: 1
-                        border.color: Theme.border
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 16
-                            anchors.rightMargin: 12
-                            spacing: 12
-
-                            FluxIcon {
-                                name: "search"
-                                size: 14
-                                color: Theme.accent
-                            }
-
-                            Text {
-                                text: "Search results (" + fluxTorrent.searchResults.length + " items for \"" + searchInput.text.trim() + "\")"
-                                color: Theme.text
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                Layout.fillWidth: true
-                                elide: Text.ElideRight
-                            }
-
-                            Rectangle {
-                                implicitWidth: reopenBtnRow.implicitWidth + 22
-                                height: 32
-                                radius: 8
-                                color: reopenMouse.containsMouse ? Theme.accent : Theme.accentSoft
-                                border.width: 1
-                                border.color: Theme.accent
-
-                                RowLayout {
-                                    id: reopenBtnRow
-                                    anchors.centerIn: parent
-                                    spacing: 6
-
-                                    FluxIcon {
-                                        name: "search"
-                                        size: 12
-                                        color: reopenMouse.containsMouse ? "#FFFFFF" : Theme.accent
-                                    }
-
-                                    Text {
-                                        text: "Reopen Results"
-                                        color: reopenMouse.containsMouse ? "#FFFFFF" : Theme.accent
-                                        font.pixelSize: 12
-                                        font.weight: Font.Bold
-                                    }
-                                }
-
-                                MouseArea {
-                                    id: reopenMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.searchResultsCollapsed = false
-                                }
-                            }
-                        }
-                    }
-
-                    // Expanded Search Results List Header
-                    RowLayout {
-                        visible: !root.searchResultsCollapsed && !!fluxTorrent && fluxTorrent.searchResults.length > 0
-                        Layout.fillWidth: true
-                        spacing: 10
-
-                        Text {
-                            text: "Results (" + (fluxTorrent ? fluxTorrent.searchResults.length : 0) + ")"
-                            color: "#FFFFFF"
-                            font.pixelSize: 14
-                            font.weight: Font.Bold
-                        }
+                        width: 44
+                        height: 24
+                        radius: 12
+                        color: root.activeOnly ? "#0d9488" : "#2d3748"
 
                         Rectangle {
-                            implicitWidth: sortedText.implicitWidth + 14
-                            height: 22
-                            radius: 11
-                            color: "#1A22C55E"
-                            border.width: 1
-                            border.color: "#22C55E"
+                            x: root.activeOnly ? 22 : 2
+                            y: 2
+                            width: 20
+                            height: 20
+                            radius: 10
+                            color: "#e2e8f0"
 
-                            Text {
-                                id: sortedText
-                                anchors.centerIn: parent
-                                text: "Sorted by Seeders"
-                                color: "#22C55E"
-                                font.pixelSize: 11
-                                font.weight: Font.DemiBold
+                            Behavior on x {
+                                NumberAnimation { duration: 120 }
                             }
                         }
 
-                        Item { Layout.fillWidth: true }
-
-                        // Hide / Collapse button
-                        Text {
-                            text: "Hide results"
-                            color: Theme.textDim
-                            font.pixelSize: 12
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.searchResultsCollapsed = true
-                            }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.activeOnly = !root.activeOnly
                         }
+                    }
 
-                        Text {
-                            text: "·"
-                            color: Theme.textDim
-                            font.pixelSize: 12
+                    Text {
+                        text: "Active"
+                        color: root.activeOnly ? "#2dd4bf" : "#a0aec0"
+                        font.pixelSize: 15
+                        font.weight: root.activeOnly ? Font.Bold : Font.Normal
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.activeOnly = !root.activeOnly
                         }
+                    }
+                }
+            }
 
-                        // Clear button
-                        Text {
-                            text: "Clear"
-                            color: Theme.textDim
-                            font.pixelSize: 12
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (fluxTorrent) fluxTorrent.clearSearchResults()
+            // ---- Active Torrent Stream Status Bar ----
+            Rectangle {
+                visible: !!fluxTorrent && fluxTorrent.status !== "idle" && fluxTorrent.status !== "error"
+                Layout.fillWidth: true
+                height: 36
+                color: "#161c24"
+                border.width: 1
+                border.color: "#242d38"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14
+                    anchors.rightMargin: 14
+                    spacing: 10
+
+                    Rectangle {
+                        width: 8
+                        height: 8
+                        radius: 4
+                        color: (fluxTorrent && fluxTorrent.status === "ready") ? "#22c55e" : "#0d9488"
+                    }
+
+                    Text {
+                        text: fluxTorrent ? (fluxTorrent.torrentName + " — " + fluxTorrent.statusMessage) : ""
+                        color: "#cbd5e1"
+                        font.pixelSize: 13
+                        font.weight: Font.Medium
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        visible: fluxTorrent ? fluxTorrent.isReadyToPlay : false
+                        text: "[Play in FLUX]"
+                        color: "#2dd4bf"
+                        font.pixelSize: 13
+                        font.bold: true
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (fluxTorrent && fluxTorrent.streamUrl) {
+                                    root.playRequested(fluxTorrent.streamUrl, fluxTorrent.torrentName)
+                                }
                             }
                         }
                     }
 
-                    // Search Results Items
-                    ColumnLayout {
-                        visible: !root.searchResultsCollapsed && !!fluxTorrent && fluxTorrent.searchResults.length > 0
+                    Text {
+                        text: "Stop"
+                        color: "#f87171"
+                        font.pixelSize: 12
+                        font.bold: true
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (fluxTorrent) fluxTorrent.stopTorrent()
+                        }
+                    }
+                }
+            }
+
+            // ---- Searching Status ----
+            Text {
+                visible: !!fluxTorrent && (fluxTorrent.isSearchingTork || fluxTorrent.isSearching1337x)
+                text: "Searching..."
+                color: "#94a3b8"
+                font.pixelSize: 13
+                Layout.alignment: Qt.AlignHCenter
+            }
+
+            // ==============================================================
+            // 4. MAIN TORRENTS TABLE VIEW (Generous, highly readable sizes)
+            // ==============================================================
+            Item {
+                visible: root.activeTab !== "direct"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 0
+
+                    // ---- TABLE HEADER ROW ----
+                    Rectangle {
                         Layout.fillWidth: true
-                        spacing: 10
+                        height: 42
+                        color: "transparent"
 
-                        Repeater {
-                            model: fluxTorrent ? fluxTorrent.searchResults : []
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: 1
+                            color: "#242d38"
+                        }
 
-                            delegate: Rectangle {
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            spacing: 14
+
+                            Text {
+                                text: "Type"
+                                color: "#14b8a6"
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                                Layout.preferredWidth: 80
+                            }
+
+                            Text {
+                                text: "Name"
+                                color: "#14b8a6"
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
                                 Layout.fillWidth: true
-                                implicitHeight: resultCardCol.implicitHeight + 24
-                                radius: 12
-                                color: resMouse.containsMouse ? Theme.surfaceHi : "#12FFFFFF"
-                                border.width: 1
-                                border.color: resMouse.containsMouse ? Theme.borderHi : Theme.border
+                            }
 
-                                ColumnLayout {
-                                    id: resultCardCol
-                                    anchors.fill: parent
-                                    anchors.margins: 14
-                                    spacing: 12
+                            Text {
+                                text: "DL"
+                                color: "#14b8a6"
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                                horizontalAlignment: Text.AlignHCenter
+                                Layout.preferredWidth: 104
+                            }
 
-                                    // Top Row: Title
-                                    Text {
-                                        text: modelData.name
-                                        color: "#FFFFFF"
-                                        font.pixelSize: 14
-                                        font.weight: Font.DemiBold
-                                        elide: Text.ElideRight
-                                        Layout.fillWidth: true
+                            Text {
+                                text: "Uploader"
+                                color: "#14b8a6"
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                                Layout.preferredWidth: 110
+                            }
+
+                            Text {
+                                text: "Size"
+                                color: "#14b8a6"
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                                Layout.preferredWidth: 92
+                            }
+
+                            Text {
+                                text: "S"
+                                color: "#14b8a6"
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                                horizontalAlignment: Text.AlignHCenter
+                                Layout.preferredWidth: 50
+                            }
+
+                            Text {
+                                text: "L"
+                                color: "#14b8a6"
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                                horizontalAlignment: Text.AlignHCenter
+                                Layout.preferredWidth: 50
+                            }
+                        }
+                    }
+
+                    // ---- EMPTY STATE ----
+                    Item {
+                        visible: root.displayedItems.length === 0 && !(fluxTorrent && (fluxTorrent.isSearchingTork || fluxTorrent.isSearching1337x))
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: root.activeOnly ? "No active torrents found with > 50 seeders" : "No torrents found. Type a query above to search."
+                            color: "#64748b"
+                            font.pixelSize: 15
+                        }
+                    }
+
+                    // ---- TABLE BODY ----
+                    ListView {
+                        id: torrentsListView
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        model: root.displayedItems
+
+                        delegate: Rectangle {
+                            id: rowRect
+                            width: torrentsListView.width
+                            height: 62
+                            color: rowHover.containsMouse ? "#202a35" : "transparent"
+
+                            Rectangle {
+                                anchors.bottom: parent.bottom
+                                width: parent.width
+                                height: 1
+                                color: "#222c37"
+                            }
+
+                            readonly property var typeInfo: root.getTypeBadge(modelData.name, modelData.category)
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 12
+                                spacing: 14
+
+                                // Type badge (TorrentLeech double-deck graphic stamp)
+                                Rectangle {
+                                    Layout.preferredWidth: 80
+                                    height: 36
+                                    radius: 4
+                                    color: typeInfo.bg
+                                    border.width: 1
+                                    border.color: typeInfo.border
+
+                                    ColumnLayout {
+                                        anchors.centerIn: parent
+                                        spacing: 1
+
+                                        Text {
+                                            Layout.alignment: Qt.AlignHCenter
+                                            text: typeInfo.tag
+                                            color: typeInfo.fg
+                                            opacity: 0.8
+                                            font.pixelSize: 9
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        Text {
+                                            Layout.alignment: Qt.AlignHCenter
+                                            text: typeInfo.text
+                                            color: typeInfo.fg
+                                            font.pixelSize: 12
+                                            font.weight: Font.Bold
+                                        }
                                     }
+                                }
 
-                                    // Bottom Row: Badges & Action Buttons
+                                // Name Column (Bookmark flag + Title + secondary subtitle)
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+
                                     RowLayout {
                                         Layout.fillWidth: true
-                                        spacing: 10
+                                        spacing: 8
 
-                                        // Seeds badge
-                                        Rectangle {
-                                            implicitWidth: seedRow.implicitWidth + 12
-                                            height: 24
-                                            radius: 6
-                                            color: "#1A22C55E"
-                                            border.width: 1
-                                            border.color: "#3322C55E"
-
-                                            RowLayout {
-                                                id: seedRow
-                                                anchors.centerIn: parent
-                                                spacing: 4
-                                                Text {
-                                                    text: "▲"
-                                                    color: "#22C55E"
-                                                    font.pixelSize: 10
-                                                }
-                                                Text {
-                                                    text: modelData.seeds + " seeds"
-                                                    color: "#22C55E"
-                                                    font.pixelSize: 11
-                                                    font.weight: Font.Bold
-                                                }
-                                            }
-                                        }
-
-                                        // Leeches badge
-                                        Rectangle {
-                                            implicitWidth: leechRow.implicitWidth + 12
-                                            height: 24
-                                            radius: 6
-                                            color: "#14FFFFFF"
-                                            border.width: 1
-                                            border.color: Theme.border
-
-                                            RowLayout {
-                                                id: leechRow
-                                                anchors.centerIn: parent
-                                                spacing: 4
-                                                Text {
-                                                    text: "▼"
-                                                    color: Theme.textDim
-                                                    font.pixelSize: 10
-                                                }
-                                                Text {
-                                                    text: modelData.leeches + " leeches"
-                                                    color: Theme.textDim
-                                                    font.pixelSize: 11
-                                                }
-                                            }
-                                        }
-
-                                        // Size badge
-                                        Rectangle {
-                                            implicitWidth: sizeText.implicitWidth + 12
-                                            height: 24
-                                            radius: 6
-                                            color: "#14FFFFFF"
-                                            border.width: 1
-                                            border.color: Theme.border
-
-                                            Text {
-                                                id: sizeText
-                                                anchors.centerIn: parent
-                                                text: modelData.size
-                                                color: Theme.text
-                                                font.pixelSize: 11
-                                                font.weight: Font.DemiBold
-                                            }
-                                        }
-
-                                        // Date
                                         Text {
-                                            visible: modelData.date && modelData.date.length > 0
-                                            text: modelData.date
-                                            color: Theme.textDim
-                                            font.pixelSize: 11
+                                            text: "⚑"
+                                            color: "#f43f5e"
+                                            font.pixelSize: 15
                                         }
 
-                                        Item { Layout.fillWidth: true }
+                                        Text {
+                                            text: modelData.name || ""
+                                            color: rowHover.containsMouse ? "#ffffff" : "#cbd5e1"
+                                            font.pixelSize: 15
+                                            font.weight: Font.Medium
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+                                    }
 
-                                        // Copy Magnet Button
-                                        Rectangle {
-                                            implicitWidth: 34
-                                            height: 32
-                                            radius: 8
-                                            color: copyMouse.containsMouse ? Theme.surfaceHi : "transparent"
-                                            border.width: 1
-                                            border.color: Theme.border
+                                    // Secondary date/category tag
+                                    Text {
+                                        text: (modelData.category || "Media") + (modelData.date ? (" · " + modelData.date) : "")
+                                        color: "#64748b"
+                                        font.pixelSize: 12
+                                    }
+                                }
 
-                                            FluxIcon {
-                                                anchors.centerIn: parent
-                                                name: "link"
-                                                size: 14
-                                                color: Theme.textDim
-                                            }
+                                // DL & Stream Action Column (Enlarged, easy-to-click icons)
+                                RowLayout {
+                                    Layout.preferredWidth: 104
+                                    spacing: 10
+                                    Layout.alignment: Qt.AlignHCenter
 
-                                            MouseArea {
-                                                id: copyMouse
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    if (fluxTorrent) {
-                                                        fluxTorrent.copyMagnet(modelData.index)
+                                    // Stream Icon
+                                    Rectangle {
+                                        width: 30
+                                        height: 30
+                                        radius: 4
+                                        color: streamMouse.containsMouse ? "#1e2d3d" : "transparent"
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "▶"
+                                            color: streamMouse.containsMouse ? "#2dd4bf" : "#94a3b8"
+                                            font.pixelSize: 16
+                                        }
+
+                                        MouseArea {
+                                            id: streamMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (fluxTorrent) {
+                                                    root.autoPlayTriggered = false
+                                                    if (root.activeTab === "tork") {
+                                                        fluxTorrent.streamTorkResult(modelData.itemIndex)
+                                                    } else {
+                                                        fluxTorrent.streamSearchResult(modelData.itemIndex)
                                                     }
                                                 }
                                             }
                                         }
+                                    }
 
-                                        // STREAM NOW BUTTON
-                                        Rectangle {
-                                            implicitWidth: streamBtnContent.implicitWidth + 24
-                                            height: 32
-                                            radius: 8
-                                            color: streamItemMouse.containsMouse ? Theme.accentHi : Theme.accent
+                                    // Download Icon (DL tray in screenshot)
+                                    Rectangle {
+                                        width: 30
+                                        height: 30
+                                        radius: 4
+                                        color: dlMouse.containsMouse ? "#1e2d3d" : "transparent"
 
-                                            RowLayout {
-                                                id: streamBtnContent
-                                                anchors.centerIn: parent
-                                                spacing: 6
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "⭳"
+                                            color: dlMouse.containsMouse ? "#38bdf8" : "#94a3b8"
+                                            font.pixelSize: 19
+                                        }
 
-                                                BusyIndicator {
-                                                    visible: modelData.isResolving
-                                                    running: modelData.isResolving
-                                                    implicitWidth: 14
-                                                    implicitHeight: 14
-                                                }
-
-                                                FluxIcon {
-                                                    visible: !modelData.isResolving
-                                                    name: "play"
-                                                    size: 12
-                                                    color: "#FFFFFF"
-                                                }
-
-                                                Text {
-                                                    text: modelData.isResolving ? "Resolving..." : "Stream"
-                                                    color: "#FFFFFF"
-                                                    font.pixelSize: 12
-                                                    font.weight: Font.Bold
+                                        MouseArea {
+                                            id: dlMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (fluxTorrent) {
+                                                    if (root.activeTab === "tork") {
+                                                        fluxTorrent.downloadTorkResult(modelData.itemIndex)
+                                                    } else {
+                                                        fluxTorrent.downloadSearchResult(modelData.itemIndex)
+                                                    }
                                                 }
                                             }
+                                        }
+                                    }
 
-                                            MouseArea {
-                                                id: streamItemMouse
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    if (fluxTorrent) {
-                                                        root.autoPlayTriggered = false
-                                                        root.searchResultsCollapsed = true
-                                                        fluxTorrent.streamSearchResult(modelData.index)
+                                    // Magnet Link
+                                    Rectangle {
+                                        width: 30
+                                        height: 30
+                                        radius: 4
+                                        color: magnetMouse.containsMouse ? "#1e2d3d" : "transparent"
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "⚯"
+                                            color: magnetMouse.containsMouse ? "#ffffff" : "#64748b"
+                                            font.pixelSize: 18
+                                        }
+
+                                        MouseArea {
+                                            id: magnetMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (fluxTorrent) {
+                                                    if (root.activeTab === "tork") {
+                                                        fluxTorrent.copyTorkMagnet(modelData.itemIndex)
+                                                    } else {
+                                                        fluxTorrent.copyMagnet(modelData.itemIndex)
                                                     }
                                                 }
                                             }
@@ -909,726 +914,201 @@ Item {
                                     }
                                 }
 
-                                MouseArea {
-                                    id: resMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    z: -1
+                                // Uploader / Provider Column (Pastel colored names like screenshot)
+                                Text {
+                                    text: modelData.provider || (root.activeTab === "1337x" ? "1337x" : "Tork")
+                                    color: root.getProviderColor(modelData.provider || (root.activeTab === "1337x" ? "1337x" : "Tork"))
+                                    font.pixelSize: 14
+                                    font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
+                                    Layout.preferredWidth: 110
                                 }
+
+                                // Size Column (Teal like in screenshot)
+                                Text {
+                                    text: modelData.size || ""
+                                    color: "#2dd4bf"
+                                    font.pixelSize: 14
+                                    font.weight: Font.Medium
+                                    Layout.preferredWidth: 92
+                                }
+
+                                // S Column (Seeders in green)
+                                Text {
+                                    text: modelData.seedsVal !== undefined ? modelData.seedsVal : "0"
+                                    color: "#22c55e"
+                                    font.pixelSize: 15
+                                    font.weight: Font.Bold
+                                    horizontalAlignment: Text.AlignHCenter
+                                    Layout.preferredWidth: 50
+                                }
+
+                                // L Column (Leechers in gray)
+                                Text {
+                                    text: modelData.leechesVal !== undefined ? modelData.leechesVal : "0"
+                                    color: "#94a3b8"
+                                    font.pixelSize: 14
+                                    horizontalAlignment: Text.AlignHCenter
+                                    Layout.preferredWidth: 50
+                                }
+                            }
+
+                            MouseArea {
+                                id: rowHover
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                z: -1
                             }
                         }
                     }
                 }
             }
 
-            // ==========================================
-            // TAB 2: DIRECT MAGNET & FILE SECTION
-            // ==========================================
-            Rectangle {
-                visible: root.activeTab === "direct" && (!fluxTorrent || fluxTorrent.status === "idle" || fluxTorrent.status === "error")
+            // ==============================================================
+            // 5. DIRECT MAGNET / FILE TAB
+            // ==============================================================
+            Item {
+                visible: root.activeTab === "direct"
                 Layout.fillWidth: true
-                implicitHeight: directSectionCol.implicitHeight + 36
-                radius: 16
-                color: Theme.surface
-                border.width: 1
-                border.color: Theme.border
+                Layout.fillHeight: true
 
                 ColumnLayout {
-                    id: directSectionCol
-                    anchors.fill: parent
-                    anchors.margins: 20
-                    spacing: 20
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - 40, 600)
+                    spacing: 18
 
-                    // Magnet Link Input Row
-                    ColumnLayout {
-                        spacing: 8
-                        Layout.fillWidth: true
-
-                        Text {
-                            text: "Paste Magnet Link"
-                            color: Theme.text
-                            font.pixelSize: 14
-                            font.weight: Font.DemiBold
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 10
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: 46
-                                radius: 10
-                                color: Theme.surfaceHi
-                                border.width: 1
-                                border.color: magnetInput.activeFocus ? Theme.accent : Theme.border
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 14
-                                    anchors.rightMargin: 10
-                                    spacing: 10
-
-                                    FluxIcon {
-                                        name: "download"
-                                        size: 16
-                                        color: Theme.textDim
-                                    }
-
-                                    TextInput {
-                                        id: magnetInput
-                                        Layout.fillWidth: true
-                                        color: Theme.text
-                                        font.pixelSize: 14
-                                        verticalAlignment: TextInput.AlignVCenter
-                                        clip: true
-                                        selectByMouse: true
-
-                                        Text {
-                                            anchors.fill: parent
-                                            text: "magnet:?xt=urn:btih:... or torrent URL"
-                                            color: Theme.textDim
-                                            font.pixelSize: 14
-                                            verticalAlignment: Text.AlignVCenter
-                                            visible: !magnetInput.text && !magnetInput.activeFocus
-                                        }
-
-                                        onAccepted: root.handleInput(magnetInput.text)
-                                    }
-
-                                    // Clear button
-                                    Rectangle {
-                                        visible: magnetInput.text.length > 0
-                                        width: 24
-                                        height: 24
-                                        radius: 12
-                                        color: "transparent"
-                                        FluxIcon {
-                                            anchors.centerIn: parent
-                                            name: "close"
-                                            size: 12
-                                            color: Theme.textDim
-                                        }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: magnetInput.text = ""
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Start Stream Button
-                            Rectangle {
-                                implicitWidth: startBtnRow.implicitWidth + 28
-                                height: 46
-                                radius: 10
-                                color: startMouse.containsMouse ? Theme.accentHi : Theme.accent
-                                border.width: 1
-                                border.color: Theme.accent
-
-                                RowLayout {
-                                    id: startBtnRow
-                                    anchors.centerIn: parent
-                                    spacing: 8
-
-                                    FluxIcon {
-                                        name: "play"
-                                        size: 14
-                                        color: "#FFFFFF"
-                                    }
-
-                                    Text {
-                                        text: "Start Stream"
-                                        color: "#FFFFFF"
-                                        font.pixelSize: 13
-                                        font.weight: Font.Bold
-                                    }
-                                }
-
-                                MouseArea {
-                                    id: startMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.handleInput(magnetInput.text)
-                                }
-                            }
-                        }
+                    Text {
+                        text: "Direct Torrent Stream"
+                        color: "#e2e8f0"
+                        font.pixelSize: 18
+                        font.weight: Font.DemiBold
+                        Layout.alignment: Qt.AlignHCenter
                     }
 
-                    // Divider "OR"
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 16
+                        spacing: 10
 
                         Rectangle {
                             Layout.fillWidth: true
-                            height: 1
-                            color: Theme.border
-                        }
+                            height: 42
+                            radius: 3
+                            color: "#161c23"
+                            border.width: 1
+                            border.color: magnetInput.activeFocus ? "#475569" : "#242d38"
 
-                        Text {
-                            text: "OR"
-                            color: Theme.textDim
-                            font.pixelSize: 12
-                            font.weight: Font.Bold
+                            TextInput {
+                                id: magnetInput
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 12
+                                verticalAlignment: TextInput.AlignVCenter
+                                color: "#e2e8f0"
+                                font.pixelSize: 14
+                                clip: true
+
+                                Text {
+                                    anchors.fill: parent
+                                    verticalAlignment: Text.AlignVCenter
+                                    text: "Paste magnet:?xt=urn:btih:... link"
+                                    color: "#64748b"
+                                    font.pixelSize: 14
+                                    visible: !magnetInput.text && !magnetInput.activeFocus
+                                }
+
+                                onAccepted: {
+                                    root.handleInput(magnetInput.text)
+                                    magnetInput.text = ""
+                                }
+                            }
                         }
 
                         Rectangle {
-                            Layout.fillWidth: true
-                            height: 1
-                            color: Theme.border
+                            implicitWidth: 86
+                            height: 42
+                            radius: 3
+                            color: "#0d9488"
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Stream"
+                                color: "#ffffff"
+                                font.pixelSize: 14
+                                font.weight: Font.Medium
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.handleInput(magnetInput.text)
+                                    magnetInput.text = ""
+                                }
+                            }
                         }
                     }
 
-                    // Drag & Drop Box
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 130
-                        radius: 12
-                        color: dropAreaMouse.containsMouse ? Theme.surfaceHi : Theme.surface
-                        border.width: 2
-                        border.color: dropAreaMouse.containsMouse ? Theme.accent : Theme.border
+                        height: 120
+                        radius: 4
+                        color: dropMouse.containsMouse ? "#1c2530" : "#161c23"
+                        border.width: 1
+                        border.color: "#242d38"
 
                         ColumnLayout {
                             anchors.centerIn: parent
                             spacing: 8
 
-                            Rectangle {
+                            Text {
+                                text: "⭳"
+                                color: "#14b8a6"
+                                font.pixelSize: 24
                                 Layout.alignment: Qt.AlignHCenter
-                                width: 44
-                                height: 44
-                                radius: 22
-                                color: Theme.surfaceHi
-                                border.width: 1
-                                border.color: Theme.border
-
-                                FluxIcon {
-                                    anchors.centerIn: parent
-                                    name: "download"
-                                    size: 20
-                                    color: Theme.accent
-                                }
                             }
 
-                            RowLayout {
+                            Text {
+                                text: "Drop .torrent file here or click to browse"
+                                color: "#94a3b8"
+                                font.pixelSize: 14
                                 Layout.alignment: Qt.AlignHCenter
-                                spacing: 4
-
-                                Text {
-                                    text: "Drag and drop a "
-                                    color: Theme.textDim
-                                    font.pixelSize: 13
-                                }
-
-                                Text {
-                                    text: ".torrent file"
-                                    color: Theme.text
-                                    font.weight: Font.Bold
-                                    font.pixelSize: 13
-                                }
-
-                                Text {
-                                    text: " here, or "
-                                    color: Theme.textDim
-                                    font.pixelSize: 13
-                                }
-
-                                Text {
-                                    text: "Browse"
-                                    color: Theme.accent
-                                    font.weight: Font.Bold
-                                    font.pixelSize: 13
-                                }
                             }
                         }
 
                         MouseArea {
-                            id: dropAreaMouse
+                            id: dropMouse
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 if (fluxTorrent) {
-                                    var chosen = fluxTorrent.browseTorrentFile()
-                                    if (chosen && chosen.length > 0) {
-                                        root.handleInput(chosen)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Error text if any
-                    Text {
-                        visible: !!fluxTorrent && fluxTorrent.errorMessage.length > 0
-                        text: fluxTorrent ? fluxTorrent.errorMessage : ""
-                        color: "#FF4D5E"
-                        font.pixelSize: 13
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
-                }
-            }
-
-            // ==========================================
-            // ACTIVE TORRENT CARD (when stream is active/buffering)
-            // ==========================================
-            Rectangle {
-                visible: !!fluxTorrent && fluxTorrent.status !== "idle" && fluxTorrent.status !== "error"
-                Layout.fillWidth: true
-                implicitHeight: activeCol.implicitHeight + 40
-                radius: 16
-                color: Theme.surface
-                border.width: 1
-                border.color: Theme.borderHi
-
-                ColumnLayout {
-                    id: activeCol
-                    anchors.fill: parent
-                    anchors.margins: 22
-                    spacing: 20
-
-                    // Title & Status Badge
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 14
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 4
-
-                            Text {
-                                text: fluxTorrent ? fluxTorrent.torrentName : "Torrent Stream"
-                                color: "#FFFFFF"
-                                font.pixelSize: 18
-                                font.weight: Font.Bold
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-
-                            Text {
-                                text: fluxTorrent ? ("Total Size: " + fluxTorrent.formattedSize) : ""
-                                color: Theme.textDim
-                                font.pixelSize: 13
-                            }
-                        }
-
-                        // Status pill
-                        Rectangle {
-                            implicitHeight: 28
-                            implicitWidth: statusPillRow.implicitWidth + 20
-                            radius: 14
-                            color: {
-                                var st = fluxTorrent ? fluxTorrent.status : ""
-                                if (st === "ready") return "#1A22C55E"
-                                if (st === "preload") return "#1A06B6D4"
-                                return "#1AEAB308"
-                            }
-                            border.width: 1
-                            border.color: {
-                                var st = fluxTorrent ? fluxTorrent.status : ""
-                                if (st === "ready") return "#22C55E"
-                                if (st === "preload") return "#06B6D4"
-                                return "#EAB308"
-                            }
-
-                            RowLayout {
-                                id: statusPillRow
-                                anchors.centerIn: parent
-                                spacing: 6
-
-                                Rectangle {
-                                    width: 6
-                                    height: 6
-                                    radius: 3
-                                    color: parent.parent.border.color
-                                }
-
-                                Text {
-                                    text: fluxTorrent ? fluxTorrent.statusMessage : ""
-                                    color: parent.parent.border.color
-                                    font.pixelSize: 12
-                                    font.weight: Font.Bold
-                                }
-                            }
-                        }
-                    }
-
-                    // Stats Metrics Row
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 12
-
-                        // Download Speed
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 60
-                            radius: 10
-                            color: Theme.surfaceHi
-                            border.width: 1
-                            border.color: Theme.border
-
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: 2
-                                Text {
-                                    text: "DOWNLOAD SPEED"
-                                    color: Theme.textDim
-                                    font.pixelSize: 10
-                                    font.weight: Font.Bold
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                Text {
-                                    text: fluxTorrent ? fluxTorrent.formattedDownloadSpeed : "0 KB/s"
-                                    color: "#22C55E"
-                                    font.pixelSize: 14
-                                    font.weight: Font.Bold
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                            }
-                        }
-
-                        // Upload Speed
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 60
-                            radius: 10
-                            color: Theme.surfaceHi
-                            border.width: 1
-                            border.color: Theme.border
-
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: 2
-                                Text {
-                                    text: "UPLOAD SPEED"
-                                    color: Theme.textDim
-                                    font.pixelSize: 10
-                                    font.weight: Font.Bold
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                Text {
-                                    text: fluxTorrent ? fluxTorrent.formattedUploadSpeed : "0 KB/s"
-                                    color: Theme.text
-                                    font.pixelSize: 14
-                                    font.weight: Font.Bold
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                            }
-                        }
-
-                        // Peers
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 60
-                            radius: 10
-                            color: Theme.surfaceHi
-                            border.width: 1
-                            border.color: Theme.border
-
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: 2
-                                Text {
-                                    text: "PEERS"
-                                    color: Theme.textDim
-                                    font.pixelSize: 10
-                                    font.weight: Font.Bold
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                Text {
-                                    text: fluxTorrent ? (fluxTorrent.activePeers + " / " + fluxTorrent.totalPeers) : "0"
-                                    color: Theme.text
-                                    font.pixelSize: 14
-                                    font.weight: Font.Bold
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                            }
-                        }
-                    }
-
-                    // Progress Bar
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text {
-                                text: "Buffer / Cache Progress"
-                                color: Theme.textDim
-                                font.pixelSize: 12
-                            }
-                            Item { Layout.fillWidth: true }
-                            Text {
-                                text: fluxTorrent ? Math.round(fluxTorrent.bufferProgress * 100) + "%" : "0%"
-                                color: Theme.text
-                                font.pixelSize: 12
-                                font.weight: Font.Bold
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 6
-                            radius: 3
-                            color: Theme.surfaceHi
-
-                            Rectangle {
-                                width: parent.width * (fluxTorrent ? fluxTorrent.bufferProgress : 0)
-                                height: parent.height
-                                radius: 3
-                                color: Theme.accent
-                            }
-                        }
-                    }
-
-                    // File Selection Section (if multiple files exist)
-                    ColumnLayout {
-                        visible: !!fluxTorrent && fluxTorrent.files.length > 0
-                        Layout.fillWidth: true
-                        spacing: 8
-
-                        Text {
-                            text: "Torrent Files (" + (fluxTorrent ? fluxTorrent.files.length : 0) + ")"
-                            color: Theme.text
-                            font.pixelSize: 13
-                            font.weight: Font.Bold
-                        }
-
-                        ListView {
-                            id: fileListView
-                            Layout.fillWidth: true
-                            implicitHeight: Math.min(contentHeight, 180)
-                            clip: true
-                            model: fluxTorrent ? fluxTorrent.files : []
-                            spacing: 6
-
-                            delegate: Rectangle {
-                                width: fileListView.width
-                                height: 38
-                                radius: 8
-                                color: modelData.selected ? Theme.accentSoft : (fileMouse.containsMouse ? Theme.surfaceHi : "transparent")
-                                border.width: 1
-                                border.color: modelData.selected ? Theme.accent : Theme.border
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 12
-                                    anchors.rightMargin: 12
-                                    spacing: 10
-
-                                    FluxIcon {
-                                        name: modelData.isVideo ? "play" : "file"
-                                        size: 14
-                                        color: modelData.selected ? Theme.accent : Theme.textDim
-                                    }
-
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: modelData.name
-                                        color: modelData.selected ? "#FFFFFF" : Theme.text
-                                        font.pixelSize: 13
-                                        elide: Text.ElideRight
-                                    }
-
-                                    Text {
-                                        text: modelData.formattedSize
-                                        color: Theme.textDim
-                                        font.pixelSize: 12
-                                    }
-                                }
-
-                                MouseArea {
-                                    id: fileMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (fluxTorrent) {
-                                            fluxTorrent.selectFile(modelData.id)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Sequential Streaming Notice & Auto-play toggle
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 12
-
-                        RowLayout {
-                            spacing: 8
-                            Rectangle {
-                                width: 8
-                                height: 8
-                                radius: 4
-                                color: (fluxTorrent && fluxTorrent.status === "preload") ? "#06B6D4" : ((fluxTorrent && fluxTorrent.status === "ready") ? "#22C55E" : "#EAB308")
-
-                                SequentialAnimation on opacity {
-                                    running: !!fluxTorrent && fluxTorrent.status === "preload"
-                                    loops: Animation.Infinite
-                                    NumberAnimation { to: 0.3; duration: 600 }
-                                    NumberAnimation { to: 1.0; duration: 600 }
-                                }
-                            }
-                            Text {
-                                text: (fluxTorrent && fluxTorrent.status === "preload")
-                                    ? "Sequential downloading active — play anytime"
-                                    : ((fluxTorrent && fluxTorrent.status === "ready")
-                                        ? "Sequential buffer ready · ready to stream"
-                                        : "Connecting to swarm...")
-                                color: Theme.textDim
-                                font.pixelSize: 12
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
-
-                        RowLayout {
-                            spacing: 8
-                            Text {
-                                text: "Auto-play when ready"
-                                color: Theme.text
-                                font.pixelSize: 13
-                            }
-                            ToggleSwitch {
-                                id: autoPlayToggle
-                                checked: root.autoPlay
-                                onToggled: function(val) {
-                                    root.autoPlay = val
-                                }
-                            }
-                        }
-                    }
-
-                    // Action Buttons Row (Stream Now, Stop)
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 12
-
-                        // PRIMARY STREAM BUTTON
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 48
-                            radius: 12
-                            color: streamMouse.containsMouse ? Theme.accentHover : Theme.accent
-                            opacity: (fluxTorrent && fluxTorrent.streamUrl.length > 0) ? 1.0 : 0.5
-
-                            RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 8
-
-                                FluxIcon {
-                                    name: "play"
-                                    size: 16
-                                    color: "#FFFFFF"
-                                }
-
-                                Text {
-                                    text: (fluxTorrent && fluxTorrent.isReadyToPlay) ? "Stream Video Now (Ready)" : "Stream Video Now"
-                                    color: "#FFFFFF"
-                                    font.pixelSize: 15
-                                    font.weight: Font.Bold
-                                }
-                            }
-
-                            MouseArea {
-                                id: streamMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                enabled: fluxTorrent && fluxTorrent.streamUrl.length > 0
-                                onClicked: {
-                                    if (fluxTorrent && fluxTorrent.streamUrl.length > 0) {
-                                        root.autoPlayTriggered = true
-                                        var t = fluxTorrent.selectedFileName.length > 0 ? fluxTorrent.selectedFileName : fluxTorrent.torrentName
-                                        root.playRequested(fluxTorrent.streamUrl, t)
-                                    }
-                                }
-                            }
-                        }
-
-                        // Stop / Cancel Button
-                        Rectangle {
-                            implicitWidth: 120
-                            height: 48
-                            radius: 12
-                            color: stopMouse.containsMouse ? Theme.surfaceHi : Theme.surface
-                            border.width: 1
-                            border.color: Theme.border
-
-                            RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 6
-
-                                FluxIcon {
-                                    name: "close"
-                                    size: 14
-                                    color: Theme.textDim
-                                }
-
-                                Text {
-                                    text: "Stop"
-                                    color: Theme.text
-                                    font.pixelSize: 14
-                                    font.weight: Font.DemiBold
-                                }
-                            }
-
-                            MouseArea {
-                                id: stopMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    if (fluxTorrent) fluxTorrent.stopTorrent()
+                                    var f = fluxTorrent.browseTorrentFile()
+                                    if (f && f.length > 0) root.handleInput(f)
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-    }
 
-    // Toast Notification (e.g. "Magnet link copied to clipboard!")
-    Rectangle {
-        id: toastNotice
-        visible: root.showToast
-        opacity: root.showToast ? 1.0 : 0.0
-        Behavior on opacity { NumberAnimation { duration: 200 } }
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 32
-        implicitHeight: 44
-        implicitWidth: toastContentRow.implicitWidth + 36
-        radius: 22
-        color: "#F0111116"
-        border.width: 1
-        border.color: Theme.accent
-
-        RowLayout {
-            id: toastContentRow
-            anchors.centerIn: parent
-            spacing: 10
-
+            // ---- Toast Notification ----
             Rectangle {
-                width: 8
-                height: 8
+                visible: root.showToast
+                Layout.alignment: Qt.AlignHCenter
+                implicitWidth: toastMsgText.implicitWidth + 28
+                height: 32
                 radius: 4
-                color: Theme.accent
-            }
+                color: "#1e2934"
+                border.width: 1
+                border.color: "#334155"
 
-            Text {
-                text: root.toastMessage
-                color: "#FFFFFF"
-                font.pixelSize: 13
-                font.weight: Font.DemiBold
+                Text {
+                    id: toastMsgText
+                    anchors.centerIn: parent
+                    text: root.toastMessage
+                    color: "#e2e8f0"
+                    font.pixelSize: 12
+                }
             }
         }
     }
