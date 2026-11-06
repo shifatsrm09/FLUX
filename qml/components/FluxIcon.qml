@@ -363,6 +363,16 @@ Item {
             ctx.stroke()
             break
 
+        case "copy":
+            // Back rectangle (top-right)
+            poly(ctx, [8.5, 4.5, 18.5, 4.5, 18.5, 15.5], false)
+            ctx.stroke()
+            // Front rectangle (bottom-left)
+            ctx.beginPath()
+            ctx.roundedRect(5.5, 8.5, 10, 11, 1.5, 1.5)
+            ctx.stroke()
+            break
+
         case "storage":
             // Hard drive / storage box
             ctx.beginPath()

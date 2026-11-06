@@ -186,10 +186,10 @@ Item {
         return []
     }
 
-    // Outer Background matching screenshot
+    // Outer Background matching FLUX design system (Library, Home, Bookmarks)
     Rectangle {
         anchors.fill: parent
-        color: "#1a222b"
+        color: Theme.bg
 
         ColumnLayout {
             anchors.fill: parent
@@ -206,7 +206,7 @@ Item {
 
                 Text {
                     text: "Torrents"
-                    color: "#e2e8f0"
+                    color: Theme.text
                     font.pixelSize: 26
                     font.weight: Font.DemiBold
                 }
@@ -220,15 +220,15 @@ Item {
                         implicitWidth: torkTabText.implicitWidth + 40
                         height: 38
                         radius: 0
-                        color: root.activeTab === "tork" ? "#0d9488" : "#1e2934"
+                        color: root.activeTab === "tork" ? Theme.accent : Theme.bgRaised
                         border.width: 1
-                        border.color: "#2a3746"
+                        border.color: root.activeTab === "tork" ? Theme.accent : Theme.border
 
                         Text {
                             id: torkTabText
                             anchors.centerIn: parent
                             text: "Tork"
-                            color: root.activeTab === "tork" ? "#ffffff" : "#94a3b8"
+                            color: root.activeTab === "tork" ? "#ffffff" : Theme.textDim
                             font.pixelSize: 14
                             font.weight: Font.DemiBold
                         }
@@ -247,15 +247,15 @@ Item {
                         implicitWidth: x1337TabText.implicitWidth + 40
                         height: 38
                         radius: 0
-                        color: root.activeTab === "1337x" ? "#0d9488" : "#1e2934"
+                        color: root.activeTab === "1337x" ? Theme.accent : Theme.bgRaised
                         border.width: 1
-                        border.color: "#2a3746"
+                        border.color: root.activeTab === "1337x" ? Theme.accent : Theme.border
 
                         Text {
                             id: x1337TabText
                             anchors.centerIn: parent
                             text: "1337x"
-                            color: root.activeTab === "1337x" ? "#ffffff" : "#94a3b8"
+                            color: root.activeTab === "1337x" ? "#ffffff" : Theme.textDim
                             font.pixelSize: 14
                             font.weight: Font.DemiBold
                         }
@@ -274,15 +274,15 @@ Item {
                         implicitWidth: directTabText.implicitWidth + 40
                         height: 38
                         radius: 0
-                        color: root.activeTab === "direct" ? "#0d9488" : "#1e2934"
+                        color: root.activeTab === "direct" ? Theme.accent : Theme.bgRaised
                         border.width: 1
-                        border.color: "#2a3746"
+                        border.color: root.activeTab === "direct" ? Theme.accent : Theme.border
 
                         Text {
                             id: directTabText
                             anchors.centerIn: parent
                             text: "Direct Magnet"
-                            color: root.activeTab === "direct" ? "#ffffff" : "#94a3b8"
+                            color: root.activeTab === "direct" ? "#ffffff" : Theme.textDim
                             font.pixelSize: 14
                             font.weight: Font.DemiBold
                         }
@@ -311,15 +311,15 @@ Item {
                         width: 20
                         height: 20
                         radius: 3
-                        color: root.catMovies ? "#222c37" : "#161c24"
+                        color: root.catMovies ? Theme.surface : Theme.bgRaised
                         border.width: 1
-                        border.color: root.catMovies ? "#64748b" : "#334155"
+                        border.color: root.catMovies ? Theme.accent : Theme.border
 
                         Text {
                             visible: root.catMovies
                             anchors.centerIn: parent
                             text: "✓"
-                            color: "#14b8a6"
+                            color: Theme.accent
                             font.pixelSize: 14
                             font.bold: true
                         }
@@ -332,7 +332,7 @@ Item {
                     }
                     Text {
                         text: "Movies"
-                        color: root.catMovies ? "#e2e8f0" : "#808f9f"
+                        color: root.catMovies ? Theme.text : Theme.textDim
                         font.pixelSize: 15
                         font.weight: Font.Medium
                         MouseArea {
@@ -350,15 +350,15 @@ Item {
                         width: 20
                         height: 20
                         radius: 3
-                        color: root.catTV ? "#222c37" : "#161c24"
+                        color: root.catTV ? Theme.surface : Theme.bgRaised
                         border.width: 1
-                        border.color: root.catTV ? "#64748b" : "#334155"
+                        border.color: root.catTV ? Theme.accent : Theme.border
 
                         Text {
                             visible: root.catTV
                             anchors.centerIn: parent
                             text: "✓"
-                            color: "#14b8a6"
+                            color: Theme.accent
                             font.pixelSize: 14
                             font.bold: true
                         }
@@ -371,7 +371,7 @@ Item {
                     }
                     Text {
                         text: "TV"
-                        color: root.catTV ? "#e2e8f0" : "#808f9f"
+                        color: root.catTV ? Theme.text : Theme.textDim
                         font.pixelSize: 15
                         font.weight: Font.Medium
                         MouseArea {
@@ -389,15 +389,15 @@ Item {
                         width: 20
                         height: 20
                         radius: 3
-                        color: root.catAnime ? "#222c37" : "#161c24"
+                        color: root.catAnime ? Theme.surface : Theme.bgRaised
                         border.width: 1
-                        border.color: root.catAnime ? "#64748b" : "#334155"
+                        border.color: root.catAnime ? Theme.accent : Theme.border
 
                         Text {
                             visible: root.catAnime
                             anchors.centerIn: parent
                             text: "✓"
-                            color: "#14b8a6"
+                            color: Theme.accent
                             font.pixelSize: 14
                             font.bold: true
                         }
@@ -410,7 +410,7 @@ Item {
                     }
                     Text {
                         text: "Anime"
-                        color: root.catAnime ? "#e2e8f0" : "#808f9f"
+                        color: root.catAnime ? Theme.text : Theme.textDim
                         font.pixelSize: 15
                         font.weight: Font.Medium
                         MouseArea {
@@ -432,10 +432,10 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 44
-                    radius: 3
-                    color: "#161c23"
+                    radius: 4
+                    color: Theme.surface
                     border.width: 1
-                    border.color: searchInput.activeFocus ? "#475569" : "#242d38"
+                    border.color: searchInput.activeFocus ? Theme.accent : Theme.border
 
                     RowLayout {
                         anchors.fill: parent
@@ -446,7 +446,7 @@ Item {
                         TextInput {
                             id: searchInput
                             Layout.fillWidth: true
-                            color: "#e2e8f0"
+                            color: Theme.text
                             font.pixelSize: 15
                             verticalAlignment: TextInput.AlignVCenter
                             clip: true
@@ -455,7 +455,7 @@ Item {
                             Text {
                                 anchors.fill: parent
                                 text: "Search by name"
-                                color: "#64748b"
+                                color: Theme.textMute
                                 font.pixelSize: 15
                                 verticalAlignment: Text.AlignVCenter
                                 visible: !searchInput.text && !searchInput.activeFocus
@@ -467,7 +467,7 @@ Item {
                         Text {
                             visible: searchInput.text.length > 0
                             text: "✕"
-                            color: "#94a3b8"
+                            color: Theme.textMute
                             font.pixelSize: 15
                             MouseArea {
                                 anchors.fill: parent
@@ -483,10 +483,10 @@ Item {
                         }
 
                         // Search Icon
-                        Text {
-                            text: "🔍"
-                            font.pixelSize: 16
-                            color: "#14b8a6"
+                        FluxIcon {
+                            name: "search"
+                            size: 16
+                            color: Theme.accent
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
@@ -505,15 +505,17 @@ Item {
                         width: 44
                         height: 24
                         radius: 12
-                        color: root.activeOnly ? "#0d9488" : "#2d3748"
+                        color: root.activeOnly ? Theme.accent : Theme.surface
+                        border.width: 1
+                        border.color: root.activeOnly ? Theme.accent : Theme.border
 
                         Rectangle {
                             x: root.activeOnly ? 22 : 2
                             y: 2
-                            width: 20
-                            height: 20
-                            radius: 10
-                            color: "#e2e8f0"
+                            width: 18
+                            height: 18
+                            radius: 9
+                            color: Theme.text
 
                             Behavior on x {
                                 NumberAnimation { duration: 120 }
@@ -529,7 +531,7 @@ Item {
 
                     Text {
                         text: "Active"
-                        color: root.activeOnly ? "#2dd4bf" : "#a0aec0"
+                        color: root.activeOnly ? Theme.accent : Theme.textDim
                         font.pixelSize: 15
                         font.weight: root.activeOnly ? Font.Bold : Font.Normal
 
@@ -547,9 +549,10 @@ Item {
                 visible: !!fluxTorrent && fluxTorrent.status !== "idle" && fluxTorrent.status !== "error"
                 Layout.fillWidth: true
                 height: 36
-                color: "#161c24"
+                radius: 4
+                color: Theme.bgRaised
                 border.width: 1
-                border.color: "#242d38"
+                border.color: Theme.border
 
                 RowLayout {
                     anchors.fill: parent
@@ -561,12 +564,12 @@ Item {
                         width: 8
                         height: 8
                         radius: 4
-                        color: (fluxTorrent && fluxTorrent.status === "ready") ? "#22c55e" : "#0d9488"
+                        color: (fluxTorrent && fluxTorrent.status === "ready") ? Theme.success : Theme.accent
                     }
 
                     Text {
                         text: fluxTorrent ? (fluxTorrent.torrentName + " — " + fluxTorrent.statusMessage) : ""
-                        color: "#cbd5e1"
+                        color: Theme.text
                         font.pixelSize: 13
                         font.weight: Font.Medium
                         elide: Text.ElideRight
@@ -576,7 +579,7 @@ Item {
                     Text {
                         visible: fluxTorrent ? fluxTorrent.isReadyToPlay : false
                         text: "[Play in FLUX]"
-                        color: "#2dd4bf"
+                        color: Theme.accent
                         font.pixelSize: 13
                         font.bold: true
                         MouseArea {
@@ -592,7 +595,7 @@ Item {
 
                     Text {
                         text: "Stop"
-                        color: "#f87171"
+                        color: Theme.danger
                         font.pixelSize: 12
                         font.bold: true
                         MouseArea {
@@ -608,7 +611,7 @@ Item {
             Text {
                 visible: !!fluxTorrent && (fluxTorrent.isSearchingTork || fluxTorrent.isSearching1337x)
                 text: "Searching..."
-                color: "#94a3b8"
+                color: Theme.textDim
                 font.pixelSize: 13
                 Layout.alignment: Qt.AlignHCenter
             }
@@ -635,7 +638,7 @@ Item {
                             anchors.bottom: parent.bottom
                             width: parent.width
                             height: 1
-                            color: "#242d38"
+                            color: Theme.border
                         }
 
                         RowLayout {
@@ -646,7 +649,7 @@ Item {
 
                             Text {
                                 text: "Type"
-                                color: "#14b8a6"
+                                color: Theme.accent
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
                                 Layout.preferredWidth: 80
@@ -654,7 +657,7 @@ Item {
 
                             Text {
                                 text: "Name"
-                                color: "#14b8a6"
+                                color: Theme.accent
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
                                 Layout.fillWidth: true
@@ -662,16 +665,16 @@ Item {
 
                             Text {
                                 text: "DL"
-                                color: "#14b8a6"
+                                color: Theme.accent
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
                                 horizontalAlignment: Text.AlignHCenter
-                                Layout.preferredWidth: 104
+                                Layout.preferredWidth: 108
                             }
 
                             Text {
                                 text: "Uploader"
-                                color: "#14b8a6"
+                                color: Theme.accent
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
                                 Layout.preferredWidth: 110
@@ -679,7 +682,7 @@ Item {
 
                             Text {
                                 text: "Size"
-                                color: "#14b8a6"
+                                color: Theme.accent
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
                                 Layout.preferredWidth: 92
@@ -687,7 +690,7 @@ Item {
 
                             Text {
                                 text: "S"
-                                color: "#14b8a6"
+                                color: Theme.accent
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
                                 horizontalAlignment: Text.AlignHCenter
@@ -696,7 +699,7 @@ Item {
 
                             Text {
                                 text: "L"
-                                color: "#14b8a6"
+                                color: Theme.accent
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
                                 horizontalAlignment: Text.AlignHCenter
@@ -714,7 +717,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: root.activeOnly ? "No active torrents found with > 50 seeders" : "No torrents found. Type a query above to search."
-                            color: "#64748b"
+                            color: Theme.textMute
                             font.pixelSize: 15
                         }
                     }
@@ -731,13 +734,13 @@ Item {
                             id: rowRect
                             width: torrentsListView.width
                             height: 62
-                            color: rowHover.containsMouse ? "#202a35" : "transparent"
+                            color: rowHover.containsMouse ? Theme.surfaceHover : "transparent"
 
                             Rectangle {
                                 anchors.bottom: parent.bottom
                                 width: parent.width
                                 height: 1
-                                color: "#222c37"
+                                color: Theme.border
                             }
 
                             readonly property var typeInfo: root.getTypeBadge(modelData.name, modelData.category)
@@ -780,57 +783,46 @@ Item {
                                     }
                                 }
 
-                                // Name Column (Bookmark flag + Title + secondary subtitle)
+                                // Name Column (Clean Title without red icon + secondary subtitle)
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 4
 
-                                    RowLayout {
+                                    Text {
+                                        text: modelData.name || ""
+                                        color: rowHover.containsMouse ? "#ffffff" : Theme.text
+                                        font.pixelSize: 15
+                                        font.weight: Font.Medium
+                                        elide: Text.ElideRight
                                         Layout.fillWidth: true
-                                        spacing: 8
-
-                                        Text {
-                                            text: "⚑"
-                                            color: "#f43f5e"
-                                            font.pixelSize: 15
-                                        }
-
-                                        Text {
-                                            text: modelData.name || ""
-                                            color: rowHover.containsMouse ? "#ffffff" : "#cbd5e1"
-                                            font.pixelSize: 15
-                                            font.weight: Font.Medium
-                                            elide: Text.ElideRight
-                                            Layout.fillWidth: true
-                                        }
                                     }
 
                                     // Secondary date/category tag
                                     Text {
                                         text: (modelData.category || "Media") + (modelData.date ? (" · " + modelData.date) : "")
-                                        color: "#64748b"
+                                        color: Theme.textMute
                                         font.pixelSize: 12
                                     }
                                 }
 
-                                // DL & Stream Action Column (Enlarged, easy-to-click icons)
+                                // DL & Stream Action Column (Vector icons, matching font size, not stretched)
                                 RowLayout {
-                                    Layout.preferredWidth: 104
-                                    spacing: 10
+                                    Layout.preferredWidth: 108
+                                    spacing: 8
                                     Layout.alignment: Qt.AlignHCenter
 
                                     // Stream Icon
                                     Rectangle {
-                                        width: 30
-                                        height: 30
-                                        radius: 4
-                                        color: streamMouse.containsMouse ? "#1e2d3d" : "transparent"
+                                        width: 32
+                                        height: 32
+                                        radius: 6
+                                        color: streamMouse.containsMouse ? Theme.surface : "transparent"
 
-                                        Text {
+                                        FluxIcon {
                                             anchors.centerIn: parent
-                                            text: "▶"
-                                            color: streamMouse.containsMouse ? "#2dd4bf" : "#94a3b8"
-                                            font.pixelSize: 16
+                                            name: "play"
+                                            size: 16
+                                            color: streamMouse.containsMouse ? Theme.accent : Theme.textDim
                                         }
 
                                         MouseArea {
@@ -851,18 +843,18 @@ Item {
                                         }
                                     }
 
-                                    // Download Icon (DL tray in screenshot)
+                                    // Download Icon (Crisp vector download tray, perfectly matching font size, never stretched)
                                     Rectangle {
-                                        width: 30
-                                        height: 30
-                                        radius: 4
-                                        color: dlMouse.containsMouse ? "#1e2d3d" : "transparent"
+                                        width: 32
+                                        height: 32
+                                        radius: 6
+                                        color: dlMouse.containsMouse ? Theme.surface : "transparent"
 
-                                        Text {
+                                        FluxIcon {
                                             anchors.centerIn: parent
-                                            text: "⭳"
-                                            color: dlMouse.containsMouse ? "#38bdf8" : "#94a3b8"
-                                            font.pixelSize: 19
+                                            name: "download"
+                                            size: 16
+                                            color: dlMouse.containsMouse ? Theme.accent : Theme.textDim
                                         }
 
                                         MouseArea {
@@ -882,18 +874,18 @@ Item {
                                         }
                                     }
 
-                                    // Magnet Link
+                                    // Copy Magnet Link Icon (Normal clipboard / duplicate copy icon)
                                     Rectangle {
-                                        width: 30
-                                        height: 30
-                                        radius: 4
-                                        color: magnetMouse.containsMouse ? "#1e2d3d" : "transparent"
+                                        width: 32
+                                        height: 32
+                                        radius: 6
+                                        color: magnetMouse.containsMouse ? Theme.surface : "transparent"
 
-                                        Text {
+                                        FluxIcon {
                                             anchors.centerIn: parent
-                                            text: "⚯"
-                                            color: magnetMouse.containsMouse ? "#ffffff" : "#64748b"
-                                            font.pixelSize: 18
+                                            name: "copy"
+                                            size: 16
+                                            color: magnetMouse.containsMouse ? "#ffffff" : Theme.textMute
                                         }
 
                                         MouseArea {
@@ -924,10 +916,10 @@ Item {
                                     Layout.preferredWidth: 110
                                 }
 
-                                // Size Column (Teal like in screenshot)
+                                // Size Column (Grayish-white like leechers was previously)
                                 Text {
                                     text: modelData.size || ""
-                                    color: "#2dd4bf"
+                                    color: Theme.textDim
                                     font.pixelSize: 14
                                     font.weight: Font.Medium
                                     Layout.preferredWidth: 92
@@ -936,17 +928,17 @@ Item {
                                 // S Column (Seeders in green)
                                 Text {
                                     text: modelData.seedsVal !== undefined ? modelData.seedsVal : "0"
-                                    color: "#22c55e"
+                                    color: Theme.success
                                     font.pixelSize: 15
                                     font.weight: Font.Bold
                                     horizontalAlignment: Text.AlignHCenter
                                     Layout.preferredWidth: 50
                                 }
 
-                                // L Column (Leechers in gray)
+                                // L Column (Leechers in soft red)
                                 Text {
                                     text: modelData.leechesVal !== undefined ? modelData.leechesVal : "0"
-                                    color: "#94a3b8"
+                                    color: "#f87171"
                                     font.pixelSize: 14
                                     horizontalAlignment: Text.AlignHCenter
                                     Layout.preferredWidth: 50
@@ -979,7 +971,7 @@ Item {
 
                     Text {
                         text: "Direct Torrent Stream"
-                        color: "#e2e8f0"
+                        color: Theme.text
                         font.pixelSize: 18
                         font.weight: Font.DemiBold
                         Layout.alignment: Qt.AlignHCenter
@@ -992,10 +984,10 @@ Item {
                         Rectangle {
                             Layout.fillWidth: true
                             height: 42
-                            radius: 3
-                            color: "#161c23"
+                            radius: 4
+                            color: Theme.surface
                             border.width: 1
-                            border.color: magnetInput.activeFocus ? "#475569" : "#242d38"
+                            border.color: magnetInput.activeFocus ? Theme.accent : Theme.border
 
                             TextInput {
                                 id: magnetInput
@@ -1003,7 +995,7 @@ Item {
                                 anchors.leftMargin: 12
                                 anchors.rightMargin: 12
                                 verticalAlignment: TextInput.AlignVCenter
-                                color: "#e2e8f0"
+                                color: Theme.text
                                 font.pixelSize: 14
                                 clip: true
 
@@ -1011,7 +1003,7 @@ Item {
                                     anchors.fill: parent
                                     verticalAlignment: Text.AlignVCenter
                                     text: "Paste magnet:?xt=urn:btih:... link"
-                                    color: "#64748b"
+                                    color: Theme.textMute
                                     font.pixelSize: 14
                                     visible: !magnetInput.text && !magnetInput.activeFocus
                                 }
@@ -1026,8 +1018,8 @@ Item {
                         Rectangle {
                             implicitWidth: 86
                             height: 42
-                            radius: 3
-                            color: "#0d9488"
+                            radius: 4
+                            color: directBtnMouse.containsMouse ? Theme.accentHover : Theme.accent
 
                             Text {
                                 anchors.centerIn: parent
@@ -1038,7 +1030,9 @@ Item {
                             }
 
                             MouseArea {
+                                id: directBtnMouse
                                 anchors.fill: parent
+                                hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     root.handleInput(magnetInput.text)
@@ -1051,25 +1045,25 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         height: 120
-                        radius: 4
-                        color: dropMouse.containsMouse ? "#1c2530" : "#161c23"
+                        radius: 6
+                        color: dropMouse.containsMouse ? Theme.surfaceHover : Theme.surface
                         border.width: 1
-                        border.color: "#242d38"
+                        border.color: Theme.border
 
                         ColumnLayout {
                             anchors.centerIn: parent
                             spacing: 8
 
-                            Text {
-                                text: "⭳"
-                                color: "#14b8a6"
-                                font.pixelSize: 24
+                            FluxIcon {
+                                name: "download"
+                                size: 28
+                                color: Theme.accent
                                 Layout.alignment: Qt.AlignHCenter
                             }
 
                             Text {
                                 text: "Drop .torrent file here or click to browse"
-                                color: "#94a3b8"
+                                color: Theme.textDim
                                 font.pixelSize: 14
                                 Layout.alignment: Qt.AlignHCenter
                             }
@@ -1098,9 +1092,9 @@ Item {
                 implicitWidth: toastMsgText.implicitWidth + 28
                 height: 32
                 radius: 4
-                color: "#1e2934"
+                color: Theme.bgRaised
                 border.width: 1
-                border.color: "#334155"
+                border.color: Theme.borderHi
 
                 Text {
                     id: toastMsgText
